@@ -22,4 +22,5 @@ export default function Home() {
       Redirecting to dashboard...
     </div>
   )
+  // Fix: Removed duplicate pages to resolve build errors
 }
