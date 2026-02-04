@@ -99,6 +99,13 @@ export default function DashboardHome() {
       }}>
         Real-time data from estate inspections across Croydon Council
       </p>
+      
+      {/* Debug: Ensure content renders */}
+      {loading && (
+        <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+          Loading dashboard data...
+        </div>
+      )}
 
       {/* Stats Row */}
       <div style={{
