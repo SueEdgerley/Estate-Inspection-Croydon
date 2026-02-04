@@ -155,27 +155,12 @@ export default function DashboardHome() {
       {/* Actions Row */}
       <div style={{
         display: 'flex',
-        justifyContent: 'flex-end',
-        gap: '1rem',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: '1.5rem'
       }}>
-        <button
-          onClick={() => setFiltersOpen(!filtersOpen)}
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: 'white',
-            color: '#374151',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.5rem',
-            fontSize: '0.9375rem',
-            fontWeight: '500',
-            cursor: 'pointer'
-          }}
-        >
-          Show Filters
-        </button>
-        <button
-          onClick={handleDownload}
+        <Link
+          href="/inspections/new"
           style={{
             padding: '0.75rem 1.5rem',
             backgroundColor: '#3b82f6',
@@ -184,11 +169,45 @@ export default function DashboardHome() {
             borderRadius: '0.5rem',
             fontSize: '0.9375rem',
             fontWeight: '500',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            textDecoration: 'none',
+            display: 'inline-block'
           }}
         >
-          Download
-        </button>
+          Start New Inspection
+        </Link>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: 'white',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.9375rem',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+          >
+            Show Filters
+          </button>
+          <button
+            onClick={handleDownload}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontSize: '0.9375rem',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+          >
+            Download
+          </button>
+        </div>
       </div>
 
       {/* Filters Panel */}

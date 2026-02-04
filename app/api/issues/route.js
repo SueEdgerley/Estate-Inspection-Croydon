@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
+import { getTemplateById } from '@/lib/airtable-client'
 
 // Route segment config
 export const runtime = 'nodejs'
@@ -56,7 +57,7 @@ export async function POST(request) {
     }
     
     const body = await request.json()
-    const { type, title, description, location } = body
+    const { type, title, description, location, template_id } = body
     
     // Validation
     if (!title || !title.trim()) {
@@ -65,13 +66,56 @@ export async function POST(request) {
         { status: 400 }
       )
     }
+
+    if (!template_id) {
+      return NextResponse.json(
+        { error: 'Template is required' },
+        { status: 400 }
+      )
+    }
+    
+    // Get template name from Airtable
+    let templateName = null
+    try {
+      if (template_id) {
+        const template = await getTemplateById(template_id)
+        if (template && template.name) {
+          templateName = template.name
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching template name:', error)
+      // Continue without template name - not a fatal error
+    }
     
     const id = Date.now().toString()
-    const status = 'open'
+    const status = 'draft' // Start as draft since it's an inspection
     
+    // Insert into inspections table (which has template_id support)
+    await sql`
+      INSERT INTO inspections (
+        id, type, title, description, location_label, status, 
+        template_id, template_name, created_at, updated_at
+      )
+      VALUES (
+        ${id}, 
+        ${type || 'repairs'}, 
+        ${title}, 
+        ${description || ''}, 
+        ${location || ''}, 
+        ${status},
+        ${template_id},
+        ${templateName},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+    `
+    
+    // Also insert into issues table for backward compatibility
     await sql`
       INSERT INTO issues (id, type, title, description, location, status)
       VALUES (${id}, ${type || 'repairs'}, ${title}, ${description || ''}, ${location || ''}, ${status})
+      ON CONFLICT (id) DO NOTHING
     `
     
     const newIssue = {
@@ -81,6 +125,8 @@ export async function POST(request) {
       description: description || '',
       location: location || '',
       status,
+      template_id,
+      template_name: templateName,
       createdAt: new Date().toISOString(),
     }
     

@@ -1,20 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createIssue, ISSUE_TYPES, ISSUE_TYPE_LABELS } from '@/lib/issues'
+import { createIssue } from '@/lib/issues'
+import { getTemplates } from '@/lib/airtable'
 
 export default function NewInspection() {
   const router = useRouter()
+  const [templates, setTemplates] = useState([])
+  const [loadingTemplates, setLoadingTemplates] = useState(true)
   const [formData, setFormData] = useState({
-    type: ISSUE_TYPES.REPAIRS,
+    template_id: '',
     title: '',
     location: '',
     description: '',
   })
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        setLoadingTemplates(true)
+        const fetchedTemplates = await getTemplates()
+        setTemplates(fetchedTemplates)
+        if (fetchedTemplates.length > 0) {
+          setFormData(prev => ({ ...prev, template_id: fetchedTemplates[0].id }))
+        }
+      } catch (error) {
+        console.error('Error loading templates:', error)
+        setErrors({ submit: 'Failed to load templates. Please refresh the page.' })
+      } finally {
+        setLoadingTemplates(false)
+      }
+    }
+    loadTemplates()
+  }, [])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -32,6 +54,10 @@ export default function NewInspection() {
 
   const validate = () => {
     const newErrors = {}
+    
+    if (!formData.template_id) {
+      newErrors.template_id = 'Please select a template'
+    }
     
     if (!formData.title.trim()) {
       newErrors.title = 'Title is required'
@@ -115,7 +141,7 @@ export default function NewInspection() {
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label 
-            htmlFor="type"
+            htmlFor="template_id"
             style={{
               display: 'block',
               marginBottom: '0.5rem',
@@ -124,33 +150,61 @@ export default function NewInspection() {
               color: '#374151',
             }}
           >
-            Inspection Type <span style={{ color: '#ef4444' }}>*</span>
+            Template <span style={{ color: '#ef4444' }}>*</span>
           </label>
-          <select
-            id="type"
-            name="type"
-            value={formData.type}
-            onChange={handleChange}
-            required
-            style={{
-              width: '100%',
+          {loadingTemplates ? (
+            <div style={{
               padding: '0.75rem',
               border: '1px solid #d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
-              backgroundColor: 'white',
-            }}
-          >
-            <option value={ISSUE_TYPES.REPAIRS}>
-              {ISSUE_TYPE_LABELS[ISSUE_TYPES.REPAIRS]}
-            </option>
-            <option value={ISSUE_TYPES.GROUNDS_MAINTENANCE}>
-              {ISSUE_TYPE_LABELS[ISSUE_TYPES.GROUNDS_MAINTENANCE]}
-            </option>
-            <option value={ISSUE_TYPES.CLEANING}>
-              {ISSUE_TYPE_LABELS[ISSUE_TYPES.CLEANING]}
-            </option>
-          </select>
+              backgroundColor: '#f9fafb',
+              color: '#6b7280'
+            }}>
+              Loading templates...
+            </div>
+          ) : (
+            <select
+              id="template_id"
+              name="template_id"
+              value={formData.template_id}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: errors.template_id ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                backgroundColor: 'white',
+              }}
+            >
+              <option value="">-- Select a template --</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {errors.template_id && (
+            <p style={{
+              margin: '0.5rem 0 0 0',
+              fontSize: '0.875rem',
+              color: '#ef4444',
+            }}>
+              {errors.template_id}
+            </p>
+          )}
+          {!loadingTemplates && templates.length === 0 && (
+            <p style={{
+              margin: '0.5rem 0 0 0',
+              fontSize: '0.875rem',
+              color: '#ef4444',
+            }}>
+              No templates available. Please check your Airtable configuration.
+            </p>
+          )}
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
