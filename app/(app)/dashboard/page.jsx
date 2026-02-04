@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 // Dashboard home page - displays inspection statistics and data
+// Fixed: Removed conflicting empty directories to ensure route is built
 export default function DashboardHome() {
   const [stats, setStats] = useState({
     totalCompleted: 0,
