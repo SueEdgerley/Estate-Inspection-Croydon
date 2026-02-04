@@ -1,0 +1,97 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+export default function AppLayout({ children }) {
+  const pathname = usePathname()
+
+  const navItems = [
+    { href: '/dashboard', label: 'Home' },
+    { href: '/inspections', label: 'Manage Inspections' },
+    { href: '/actions', label: 'Manage Tasks' },
+    { href: '/templates', label: 'Templates' },
+    { href: '/guides', label: 'Best Practice Guides' },
+    { href: '/settings', label: 'Settings' },
+    { href: '/downloads', label: 'Data Download' },
+    { href: '/analytics', label: 'Analytics' },
+  ]
+
+  const isActive = (href) => {
+    if (href === '/dashboard') {
+      return pathname === '/dashboard' || pathname === '/'
+    }
+    return pathname?.startsWith(href)
+  }
+
+  return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      minHeight: '100vh', 
+      backgroundColor: '#f9fafb' 
+    }}>
+      {/* Top Navigation Bar */}
+      <header style={{
+        backgroundColor: '#fff',
+        borderBottom: '1px solid #e5e7eb',
+        padding: '0 2rem',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          height: '64px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <h1 style={{
+              margin: 0,
+              fontSize: '1.25rem',
+              fontWeight: 'bold',
+              color: '#111827',
+              marginRight: '2rem'
+            }}>
+              Estate Inspection
+            </h1>
+            <nav style={{ display: 'flex', gap: '0.5rem' }}>
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{
+                    padding: '0.75rem 1rem',
+                    color: isActive(item.href) ? '#3b82f6' : '#6b7280',
+                    textDecoration: 'none',
+                    fontWeight: isActive(item.href) ? '600' : '500',
+                    borderBottom: isActive(item.href) ? '2px solid #3b82f6' : '2px solid transparent',
+                    marginBottom: '-1px',
+                    transition: 'all 0.2s',
+                    fontSize: '0.9375rem'
+                  }}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+            Croydon Council
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main style={{
+        flex: 1,
+        padding: '2rem',
+        overflowY: 'auto'
+      }}>
+        {children}
+      </main>
+    </div>
+  )
+}

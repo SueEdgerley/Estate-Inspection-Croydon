@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createIssue, ISSUE_TYPES, ISSUE_TYPE_LABELS } from '@/lib/issues'
 
-export default function NewIssue() {
+export default function NewInspection() {
   const router = useRouter()
   const [formData, setFormData] = useState({
     type: ISSUE_TYPES.REPAIRS,
@@ -22,7 +22,6 @@ export default function NewIssue() {
       ...prev,
       [name]: value,
     }))
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -55,13 +54,13 @@ export default function NewIssue() {
       const newIssue = await createIssue(formData)
       
       if (newIssue) {
-        // Redirect to inspections page
-        router.push('/inspections')
+        // Redirect to first section of the inspection
+        router.push(`/inspections/${newIssue.id}/section/1`)
       } else {
-        setErrors({ submit: 'Failed to create issue. Please try again.' })
+        setErrors({ submit: 'Failed to create inspection. Please try again.' })
       }
     } catch (error) {
-      console.error('Error creating issue:', error)
+      console.error('Error creating inspection:', error)
       setErrors({ submit: error.message || 'An error occurred. Please try again.' })
     } finally {
       setIsSubmitting(false)
@@ -69,7 +68,7 @@ export default function NewIssue() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+    <div>
       <div style={{ marginBottom: '2rem' }}>
         <Link 
           href="/inspections"
@@ -84,8 +83,11 @@ export default function NewIssue() {
           ← Back to Inspections
         </Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>
-          Log New Issue
+          Start New Inspection
         </h1>
+        <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
+          Choose block/template and enter basic details
+        </p>
       </div>
 
       <form 
@@ -95,6 +97,7 @@ export default function NewIssue() {
           padding: '2rem',
           borderRadius: '0.5rem',
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          maxWidth: '800px'
         }}
       >
         {errors.submit && (
@@ -121,7 +124,7 @@ export default function NewIssue() {
               color: '#374151',
             }}
           >
-            Issue Type <span style={{ color: '#ef4444' }}>*</span>
+            Inspection Type <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <select
             id="type"
@@ -170,6 +173,7 @@ export default function NewIssue() {
             value={formData.title}
             onChange={handleChange}
             required
+            placeholder="e.g., Block A - Ground Floor Inspection"
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -238,7 +242,7 @@ export default function NewIssue() {
             value={formData.description}
             onChange={handleChange}
             rows={5}
-            placeholder="Provide details about the issue..."
+            placeholder="Additional notes about this inspection..."
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -284,7 +288,7 @@ export default function NewIssue() {
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
             }}
           >
-            {isSubmitting ? 'Creating...' : 'Create Issue'}
+            {isSubmitting ? 'Creating...' : 'Start Inspection'}
           </button>
         </div>
       </form>

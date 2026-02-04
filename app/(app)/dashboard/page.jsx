@@ -1,0 +1,414 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+
+export default function DashboardHome() {
+  const [stats, setStats] = useState({
+    totalCompleted: 0,
+    scheduledCompleted: 0,
+    adHocCompleted: 0
+  })
+  const [inspections, setInspections] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    type: 'all',
+    template: 'all',
+    inspector: 'all',
+    scheduled: 'all',
+    grading: 'all'
+  })
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [filters])
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
+      if (filters.dateTo) params.append('dateTo', filters.dateTo)
+      if (filters.type !== 'all') params.append('type', filters.type)
+      if (filters.template !== 'all') params.append('template', filters.template)
+      if (filters.inspector !== 'all') params.append('inspector', filters.inspector)
+      if (filters.scheduled !== 'all') params.append('scheduled', filters.scheduled)
+      if (filters.grading !== 'all') params.append('grading', filters.grading)
+
+      const response = await fetch(`/api/dashboard?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data.stats)
+        setInspections(data.inspections)
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    try {
+      const params = new URLSearchParams()
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== 'all' && value !== '') {
+          params.append(key, value)
+        }
+      })
+
+      const response = await fetch(`/api/dashboard/download?${params.toString()}`)
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `inspections-${new Date().toISOString().split('T')[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      }
+    } catch (error) {
+      console.error('Error downloading CSV:', error)
+      alert('Failed to download CSV')
+    }
+  }
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  }
+
+  return (
+    <div>
+      {/* Intro Line */}
+      <p style={{
+        margin: '0 0 1.5rem 0',
+        fontSize: '0.9375rem',
+        color: '#6b7280'
+      }}>
+        Real-time data from estate inspections across Croydon Council
+      </p>
+
+      {/* Stats Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+            Total Inspections Completed
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#111827' }}>
+            {loading ? '...' : stats.totalCompleted}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+            Scheduled Inspections Completed
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#111827' }}>
+            {loading ? '...' : stats.scheduledCompleted}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+            Ad Hoc Inspections Completed
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#111827' }}>
+            {loading ? '...' : stats.adHocCompleted}
+          </div>
+        </div>
+      </div>
+
+      {/* Actions Row */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '1rem',
+        marginBottom: '1.5rem'
+      }}>
+        <button
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: 'white',
+            color: '#374151',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '0.9375rem',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+        >
+          Show Filters
+        </button>
+        <button
+          onClick={handleDownload}
+          style={{
+            padding: '0.75rem 1.5rem',
+            backgroundColor: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '0.5rem',
+            fontSize: '0.9375rem',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+        >
+          Download
+        </button>
+      </div>
+
+      {/* Filters Panel */}
+      {filtersOpen && (
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          marginBottom: '1.5rem',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '1rem',
+            marginBottom: '1rem'
+          }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+                Date From
+              </label>
+              <input
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+                Date To
+              </label>
+              <input
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+                Type
+              </label>
+              <select
+                value={filters.type}
+                onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem'
+                }}
+              >
+                <option value="all">All Types</option>
+                <option value="street">Street</option>
+                <option value="block">Block</option>
+                <option value="estate">Estate</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+                Scheduled
+              </label>
+              <select
+                value={filters.scheduled}
+                onChange={(e) => setFilters({ ...filters, scheduled: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem'
+                }}
+              >
+                <option value="all">All</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="ad_hoc">Ad Hoc</option>
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setFilters({
+                dateFrom: '',
+                dateTo: '',
+                type: 'all',
+                template: 'all',
+                inspector: 'all',
+                scheduled: 'all',
+                grading: 'all'
+              })
+            }}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#f3f4f6',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              cursor: 'pointer'
+            }}
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
+      {/* Inspections Table */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '0.5rem',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        overflow: 'hidden',
+        border: '1px solid #e5e7eb'
+      }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Type</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Location</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>User</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Template</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Due Date</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Completed</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Grading</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>View</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Select</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                  Loading inspections...
+                </td>
+              </tr>
+            ) : inspections.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                  No inspections found
+                </td>
+              </tr>
+            ) : (
+              inspections.map((inspection) => (
+                <tr
+                  key={inspection.id}
+                  style={{
+                    borderBottom: '1px solid #e5e7eb',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {inspection.type || '-'}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {inspection.location_label || '-'}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {inspection.inspector_name || '-'}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {inspection.template_name || '-'}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {formatDate(inspection.due_date)}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {formatDate(inspection.submitted_at)}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
+                    {inspection.grading || '-'}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                    {inspection.pdf_url ? (
+                      <a
+                        href={inspection.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: '#3b82f6',
+                          textDecoration: 'none',
+                          fontSize: '1.25rem'
+                        }}
+                      >
+                        👁️
+                      </a>
+                    ) : (
+                      <span style={{ color: '#9ca3af' }}>-</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                    <Link
+                      href={`/inspections/${inspection.id}`}
+                      style={{
+                        color: '#3b82f6',
+                        textDecoration: 'none',
+                        fontSize: '1.25rem'
+                      }}
+                    >
+                      ✓
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
