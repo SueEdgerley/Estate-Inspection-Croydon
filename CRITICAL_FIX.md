@@ -42,6 +42,7 @@ git push
 ### Step 3: Test Routes in Order
 After deployment, test these URLs (replace with your domain):
 1. `https://your-app.vercel.app/api/hello` - Should return `{"message":"Hello from API!"}`
+
 2. `https://your-app.vercel.app/api/health` - Should return status
 3. `https://your-app.vercel.app/api/test` - Should return test data
 4. `https://your-app.vercel.app/api/issues` - Should return issues (or 503 if DB not configured)
