@@ -13,6 +13,7 @@ export default function DashboardHome() {
   })
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -31,6 +32,7 @@ export default function DashboardHome() {
   const loadDashboardData = async () => {
     try {
       setLoading(true)
+      setError(null)
       const params = new URLSearchParams()
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
       if (filters.dateTo) params.append('dateTo', filters.dateTo)
@@ -44,10 +46,17 @@ export default function DashboardHome() {
       if (response.ok) {
         const data = await response.json()
         setStats(data.stats)
-        setInspections(data.inspections)
+        setInspections(data.inspections || [])
+      } else {
+        const body = await response.json().catch(() => ({}))
+        const msg = body.error || (response.status === 503 ? 'Database not configured. Set POSTGRES_URL in environment variables.' : 'Failed to load dashboard.')
+        setError(msg)
+        setInspections([])
       }
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
+    } catch (err) {
+      console.error('Error loading dashboard data:', err)
+      setError('Could not reach the server. Run the app and ensure POSTGRES_URL is set for full data.')
+      setInspections([])
     } finally {
       setLoading(false)
     }
@@ -101,10 +110,23 @@ export default function DashboardHome() {
         Real-time data from estate inspections across Croydon Council
       </p>
       
-      {/* Debug: Ensure content renders */}
       {loading && (
         <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '0.5rem', marginBottom: '1rem' }}>
           Loading dashboard data...
+        </div>
+      )}
+
+      {error && !loading && (
+        <div style={{
+          padding: '1rem 1.25rem',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '0.5rem',
+          marginBottom: '1rem',
+          color: '#991b1b',
+          fontSize: '0.9375rem'
+        }}>
+          {error}
         </div>
       )}
 

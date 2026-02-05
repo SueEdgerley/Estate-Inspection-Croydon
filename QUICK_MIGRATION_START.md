@@ -1,5 +1,12 @@
 # 🚀 Quick Migration Start Guide
 
+## Get the dashboard and app working
+
+- **On Vercel**: Follow Step 1–3 below (env vars + redeploy). Then open the Dashboard URL.
+- **Locally**: Create `.env.local` from `.env.example`, add your `POSTGRES_URL` (and Airtable vars if needed), then run `npm install` and `npm run dev`. Open http://localhost:3000 — it will redirect to the dashboard.
+
+---
+
 ## What You Need to Do
 
 I've automated most of the migration process. Here's what you need to do:
