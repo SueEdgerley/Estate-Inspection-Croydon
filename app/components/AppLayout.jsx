@@ -7,7 +7,7 @@ export default function AppLayout({ children }) {
   const pathname = usePathname()
 
   const navItems = [
-    { href: '/dashboard', label: 'Home' },
+    { href: '/', label: 'Home' },
     { href: '/inspections', label: 'Manage Inspections' },
     { href: '/actions', label: 'Manage Tasks' },
     { href: '/templates', label: 'Templates' },
@@ -18,9 +18,7 @@ export default function AppLayout({ children }) {
   ]
 
   const isActive = (href) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard' || pathname === '/'
-    }
+    if (href === '/') return pathname === '/' || pathname === '/dashboard'
     return pathname?.startsWith(href)
   }
 
