@@ -3,93 +3,257 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createIssue } from '@/lib/issues'
-import { getTemplates } from '@/lib/airtable'
 
-export default function NewInspection() {
+function shouldShowQuestion(question, answers) {
+  if (!question.depends_on_question_id) return true
+  const depAnswer = answers[question.depends_on_question_id]
+  if (depAnswer === undefined || depAnswer === null) return false
+  const showWhen = question.show_when_value
+  if (typeof showWhen === 'boolean') return depAnswer === showWhen
+  if (typeof showWhen === 'string') return String(depAnswer).toLowerCase() === showWhen.toLowerCase()
+  return depAnswer === showWhen
+}
+
+function InspectionQuestion({ question, value, onChange, error }) {
+  const qType = (question.question_type || 'text').replace(/[\s-]/g, '_')
+  const opts = question.options || []
+  const isRequired = question.is_required
+
+  const handleChange = (val) => onChange(question.id, val)
+
+  if (qType === 'yes_no') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          {['Yes', 'No'].map((opt) => (
+            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name={`q-${question.id}`}
+                checked={value === opt}
+                onChange={() => handleChange(opt)}
+              />
+              {opt}
+            </label>
+          ))}
+        </div>
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'select') {
+    const options = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o)))
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        <select
+          value={value ?? ''}
+          onChange={(e) => handleChange(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            backgroundColor: 'white',
+          }}
+        >
+          <option value="">Select...</option>
+          {options.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'rating') {
+    const max = 5
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => handleChange(n)}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: value === n ? '#3b82f6' : '#f3f4f6',
+                color: value === n ? 'white' : '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                cursor: 'pointer',
+                fontWeight: value === n ? 600 : 500,
+              }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  // text and fallback
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        {question.question_text}
+        {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+      </label>
+      <input
+        type="text"
+        value={value ?? ''}
+        onChange={(e) => handleChange(e.target.value)}
+        style={{
+          width: '100%',
+          padding: '0.75rem',
+          border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
+          borderRadius: '0.375rem',
+          fontSize: '1rem',
+        }}
+      />
+      {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+    </div>
+  )
+}
+
+export default function NewInspectionPage() {
   const router = useRouter()
-  const [templates, setTemplates] = useState([])
-  const [loadingTemplates, setLoadingTemplates] = useState(true)
-  const [formData, setFormData] = useState({
-    template_id: '',
-    title: '',
-    location: '',
-    description: '',
-  })
-  const [errors, setErrors] = useState({})
+  const [apiPayload, setApiPayload] = useState({ templates: [] })
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [templateId, setTemplateId] = useState('')
+  const [title, setTitle] = useState('')
+  const [location, setLocation] = useState('')
+  const [description, setDescription] = useState('')
+  const [answers, setAnswers] = useState({})
+  const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [validationErrors, setValidationErrors] = useState({})
 
   useEffect(() => {
-    const loadTemplates = async () => {
-      try {
-        setLoadingTemplates(true)
-        const fetchedTemplates = await getTemplates()
-        setTemplates(fetchedTemplates)
-        if (fetchedTemplates.length > 0) {
-          setFormData(prev => ({ ...prev, template_id: fetchedTemplates[0].id }))
+    let cancelled = false
+    fetch('/api/templates')
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status === 503 ? 'Airtable not configured' : 'Failed to load templates')
+        return res.json()
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setApiPayload(data)
+          const list = data.templates || []
+          if (list.length > 0 && !templateId) setTemplateId(list[0].id)
         }
-      } catch (error) {
-        console.error('Error loading templates:', error)
-        setErrors({ submit: 'Failed to load templates. Please refresh the page.' })
-      } finally {
-        setLoadingTemplates(false)
-      }
-    }
-    loadTemplates()
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [])
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }))
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: '',
-      }))
-    }
+  const templates = apiPayload.templates || []
+  const selectedTemplate = templates.find((t) => t.id === templateId)
+
+  const handleAnswer = (questionId, value) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }))
+    setValidationErrors((prev) => ({ ...prev, [questionId]: undefined }))
   }
 
   const validate = () => {
-    const newErrors = {}
+    const errs = {}
+    if (!title.trim()) errs.title = 'Title is required'
+    if (!templateId) errs.template_id = 'Select a template'
+    if (!selectedTemplate) return { ...errs }
 
-    if (!formData.template_id) {
-      newErrors.template_id = 'Please select a template'
-    }
-
-    if (!formData.title.trim()) {
-      newErrors.title = 'Title is required'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    selectedTemplate.sections.forEach((sec) => {
+      (sec.questions || []).forEach((q) => {
+        if (!shouldShowQuestion(q, answers)) return
+        if (!q.is_required) return
+        const v = answers[q.id]
+        if (v === undefined || v === null || (typeof v === 'string' && !v.trim())) {
+          errs[q.id] = 'Required'
+        }
+      })
+    })
+    setValidationErrors(errs)
+    return errs
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-
-    if (!validate()) {
-      return
-    }
+    setSubmitError(null)
+    const errs = validate()
+    if (Object.keys(errs).length > 0) return
 
     setIsSubmitting(true)
-
     try {
-      const newIssue = await createIssue(formData)
-
-      if (newIssue) {
-        router.push(`/inspections/${newIssue.id}/section/1`)
-      } else {
-        setErrors({ submit: 'Failed to create inspection. Please try again.' })
+      const res = await fetch('/api/inspections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: templateId,
+          title: title.trim(),
+          location: location.trim() || undefined,
+          description: description.trim() || undefined,
+          answers,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setSubmitError(data.error || data.details || `Request failed (${res.status})`)
+        return
       }
-    } catch (error) {
-      console.error('Error creating inspection:', error)
-      setErrors({ submit: error.message || 'An error occurred. Please try again.' })
+      const inspectionId = data.inspectionId ?? data.id
+      if (inspectionId) {
+        router.push(`/inspections/${inspectionId}`)
+      } else {
+        router.push('/inspections')
+      }
+    } catch (err) {
+      setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (loading) {
+    return (
+      <div>
+        <p>Loading templates...</p>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div>
+        <Link href="/inspections" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '0.875rem' }}>
+          ← Back to Inspections
+        </Link>
+        <div style={{ marginTop: '1rem', padding: '1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '0.5rem' }}>
+          {loadError}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -108,10 +272,10 @@ export default function NewInspection() {
           ← Back to Inspections
         </Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>
-          Start New Inspection
+          New Inspection
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Choose block/template and enter basic details
+          Choose a template and complete the form
         </p>
       </div>
 
@@ -121,151 +285,99 @@ export default function NewInspection() {
           backgroundColor: 'white',
           padding: '2rem',
           borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          maxWidth: '800px'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          maxWidth: '800px',
         }}
       >
-        {errors.submit && (
-          <div style={{
-            padding: '0.75rem',
-            marginBottom: '1.5rem',
-            backgroundColor: '#fee2e2',
-            color: '#dc2626',
-            borderRadius: '0.375rem',
-            fontSize: '0.875rem',
-          }}>
-            {errors.submit}
+        {submitError && (
+          <div
+            style={{
+              padding: '0.75rem',
+              marginBottom: '1.5rem',
+              backgroundColor: '#fee2e2',
+              color: '#dc2626',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+            }}
+          >
+            {submitError}
           </div>
         )}
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
             htmlFor="template_id"
-            style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              color: '#374151',
-            }}
+            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
             Template <span style={{ color: '#ef4444' }}>*</span>
           </label>
-          {loadingTemplates ? (
-            <div style={{
+          <select
+            id="template_id"
+            value={templateId}
+            onChange={(e) => {
+              setTemplateId(e.target.value)
+              setAnswers({})
+              setValidationErrors({})
+            }}
+            required
+            style={{
+              width: '100%',
               padding: '0.75rem',
-              border: '1px solid #d1d5db',
+              border: validationErrors.template_id ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
-              backgroundColor: '#f9fafb',
-              color: '#6b7280'
-            }}>
-              Loading templates...
-            </div>
-          ) : (
-            <select
-              id="template_id"
-              name="template_id"
-              value={formData.template_id}
-              onChange={handleChange}
-              required
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: errors.template_id ? '1px solid #ef4444' : '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: '1rem',
-                backgroundColor: 'white',
-              }}
-            >
-              <option value="">-- Select a template --</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {errors.template_id && (
-            <p style={{
-              margin: '0.5rem 0 0 0',
-              fontSize: '0.875rem',
-              color: '#ef4444',
-            }}>
-              {errors.template_id}
-            </p>
-          )}
-          {!loadingTemplates && templates.length === 0 && (
-            <p style={{
-              margin: '0.5rem 0 0 0',
-              fontSize: '0.875rem',
-              color: '#ef4444',
-            }}>
-              No templates available. Please check your Airtable configuration.
-            </p>
+              backgroundColor: 'white',
+            }}
+          >
+            <option value="">— Select template —</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name || t.template_key || t.id}</option>
+            ))}
+          </select>
+          {validationErrors.template_id && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.template_id}</p>
           )}
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
             htmlFor="title"
-            style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              color: '#374151',
-            }}
+            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
             Title <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <input
             type="text"
             id="title"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            required
-            placeholder="e.g., Block A - Ground Floor Inspection"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Block A – Ground Floor"
             style={{
               width: '100%',
               padding: '0.75rem',
-              border: errors.title ? '1px solid #ef4444' : '1px solid #d1d5db',
+              border: validationErrors.title ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
             }}
           />
-          {errors.title && (
-            <p style={{
-              margin: '0.5rem 0 0 0',
-              fontSize: '0.875rem',
-              color: '#ef4444',
-            }}>
-              {errors.title}
-            </p>
+          {validationErrors.title && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.title}</p>
           )}
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
             htmlFor="location"
-            style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              color: '#374151',
-            }}
+            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
             Location
           </label>
           <input
             type="text"
             id="location"
-            name="location"
-            value={formData.location}
-            onChange={handleChange}
-            placeholder="e.g., Block A, Flat 12"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Block A, Flat 12"
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -276,26 +388,56 @@ export default function NewInspection() {
           />
         </div>
 
+        {selectedTemplate && selectedTemplate.sections && selectedTemplate.sections.length > 0 && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
+              Sections &amp; questions
+            </h2>
+            {selectedTemplate.sections.map((section) => (
+              <div
+                key={section.id}
+                style={{
+                  marginBottom: '2rem',
+                  paddingBottom: '1.5rem',
+                  borderBottom: '1px solid #e5e7eb',
+                }}
+              >
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
+                  {section.title}
+                </h3>
+                {section.help_text && (
+                  <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
+                )}
+                {(section.questions || []).map((q) => {
+                  if (!shouldShowQuestion(q, answers)) return null
+                  return (
+                    <InspectionQuestion
+                      key={q.id}
+                      question={q}
+                      value={answers[q.id]}
+                      onChange={handleAnswer}
+                      error={validationErrors[q.id]}
+                    />
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ marginBottom: '1.5rem' }}>
           <label
             htmlFor="description"
-            style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              color: '#374151',
-            }}
+            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
             Description
           </label>
           <textarea
             id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={5}
-            placeholder="Additional notes about this inspection..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Additional notes..."
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -308,11 +450,7 @@ export default function NewInspection() {
           />
         </div>
 
-        <div style={{
-          display: 'flex',
-          gap: '1rem',
-          justifyContent: 'flex-end',
-        }}>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
           <Link
             href="/inspections"
             style={{
@@ -321,8 +459,7 @@ export default function NewInspection() {
               borderRadius: '0.5rem',
               textDecoration: 'none',
               color: '#374151',
-              fontWeight: '500',
-              display: 'inline-block',
+              fontWeight: 500,
             }}
           >
             Cancel
@@ -337,11 +474,11 @@ export default function NewInspection() {
               border: 'none',
               borderRadius: '0.5rem',
               fontSize: '1rem',
-              fontWeight: '500',
+              fontWeight: 500,
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
             }}
           >
-            {isSubmitting ? 'Creating...' : 'Start Inspection'}
+            {isSubmitting ? 'Saving...' : 'Save inspection'}
           </button>
         </div>
       </form>
