@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     console.log('[Airtable Test Route] Testing Airtable connection...')
-    
+
     if (!process.env.AIRTABLE_API_KEY) {
       return NextResponse.json(
         {
@@ -31,10 +31,10 @@ export async function GET() {
 
     const base = new Airtable({
       apiKey: process.env.AIRTABLE_API_KEY,
-    }).base(process.env.AIRTABLE_BASE_ID as string)
+    }).base(process.env.AIRTABLE_BASE_ID)
 
     console.log('[Airtable Test Route] Fetching records from Templates table...')
-    
+
     const records = await base('Templates')
       .select({ maxRecords: 5 })
       .firstPage()
@@ -45,7 +45,7 @@ export async function GET() {
       const templateName = r.get('template_name') || r.get('Name') || r.get('Template Name') || 'N/A'
       console.log(`[Airtable Test Route] Template: ${r.id} - ${templateName}`)
       console.log(`[Airtable Test Route] Available fields:`, Object.keys(r.fields))
-      
+
       return {
         id: r.id,
         name: templateName,
@@ -59,7 +59,7 @@ export async function GET() {
       recordCount: templates.length,
       templates,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Airtable Test Route] Error testing Airtable:', error)
     return NextResponse.json(
       {
