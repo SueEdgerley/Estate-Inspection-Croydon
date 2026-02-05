@@ -19,9 +19,9 @@ export default function ActionsPage() {
         setLoading(false)
       }
     }
-    
+
     loadIssues()
-    
+
     const interval = setInterval(async () => {
       const data = await getAllIssues()
       setIssues(data)
@@ -54,8 +54,8 @@ export default function ActionsPage() {
     }
   }
 
-  const filteredIssues = selectedType === 'all' 
-    ? issues 
+  const filteredIssues = selectedType === 'all'
+    ? issues
     : issues.filter(issue => issue.type === selectedType)
 
   const repairsIssues = issues.filter(i => i.type === ISSUE_TYPES.REPAIRS)
@@ -73,7 +73,6 @@ export default function ActionsPage() {
         </p>
       </div>
 
-      {/* Type Tabs */}
       <div style={{
         display: 'flex',
         gap: '0.5rem',
@@ -142,7 +141,6 @@ export default function ActionsPage() {
         </button>
       </div>
 
-      {/* Actions List */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
           Loading actions...
@@ -160,10 +158,7 @@ export default function ActionsPage() {
           </p>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gap: '1rem'
-        }}>
+        <div style={{ display: 'grid', gap: '1rem' }}>
           {filteredIssues.map((issue) => {
             const statusColors = getStatusColor(issue.status)
             return (
@@ -177,16 +172,16 @@ export default function ActionsPage() {
                   border: '1px solid #e5e7eb'
                 }}
               >
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'flex-start',
                   marginBottom: '1rem'
                 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      gap: '1rem', 
+                    <div style={{
+                      display: 'flex',
+                      gap: '1rem',
                       alignItems: 'center',
                       marginBottom: '0.5rem'
                     }}>

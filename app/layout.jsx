@@ -1,5 +1,5 @@
 import './styles/globals.css'
-import Header from './components/Header'
+import AppLayout from './components/AppLayout'
 
 export const metadata = {
   title: 'Estate Inspection - Croydon',
@@ -10,7 +10,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body style={{ margin: 0, backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-        {children}
+        <AppLayout>{children}</AppLayout>
       </body>
     </html>
   )

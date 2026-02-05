@@ -36,7 +36,7 @@ export default function InspectionReview() {
         setLoading(false)
       }
     }
-    
+
     if (id) {
       loadInspection()
     }
@@ -47,28 +47,26 @@ export default function InspectionReview() {
 
     setIsSubmitting(true)
     try {
-      // Generate PDF and send emails
       const response = await fetch(`/api/inspections/${id}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         }
       })
-      
+
       if (!response.ok) {
         const error = await response.json()
         throw new Error(error.error || 'Failed to submit inspection')
       }
-      
+
       const result = await response.json()
-      
-      // Update status
-      await updateIssue(id, { 
+
+      await updateIssue(id, {
         status: 'submitted',
         submitted_at: new Date().toISOString(),
         pdf_url: result.pdf_url
       })
-      
+
       alert(`Inspection submitted successfully! PDF generated and ${result.emails_sent} email(s) sent.`)
       router.push('/dashboard')
     } catch (error) {
@@ -95,7 +93,7 @@ export default function InspectionReview() {
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
-        <Link 
+        <Link
           href={`/inspections/${id}`}
           style={{
             color: '#3b82f6',

@@ -25,13 +25,12 @@ export default function AppLayout({ children }) {
   }
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      minHeight: '100vh', 
-      backgroundColor: '#f9fafb' 
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100vh',
+      backgroundColor: '#f9fafb'
     }}>
-      {/* Top Navigation Bar */}
       <header style={{
         backgroundColor: '#fff',
         borderBottom: '1px solid #e5e7eb',
@@ -83,8 +82,6 @@ export default function AppLayout({ children }) {
           </div>
         </div>
       </header>
-
-      {/* Main Content Area */}
       <main style={{
         flex: 1,
         padding: '2rem',

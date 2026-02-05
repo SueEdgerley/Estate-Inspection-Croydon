@@ -6,8 +6,7 @@ import Link from 'next/link'
 import { getAllIssues, updateIssue } from '@/lib/issues'
 import SectionQuestions from '@/app/components/questions/SectionQuestions'
 import { getTemplateSections } from '@/lib/airtable'
-import { validateCaretakerTemplate, extractCaretakerRecipients, isCaretakerTriggerActive, findTriggerQuestion } from '@/lib/caretaker-template'
-import { isSpecialSection, getSectionActionCategory, getQuestionActionCategory } from '@/lib/template-rules'
+import { validateCaretakerTemplate } from '@/lib/caretaker-template'
 import { validateRequiredQuestions } from '@/lib/airtable'
 import { handleYesAnswer, handleNoAnswer } from '@/lib/yesno-action-handler'
 
@@ -28,11 +27,11 @@ export default function InspectionSection() {
   const [inspection, setInspection] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sectionData, setSectionData] = useState({})
-  const [answers, setAnswers] = useState({}) // Store all question answers
-  const [createdActions, setCreatedActions] = useState([]) // Track auto-created actions
-  const [questions, setQuestions] = useState([]) // Store questions for validation
-  const [errors, setErrors] = useState({}) // Validation errors
-  const [section, setSection] = useState(null) // Current section info
+  const [answers, setAnswers] = useState({})
+  const [createdActions, setCreatedActions] = useState([])
+  const [questions, setQuestions] = useState([])
+  const [errors, setErrors] = useState({})
+  const [section, setSection] = useState(null)
 
   useEffect(() => {
     const loadInspection = async () => {
@@ -42,7 +41,6 @@ export default function InspectionSection() {
         const found = issues.find(i => i.id === id)
         if (found) {
           setInspection(found)
-          // Load section info
           if (found.template_id) {
             const sections = await getTemplateSections(found.template_id)
             const currentSection = sections.find(s => s.order === parseInt(sectionId))
@@ -57,13 +55,12 @@ export default function InspectionSection() {
         setLoading(false)
       }
     }
-    
+
     if (id && sectionId) {
       loadInspection()
     }
   }, [id, sectionId])
-  
-  // Load saved answers
+
   useEffect(() => {
     const loadAnswers = async () => {
       if (!id || !sectionId) return
@@ -74,7 +71,6 @@ export default function InspectionSection() {
           const answerMap = {}
           data.forEach(answer => {
             answerMap[answer.question_id] = answer.answer_value || answer.answer_text || answer.answer_boolean
-            // Load comment if exists
             if (answer.notes) {
               answerMap[`${answer.question_id}_comment`] = answer.notes
             }
@@ -88,65 +84,20 @@ export default function InspectionSection() {
     loadAnswers()
   }, [id, sectionId])
 
-  const handleSave = async () => {
-    try {
-      // Validate required questions (including caretaker template logic)
-      const requiredErrors = validateRequiredQuestions(questions, answers)
-      const caretakerErrors = validateCaretakerTemplate(answers, questions, section)
-      
-      // Validate No answers have required comment/photos
-      const noAnswerErrors = await validateNoAnswers(questions, answers)
-      
-      const allErrors = { ...requiredErrors, ...caretakerErrors, ...noAnswerErrors }
-      
-      if (Object.keys(allErrors).length > 0) {
-        setErrors(allErrors)
-        alert('Please complete all required fields (comments and photos for "No" answers)')
-        return
-      }
-      
-      setErrors({})
-      
-      // Save answers to database (including comments)
-      await saveAnswers()
-      
-      // Save section data
-      await updateIssue(id, { ...sectionData })
-      
-      // Process Yes/No answers and create/update actions for "No" answers
-      await processNoAnswers(questions, answers)
-      
-      alert('Section saved!')
-    } catch (error) {
-      console.error('Error saving section:', error)
-      alert('Failed to save section')
-    }
-  }
-  
-  // Validate No answers have required comment/photos
   const validateNoAnswers = async (questions, answers) => {
     const errors = {}
-    
     for (const question of questions) {
       if (question.question_type !== 'yesno') continue
-      
       const answer = answers[question.id]
       const isNo = answer === false || answer === 'no' || answer === 'No'
-      
       if (!isNo) continue
-      
-      // Check if action should be created
       if (question.create_action_on_no === false) continue
-      
-      // Check comment requirement
       if (question.require_comment_on_no !== false) {
         const comment = answers[`${question.id}_comment`]
         if (!comment || comment.trim() === '') {
           errors[`${question.id}_comment`] = 'Comment is required when answering "No"'
         }
       }
-      
-      // Check photo requirement
       if (question.require_photo_on_no !== false) {
         const photos = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`)
         if (photos.ok) {
@@ -159,42 +110,26 @@ export default function InspectionSection() {
         }
       }
     }
-    
     return errors
   }
-  
-  // Process No answers and create/update actions
+
   const processNoAnswers = async (questions, answers) => {
     const sectionName = section?.name || `Section ${sectionId}`
-    
     for (const question of questions) {
       if (question.question_type !== 'yesno') continue
-      
       const answer = answers[question.id]
       const isNo = answer === false || answer === 'no' || answer === 'No'
-      
       if (!isNo) {
-        // Answer is Yes - close any existing action
         await handleYesAnswer(id, question.id)
         continue
       }
-      
-      // Check if action should be created
       if (question.create_action_on_no === false) continue
-      
-      // Get comment and photos
       const comment = answers[`${question.id}_comment`] || ''
       const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`)
       const photos = photosResponse.ok ? await photosResponse.json() : []
       const photoIds = photos.map(p => p.id)
-      
-      // Get priority if set
       const priority = answers[`${question.id}_priority`] || question.action_priority || null
-      
-      // Get recipient if this is a "who to send to" type question
       const recipientPersonId = question.id === 'who_to_send_to' ? answer : null
-      
-      // Create or update action
       try {
         const action = await handleNoAnswer({
           inspectionId: id,
@@ -208,7 +143,6 @@ export default function InspectionSection() {
           priority: priority,
           recipientPersonId: recipientPersonId
         })
-        
         if (action) {
           setCreatedActions(prev => {
             const existing = prev.find(a => a.question_id === question.id)
@@ -223,20 +157,14 @@ export default function InspectionSection() {
       }
     }
   }
-  
+
   const saveAnswers = async () => {
     if (!id || !sectionId || Object.keys(answers).length === 0) return
-    
     try {
       await fetch(`/api/inspections/${id}/answers`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          section_id: sectionId,
-          answers: answers
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section_id: sectionId, answers: answers })
       })
     } catch (error) {
       console.error('Error saving answers:', error)
@@ -244,37 +172,50 @@ export default function InspectionSection() {
     }
   }
 
+  const handleSave = async () => {
+    try {
+      const requiredErrors = validateRequiredQuestions(questions, answers)
+      const caretakerErrors = validateCaretakerTemplate(answers, questions, section)
+      const noAnswerErrors = await validateNoAnswers(questions, answers)
+      const allErrors = { ...requiredErrors, ...caretakerErrors, ...noAnswerErrors }
+      if (Object.keys(allErrors).length > 0) {
+        setErrors(allErrors)
+        alert('Please complete all required fields (comments and photos for "No" answers)')
+        return
+      }
+      setErrors({})
+      await saveAnswers()
+      await updateIssue(id, { ...sectionData })
+      await processNoAnswers(questions, answers)
+      alert('Section saved!')
+    } catch (error) {
+      console.error('Error saving section:', error)
+      alert('Failed to save section')
+    }
+  }
+
   const handleAnswersChange = (newAnswers) => {
     setAnswers(newAnswers)
-    // Clear errors when answers change
     setErrors({})
   }
-  
+
   const handleQuestionsLoaded = (loadedQuestions) => {
     setQuestions(loadedQuestions)
   }
 
   const handleNext = async () => {
-    // Validate and save before moving to next section
     try {
-      // Validate required questions
       const requiredErrors = validateRequiredQuestions(questions, answers)
-      const caretakerErrors = validateCaretakerTemplate(answers)
+      const caretakerErrors = validateCaretakerTemplate(answers, questions, section)
       const noAnswerErrors = await validateNoAnswers(questions, answers)
       const allErrors = { ...requiredErrors, ...caretakerErrors, ...noAnswerErrors }
-      
       if (Object.keys(allErrors).length > 0) {
         setErrors(allErrors)
         alert('Please complete all required fields before continuing')
         return
       }
-      
-      // Save answers
       await saveAnswers()
-      
-      // Process No answers and create/update actions
       await processNoAnswers(questions, answers)
-      
       const nextSection = parseInt(sectionId) + 1
       router.push(`/inspections/${id}/section/${nextSection}`)
     } catch (error) {
@@ -303,7 +244,7 @@ export default function InspectionSection() {
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
-        <Link 
+        <Link
           href={`/inspections/${id}`}
           style={{
             color: '#3b82f6',
@@ -335,8 +276,6 @@ export default function InspectionSection() {
             {section.name}
           </h2>
         )}
-        
-        {/* Render questions with conditional logic */}
         {section && (
           <SectionQuestions
             sectionId={section.id}
@@ -348,14 +287,11 @@ export default function InspectionSection() {
             onQuestionsLoaded={handleQuestionsLoaded}
           />
         )}
-        
         {!section && (
           <p style={{ color: '#6b7280' }}>
             Loading questions for Section {sectionId}...
           </p>
         )}
-
-        {/* Show created actions */}
         {createdActions.length > 0 && (
           <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', border: '1px solid #3b82f6' }}>
             <p style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#1e40af' }}>

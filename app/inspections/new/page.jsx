@@ -54,11 +54,11 @@ export default function NewInspection() {
 
   const validate = () => {
     const newErrors = {}
-    
+
     if (!formData.template_id) {
       newErrors.template_id = 'Please select a template'
     }
-    
+
     if (!formData.title.trim()) {
       newErrors.title = 'Title is required'
     }
@@ -69,7 +69,7 @@ export default function NewInspection() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!validate()) {
       return
     }
@@ -78,9 +78,8 @@ export default function NewInspection() {
 
     try {
       const newIssue = await createIssue(formData)
-      
+
       if (newIssue) {
-        // Redirect to first section of the inspection
         router.push(`/inspections/${newIssue.id}/section/1`)
       } else {
         setErrors({ submit: 'Failed to create inspection. Please try again.' })
@@ -96,7 +95,7 @@ export default function NewInspection() {
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
-        <Link 
+        <Link
           href="/inspections"
           style={{
             color: '#3b82f6',
@@ -116,7 +115,7 @@ export default function NewInspection() {
         </p>
       </div>
 
-      <form 
+      <form
         onSubmit={handleSubmit}
         style={{
           backgroundColor: 'white',
@@ -140,7 +139,7 @@ export default function NewInspection() {
         )}
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label 
+          <label
             htmlFor="template_id"
             style={{
               display: 'block',
@@ -208,7 +207,7 @@ export default function NewInspection() {
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label 
+          <label
             htmlFor="title"
             style={{
               display: 'block',
@@ -248,7 +247,7 @@ export default function NewInspection() {
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label 
+          <label
             htmlFor="location"
             style={{
               display: 'block',
@@ -278,7 +277,7 @@ export default function NewInspection() {
         </div>
 
         <div style={{ marginBottom: '1.5rem' }}>
-          <label 
+          <label
             htmlFor="description"
             style={{
               display: 'block',
@@ -314,7 +313,7 @@ export default function NewInspection() {
           gap: '1rem',
           justifyContent: 'flex-end',
         }}>
-          <Link 
+          <Link
             href="/inspections"
             style={{
               padding: '0.75rem 1.5rem',

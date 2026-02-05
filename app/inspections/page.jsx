@@ -22,9 +22,9 @@ export default function InspectionsPage() {
         setLoading(false)
       }
     }
-    
+
     loadIssues()
-    
+
     const interval = setInterval(async () => {
       const data = await getAllIssues()
       setIssues(data)
@@ -68,9 +68,9 @@ export default function InspectionsPage() {
 
   return (
     <div>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: '2rem'
       }}>
@@ -82,7 +82,7 @@ export default function InspectionsPage() {
             View and manage estate inspections
           </p>
         </div>
-        <Link 
+        <Link
           href="/inspections/new"
           style={{
             padding: '0.75rem 1.5rem',
@@ -98,7 +98,6 @@ export default function InspectionsPage() {
         </Link>
       </div>
 
-      {/* Search and Filters */}
       <div style={{
         backgroundColor: 'white',
         padding: '1.5rem',
@@ -154,7 +153,6 @@ export default function InspectionsPage() {
         </div>
       </div>
 
-      {/* Issues List */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
           Loading inspections...
@@ -168,12 +166,12 @@ export default function InspectionsPage() {
           textAlign: 'center'
         }}>
           <p style={{ fontSize: '1.125rem', color: '#6b7280', marginBottom: '1rem' }}>
-            {searchTerm || filterType !== 'all' || filterStatus !== 'all' 
+            {searchTerm || filterType !== 'all' || filterStatus !== 'all'
               ? 'No inspections match your filters'
               : 'No inspections yet'}
           </p>
           {!searchTerm && filterType === 'all' && filterStatus === 'all' && (
-            <Link 
+            <Link
               href="/inspections/new"
               style={{
                 padding: '0.75rem 1.5rem',
@@ -190,10 +188,7 @@ export default function InspectionsPage() {
           )}
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gap: '1rem'
-        }}>
+        <div style={{ display: 'grid', gap: '1rem' }}>
           {filteredIssues.map((issue) => {
             const statusColors = getStatusColor(issue.status)
             return (
@@ -207,16 +202,16 @@ export default function InspectionsPage() {
                   border: '1px solid #e5e7eb'
                 }}
               >
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'flex-start',
                   marginBottom: '1rem'
                 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      gap: '1rem', 
+                    <div style={{
+                      display: 'flex',
+                      gap: '1rem',
                       alignItems: 'center',
                       marginBottom: '0.5rem'
                     }}>

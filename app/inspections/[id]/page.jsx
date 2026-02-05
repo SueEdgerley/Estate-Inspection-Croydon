@@ -66,7 +66,7 @@ export default function InspectionDetail() {
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
-        <Link 
+        <Link
           href="/dashboard"
           style={{
             color: '#3b82f6',
@@ -86,7 +86,6 @@ export default function InspectionDetail() {
         </p>
       </div>
 
-      {/* Summary Card */}
       <div style={{
         backgroundColor: 'white',
         padding: '2rem',
@@ -154,7 +153,6 @@ export default function InspectionDetail() {
         </div>
       </div>
 
-      {/* Actions */}
       <div style={{
         backgroundColor: 'white',
         padding: '2rem',
@@ -169,10 +167,8 @@ export default function InspectionDetail() {
         <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
           Actions logged during this inspection will appear here.
         </p>
-        {/* TODO: Add actions list */}
       </div>
 
-      {/* PDF Link */}
       {inspection.pdf_url && (
         <div style={{
           backgroundColor: 'white',

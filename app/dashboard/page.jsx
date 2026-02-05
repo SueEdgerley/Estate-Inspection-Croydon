@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-// Dashboard home page - displays inspection statistics and data
-// Fixed: Removed conflicting empty directories to ensure route is built
 export default function DashboardHome() {
   const [stats, setStats] = useState({
     totalCompleted: 0,
@@ -101,7 +99,6 @@ export default function DashboardHome() {
 
   return (
     <div>
-      {/* Intro Line */}
       <p style={{
         margin: '0 0 1.5rem 0',
         fontSize: '0.9375rem',
@@ -109,7 +106,7 @@ export default function DashboardHome() {
       }}>
         Real-time data from estate inspections across Croydon Council
       </p>
-      
+
       {loading && (
         <div style={{ padding: '1rem', backgroundColor: '#f3f4f6', borderRadius: '0.5rem', marginBottom: '1rem' }}>
           Loading dashboard data...
@@ -130,7 +127,6 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Stats Row */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -183,7 +179,6 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Actions Row */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -241,7 +236,6 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Filters Panel */}
       {filtersOpen && (
         <div style={{
           backgroundColor: 'white',
@@ -356,7 +350,6 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Inspections Table */}
       <div style={{
         backgroundColor: 'white',
         borderRadius: '0.5rem',
