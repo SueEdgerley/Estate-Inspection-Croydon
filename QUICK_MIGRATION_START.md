@@ -32,12 +32,15 @@ I've automated most of the migration process. Here's what you need to do:
    - Select ALL environments (Production, Preview, Development)
    - Save
 
-### Step 2: Redeploy (1 minute)
+### Step 2: Push code and let Vercel deploy (or Redeploy)
 
-1. Go to: https://vercel.com/photobook-73dad537/estate-inspection-croydon/deployments
-2. Click "..." on latest deployment
-3. Click "Redeploy"
-4. Wait 1-2 minutes
+**Important:** The dashboard was 404 because builds that included the new routes were **failing** (missing `@vercel/blob`). That’s now added in `package.json`. You need a **successful** build for the dashboard to exist.
+
+1. **Commit and push** your latest code (including the `@vercel/blob` dependency) to the `main` branch.
+2. Vercel will run a new build. Wait for it to finish and show **Ready** (not Error).
+3. If you only “Redeploy” without pushing, you’ll redeploy the old commit and may still get 404. So push first, then use the new deployment.
+
+Alternative: Go to https://vercel.com/photobook-73dad537/estate-inspection-croydon/deployments → trigger a new deployment from the latest commit after pushing.
 
 ### Step 3: Test (30 seconds)
 
