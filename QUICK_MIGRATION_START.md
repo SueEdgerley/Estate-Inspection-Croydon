@@ -42,11 +42,18 @@ I've automated most of the migration process. Here's what you need to do:
 
 Alternative: Go to https://vercel.com/photobook-73dad537/estate-inspection-croydon/deployments → trigger a new deployment from the latest commit after pushing.
 
-### Step 3: Test (30 seconds)
+### Step 3: Vercel project settings (if you get 404)
 
-Visit: https://estate-inspection-croydon-ruby.vercel.app/dashboard
+1. Go to **Project Settings** → **General**: https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings  
+2. **Root Directory**: must be **empty** (or `.`). If it’s set to e.g. `frontend`, clear it so the build runs from the repo root where `app/` and `package.json` are.  
+3. **Framework Preset**: set to **Next.js** (or leave default; `vercel.json` in the repo now sets `framework: nextjs`).
 
-Should show your dashboard with stats!
+### Step 4: Test
+
+- **Main URL (use this):** https://estate-inspection-croydon-ruby.vercel.app/  
+- Or: https://estate-inspection-croydon-ruby.vercel.app/dashboard  
+
+The dashboard is shown at **/** (root). You should see the app with the nav and stats.
 
 ## That's It! 🎉
 
