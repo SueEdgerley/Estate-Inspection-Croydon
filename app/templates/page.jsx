@@ -45,7 +45,16 @@ export default function TemplatesPage() {
           borderRadius: '0.5rem',
           marginBottom: '1rem',
         }}>
-          {error}
+          <p style={{ margin: 0, fontWeight: 500 }}>{error}</p>
+          {error.toLowerCase().includes('airtable') && (
+            <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
+              In Vercel: Settings → Environment Variables. Set <strong>AIRTABLE_BASE_ID</strong> and <strong>AIRTABLE_API_TOKEN</strong> (or <strong>AIRTABLE_API_KEY</strong>) for <strong>Production</strong>, then redeploy.
+              {' '}
+              <a href="/api/airtable-status" target="_blank" rel="noopener noreferrer" style={{ color: '#dc2626', textDecoration: 'underline' }}>
+                Check what the server sees →
+              </a>
+            </p>
+          )}
         </div>
       )}
 

@@ -5,8 +5,8 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request) {
-  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY
-  if (!process.env.AIRTABLE_BASE_ID || !hasKey) {
+  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
+  if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
     return NextResponse.json(
       { error: 'Airtable not configured. Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY or AIRTABLE_API_TOKEN.' },
       { status: 503 }
