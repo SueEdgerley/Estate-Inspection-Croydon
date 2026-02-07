@@ -14,12 +14,38 @@ function shouldShowQuestion(question, answers) {
   return depAnswer === showWhen
 }
 
-function InspectionQuestion({ question, value, onChange, error }) {
+function InspectionQuestion({ question, value, onChange, error, answerExtras, onAnswerExtras, createActionOnNo }) {
   const qType = (question.question_type || 'text').replace(/[\s-]/g, '_')
   const opts = question.options || []
   const isRequired = question.is_required
+  const isNo = String(value).toLowerCase() === 'no'
+  const showIssueExtras = qType === 'yes_no' && isNo && createActionOnNo
+  const extras = answerExtras || { comment: '', photoUrls: [] }
 
   const handleChange = (val) => onChange(question.id, val)
+
+  const setExtras = (updates) => {
+    if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
+  }
+
+  const handlePhotoUpload = async (e) => {
+    const files = e.target.files
+    if (!files?.length || !onAnswerExtras) return
+    for (const file of Array.from(files)) {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('inspection_id', 'new')
+      fd.append('question_id', question.id)
+      try {
+        const res = await fetch('/api/photos/upload', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (data?.url) setExtras({ photoUrls: [...(extras.photoUrls || []), data.url] })
+      } catch (err) {
+        console.error('Photo upload failed:', err)
+      }
+    }
+    e.target.value = ''
+  }
 
   if (qType === 'yes_no') {
     return (
@@ -41,6 +67,43 @@ function InspectionQuestion({ question, value, onChange, error }) {
             </label>
           ))}
         </div>
+        {showIssueExtras && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Resident-friendly message (for poster PDF)
+            </label>
+            <textarea
+              value={extras.comment || ''}
+              onChange={(e) => setExtras({ comment: e.target.value })}
+              placeholder="e.g. Please ensure the area is kept clear."
+              rows={2}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+              }}
+            />
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Photos (optional)
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotoUpload}
+              style={{ fontSize: '0.875rem' }}
+            />
+            {(extras.photoUrls || []).length > 0 && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
+                {extras.photoUrls.length} photo(s) added
+              </p>
+            )}
+          </div>
+        )}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -143,6 +206,7 @@ export default function NewInspectionPage() {
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [answers, setAnswers] = useState({})
+  const [answerExtras, setAnswerExtras] = useState({})
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
@@ -215,6 +279,7 @@ export default function NewInspectionPage() {
           location: location.trim() || undefined,
           description: description.trim() || undefined,
           answers,
+          answer_extras: answerExtras,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -317,6 +382,7 @@ export default function NewInspectionPage() {
             onChange={(e) => {
               setTemplateId(e.target.value)
               setAnswers({})
+              setAnswerExtras({})
               setValidationErrors({})
             }}
             required
@@ -417,6 +483,9 @@ export default function NewInspectionPage() {
                       value={answers[q.id]}
                       onChange={handleAnswer}
                       error={validationErrors[q.id]}
+                      answerExtras={answerExtras[q.id]}
+                      onAnswerExtras={(questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))}
+                      createActionOnNo={q.create_action_on_no}
                     />
                   )
                 })}

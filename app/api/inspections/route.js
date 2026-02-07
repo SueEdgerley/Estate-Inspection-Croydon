@@ -19,7 +19,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { template_id, title, location, description, answers = {} } = body
+  const { template_id, title, location, description, answers = {}, answer_extras = {} } = body
 
   if (!template_id || !title || typeof title !== 'string' || !title.trim()) {
     return NextResponse.json(
@@ -68,20 +68,35 @@ export async function POST(request) {
       console.warn('[Inspections] Inspection Responses table may not exist or have different fields:', responseErr.message)
     }
 
+    // Create Issue/Action records for "fail" answers (e.g. Yes/No = No when create_action_on_no)
     for (const section of template.sections || []) {
       for (const q of section.questions || []) {
         const answer = answers[q.id]
         const isNo = String(answer).toLowerCase() === 'no'
         if (!isNo || !q.create_action_on_no) continue
+
+        const extras = answer_extras[q.id] || {}
+        const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+        const photoUrls = Array.isArray(extras.photoUrls) ? extras.photoUrls.filter((u) => typeof u === 'string' && u) : []
+
+        const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = q.action_category || 'Follow-up'
+
+        const actionFields = {
+          Inspection: [inspectionId],
+          'Action Category': category,
+          Status: 'Open',
+          Description: residentMessage,
+          'Resident Message': residentMessage,
+        }
+        if (photoUrls.length > 0) {
+          actionFields.Photos = photoUrls.map((url) => ({ url }))
+        }
+
         try {
-          await createAirtableRecord(TABLES.ACTIONS, {
-            Inspection: [inspectionId],
-            'Action Category': category,
-            Status: 'Open',
-          })
+          await createAirtableRecord(TABLES.ACTIONS, actionFields)
         } catch (actionErr) {
-          console.warn('[Inspections] Actions table may not exist or have different fields:', actionErr.message)
+          console.warn('[Inspections] Actions/Issues table may not exist or have different fields:', actionErr.message)
         }
       }
     }
