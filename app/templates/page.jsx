@@ -11,9 +11,15 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     fetch('/api/templates')
-      .then((res) => {
-        if (!res.ok) throw new Error(res.status === 503 ? 'Airtable not configured' : 'Failed to load templates')
-        return res.json()
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const msg = res.status === 503
+            ? 'Airtable not configured'
+            : (body.details || body.error || 'Failed to load templates')
+          throw new Error(msg)
+        }
+        return body
       })
       .then((d) => setData(d))
       .catch((err) => setError(err.message))
@@ -53,6 +59,11 @@ export default function TemplatesPage() {
               <a href="/api/airtable-status" target="_blank" rel="noopener noreferrer" style={{ color: '#dc2626', textDecoration: 'underline' }}>
                 Check what the server sees →
               </a>
+            </p>
+          )}
+          {error && !error.toLowerCase().includes('airtable not configured') && (
+            <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
+              Check: correct base ID, token has access to the base, and the base has tables named <strong>Templates</strong>, <strong>Template Sections</strong>, <strong>Template Questions</strong> (or set AIRTABLE_TEMPLATES_TABLE etc. in env).
             </p>
           )}
         </div>
