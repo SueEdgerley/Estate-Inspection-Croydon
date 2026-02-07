@@ -47,6 +47,35 @@ function InspectionQuestion({ question, value, onChange, error, answerExtras, on
     e.target.value = ''
   }
 
+  const buttonGroup = (optionList) => (
+    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      {(optionList || []).map((opt) => {
+        const label = typeof opt === 'string' ? opt : (opt?.label ?? opt?.value ?? opt)
+        const val = typeof opt === 'string' ? opt : (opt?.value ?? opt?.label ?? opt)
+        const isSelected = value === val || value === label
+        return (
+          <button
+            key={val}
+            type="button"
+            onClick={() => handleChange(val)}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: isSelected ? '#3b82f6' : '#f3f4f6',
+              color: isSelected ? 'white' : '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              cursor: 'pointer',
+              fontWeight: isSelected ? 600 : 500,
+              fontSize: '0.9375rem',
+            }}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+
   if (qType === 'yes_no') {
     return (
       <div style={{ marginBottom: '1rem' }}>
@@ -54,19 +83,7 @@ function InspectionQuestion({ question, value, onChange, error, answerExtras, on
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          {['Yes', 'No'].map((opt) => (
-            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name={`q-${question.id}`}
-                checked={value === opt}
-                onChange={() => handleChange(opt)}
-              />
-              {opt}
-            </label>
-          ))}
-        </div>
+        {buttonGroup(['Yes', 'No'])}
         {showIssueExtras && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
@@ -109,8 +126,25 @@ function InspectionQuestion({ question, value, onChange, error, answerExtras, on
     )
   }
 
-  if (qType === 'select') {
-    const options = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o)))
+  if (qType === 'graded') {
+    const gradingOpts = question.grading_options || ['A', 'B', 'C', 'D', 'NA']
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+          {question.grading_scheme_name && (
+            <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({question.grading_scheme_name})</span>
+          )}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        {buttonGroup(gradingOpts)}
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'select' || qType === 'single_select') {
+    const options = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o))).filter(Boolean)
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
@@ -130,7 +164,7 @@ function InspectionQuestion({ question, value, onChange, error, answerExtras, on
           }}
         >
           <option value="">Select...</option>
-          {options.map((o) => (
+          {(options.length ? options : ['—']).map((o) => (
             <option key={o} value={o}>{o}</option>
           ))}
         </select>
