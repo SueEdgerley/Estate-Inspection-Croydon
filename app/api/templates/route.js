@@ -12,13 +12,15 @@ export async function GET() {
         error: 'Airtable not configured',
         details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY (or AIRTABLE_API_TOKEN) in environment variables.',
       },
-      { status: 503 }
+      { status: 503, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   }
 
   try {
     const templates = await getTemplatesNested()
-    return NextResponse.json({ templates })
+    return NextResponse.json({ templates }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+    })
   } catch (error) {
     console.error('Error fetching templates:', error)
     return NextResponse.json(
