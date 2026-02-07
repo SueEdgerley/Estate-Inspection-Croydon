@@ -5,11 +5,12 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  if (!process.env.AIRTABLE_BASE_ID || !process.env.AIRTABLE_API_KEY) {
+  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY
+  if (!process.env.AIRTABLE_BASE_ID || !hasKey) {
     return NextResponse.json(
       {
         error: 'Airtable not configured',
-        details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY in environment variables.',
+        details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY (or AIRTABLE_API_TOKEN) in environment variables.',
       },
       { status: 503 }
     )

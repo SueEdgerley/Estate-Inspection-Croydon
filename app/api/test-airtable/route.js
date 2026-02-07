@@ -26,7 +26,7 @@ export async function GET() {
         details: result.details,
         troubleshooting: [
           'Check that AIRTABLE_BASE_ID is set in environment variables',
-          'Check that AIRTABLE_API_KEY is set in environment variables',
+          'Check that AIRTABLE_API_KEY or AIRTABLE_API_TOKEN is set in environment variables',
           'Verify the API key has access to the base',
           'Check that the Templates table exists in your Airtable base',
           'Verify the table name matches exactly (case-sensitive)'

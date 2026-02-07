@@ -9,11 +9,11 @@ export async function GET() {
   try {
     console.log('[Airtable Test Route] Testing Airtable connection...')
 
-    if (!process.env.AIRTABLE_API_KEY) {
+    if (!process.env.AIRTABLE_API_TOKEN && !process.env.AIRTABLE_API_KEY) {
       return NextResponse.json(
         {
           success: false,
-          error: 'AIRTABLE_API_KEY is not set',
+          error: 'AIRTABLE_API_KEY or AIRTABLE_API_TOKEN is not set',
         },
         { status: 500 }
       )
@@ -30,7 +30,7 @@ export async function GET() {
     }
 
     const base = new Airtable({
-      apiKey: process.env.AIRTABLE_API_KEY,
+      apiKey: process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY,
     }).base(process.env.AIRTABLE_BASE_ID)
 
     console.log('[Airtable Test Route] Fetching records from Templates table...')
@@ -68,7 +68,7 @@ export async function GET() {
         details: error.toString(),
         troubleshooting: [
           'Check that AIRTABLE_BASE_ID is set in environment variables',
-          'Check that AIRTABLE_API_KEY is set in environment variables',
+          'Check that AIRTABLE_API_KEY or AIRTABLE_API_TOKEN is set in environment variables',
           'Verify the API key has access to the base',
           'Check that the Templates table exists in your Airtable base',
           'Verify the table name matches exactly (case-sensitive)',
