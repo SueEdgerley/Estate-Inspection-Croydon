@@ -3,6 +3,95 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
+function QuestionPreview({ q }) {
+  const qType = (q.question_type || 'text').replace(/[\s-]/g, '_')
+  const opts = q.options || []
+  const gradingOpts = q.grading_options || ['A', 'B', 'C', 'D', 'NA']
+
+  if (qType === 'yes_no') {
+    return (
+      <span style={{ display: 'inline-flex', gap: '0.25rem', marginLeft: '0.5rem' }}>
+        {['Yes', 'No'].map((opt) => (
+          <span
+            key={opt}
+            style={{
+              padding: '0.2rem 0.5rem',
+              borderRadius: '0.25rem',
+              backgroundColor: '#e5e7eb',
+              color: '#374151',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+            }}
+          >
+            {opt}
+          </span>
+        ))}
+      </span>
+    )
+  }
+
+  if (qType === 'graded') {
+    return (
+      <span style={{ display: 'inline-flex', gap: '0.25rem', marginLeft: '0.5rem', flexWrap: 'wrap' }}>
+        {(gradingOpts || []).map((opt) => (
+          <span
+            key={opt}
+            style={{
+              padding: '0.2rem 0.5rem',
+              borderRadius: '0.25rem',
+              backgroundColor: '#dbeafe',
+              color: '#1e40af',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+            }}
+          >
+            {opt}
+          </span>
+        ))}
+        {q.grading_scheme_name && (
+          <span style={{ fontSize: '0.7rem', color: '#6b7280', marginLeft: '0.25rem' }}>({q.grading_scheme_name})</span>
+        )}
+      </span>
+    )
+  }
+
+  if (qType === 'select' || qType === 'single_select') {
+    const options = opts.map((o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? o))).filter(Boolean)
+    return (
+      <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+        Dropdown{options.length ? `: ${options.slice(0, 5).join(', ')}${options.length > 5 ? '…' : ''}` : ''}
+      </span>
+    )
+  }
+
+  if (qType === 'rating') {
+    return (
+      <span style={{ display: 'inline-flex', gap: '0.2rem', marginLeft: '0.5rem' }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span
+            key={n}
+            style={{
+              padding: '0.15rem 0.4rem',
+              borderRadius: '0.2rem',
+              backgroundColor: '#f3f4f6',
+              fontSize: '0.7rem',
+              color: '#374151',
+            }}
+          >
+            {n}
+          </span>
+        ))}
+      </span>
+    )
+  }
+
+  return (
+    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>
+      (text)
+    </span>
+  )
+}
+
 export default function TemplatesPage() {
   const [data, setData] = useState({ templates: [] })
   const [loading, setLoading] = useState(true)
@@ -141,9 +230,9 @@ export default function TemplatesPage() {
                         </div>
                         <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#4b5563', fontSize: '0.875rem' }}>
                           {(sec.questions || []).map((q) => (
-                            <li key={q.id} style={{ marginBottom: '0.25rem' }}>
-                              {q.question_text}
-                              <span style={{ color: '#9ca3af' }}> ({q.question_type || 'text'})</span>
+                            <li key={q.id} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span>{q.question_text}</span>
+                              <QuestionPreview q={q} />
                             </li>
                           ))}
                         </ul>
