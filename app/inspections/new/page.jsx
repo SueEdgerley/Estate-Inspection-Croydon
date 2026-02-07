@@ -397,7 +397,11 @@ export default function NewInspectionPage() {
           >
             <option value="">— Select template —</option>
             {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.name || t.template_key || t.id}</option>
+              <option key={t.id} value={t.id}>
+                {(t.name || t.template_key || '').trim() && !(t.name || t.template_key || '').trim().startsWith('rec')
+                  ? (t.name || t.template_key).trim()
+                  : `Template ${(t.id || '').slice(0, 12)}…`}
+              </option>
             ))}
           </select>
           {validationErrors.template_id && (

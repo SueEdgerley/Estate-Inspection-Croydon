@@ -93,6 +93,10 @@ export default function TemplatesPage() {
             const isExpanded = expandedId === t.id
             const sectionCount = (t.sections || []).length
             const questionCount = (t.sections || []).reduce((n, s) => n + (s.questions || []).length, 0)
+            const displayName = (t.name || t.template_key || '').trim()
+            const nameToShow = displayName && !displayName.startsWith('rec')
+              ? displayName
+              : `Template ${t.id?.slice(0, 12) || t.id}…`
             return (
               <div
                 key={t.id}
@@ -118,7 +122,7 @@ export default function TemplatesPage() {
                     color: '#111827',
                   }}
                 >
-                  <span>{t.name || t.template_key || t.id}</span>
+                  <span>{nameToShow}</span>
                   <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                     {sectionCount} section{sectionCount !== 1 ? 's' : ''}, {questionCount} question{questionCount !== 1 ? 's' : ''}
                   </span>

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { sql } from '@vercel/postgres'
+import { ensureDatabase } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, TABLES } from '@/lib/airtable-client'
 
 export const runtime = 'nodejs'
@@ -99,6 +101,43 @@ export async function POST(request) {
         } catch (actionErr) {
           console.warn('[Inspections] Actions/Issues table may not exist or have different fields:', actionErr.message)
         }
+      }
+    }
+
+    // Also write to Postgres so the dashboard and app can see the inspection
+    if (process.env.POSTGRES_URL) {
+      try {
+        await ensureDatabase()
+        await sql`
+          INSERT INTO inspections (
+            id, type, title, description, location_label,
+            template_id, template_name, status, submitted_at, created_at, updated_at
+          )
+          VALUES (
+            ${inspectionId},
+            'inspection',
+            ${title.trim()},
+            ${description && String(description).trim() ? String(description).trim() : null},
+            ${location && String(location).trim() ? String(location).trim() : null},
+            ${template_id},
+            ${template.name || null},
+            'submitted',
+            new Date(),
+            new Date(),
+            new Date()
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            location_label = EXCLUDED.location_label,
+            template_id = EXCLUDED.template_id,
+            template_name = EXCLUDED.template_name,
+            status = EXCLUDED.status,
+            submitted_at = EXCLUDED.submitted_at,
+            updated_at = ${new Date()}
+        `
+      } catch (dbErr) {
+        console.warn('[Inspections] Could not save to database (dashboard may not show this inspection):', dbErr.message)
       }
     }
 
