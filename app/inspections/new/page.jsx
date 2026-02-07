@@ -15,7 +15,7 @@ function shouldShowQuestion(question, answers) {
 }
 
 function InspectionQuestion({ question, value, onChange, error, answerExtras, onAnswerExtras, createActionOnNo }) {
-  const qType = (question.question_type || 'text').replace(/[\s-]/g, '_')
+  const qType = (question.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
   const opts = question.options || []
   const isRequired = question.is_required
   const isNo = String(value).toLowerCase() === 'no'

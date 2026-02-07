@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 function QuestionPreview({ q }) {
-  const qType = (q.question_type || 'text').replace(/[\s-]/g, '_')
+  const qType = (q.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
   const opts = q.options || []
   const gradingOpts = q.grading_options || ['A', 'B', 'C', 'D', 'NA']
 
