@@ -26,6 +26,59 @@ export async function GET(request) {
     const grading = searchParams.get('grading')
     const missed = searchParams.get('missed')
     const dataType = searchParams.get('dataType')
+    const tab = searchParams.get('tab')
+    const taskType = searchParams.get('taskType')
+
+    // Tasks export: actions filtered by taskType (raised | completed | outstanding)
+    if (tab === 'tasks' || taskType) {
+      const taskFilter = taskType || 'raised'
+      let taskWhere = sql`true`
+      if (taskFilter === 'completed') {
+        taskWhere = sql`a.status = 'completed'`
+      } else if (taskFilter === 'outstanding') {
+        taskWhere = sql`(a.status IS DISTINCT FROM 'completed' OR a.status IS NULL)`
+      }
+      const actionsResult = await sql`
+        SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
+               a.title, a.description, a.location, a.status, a.comment, a.auto_created,
+               a.created_at, a.updated_at,
+               i.title AS inspection_title, i.submitted_at AS inspection_submitted,
+               p.name AS recipient_name
+        FROM actions a
+        LEFT JOIN inspections i ON i.id = a.inspection_id
+        LEFT JOIN people p ON p.id = a.recipient_person_id
+        WHERE ${taskWhere}
+        ORDER BY a.created_at DESC
+      `
+      const headers = ['Task ID', 'Inspection ID', 'Inspection', 'Completed', 'Section', 'Category', 'Priority', 'Title', 'Description', 'Location', 'Status', 'Recipient', 'Raised', 'Updated']
+      const rows = actionsResult.rows.map(row => [
+        row.id || '',
+        row.inspection_id || '',
+        row.inspection_title || '',
+        row.inspection_submitted ? new Date(row.inspection_submitted).toLocaleDateString('en-GB') : '',
+        row.section_name || '',
+        row.category || '',
+        row.priority || '',
+        row.title || '',
+        (row.description || '').replace(/\s+/g, ' ').trim(),
+        row.location || '',
+        row.status || '',
+        row.recipient_name || '',
+        row.created_at ? new Date(row.created_at).toLocaleDateString('en-GB') : '',
+        row.updated_at ? new Date(row.updated_at).toLocaleDateString('en-GB') : ''
+      ])
+      const csv = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(','))
+      ].join('\n')
+      const filename = `tasks-${taskFilter}-${new Date().toISOString().split('T')[0]}.csv`
+      return new NextResponse(csv, {
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="${filename}"`
+        }
+      })
+    }
 
     // Questions & Answers export: inspection_answers for completed inspections
     if (dataType === 'questions_answers') {

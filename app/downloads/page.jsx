@@ -19,7 +19,8 @@ export default function DownloadsPage() {
       a.href = url
       const disp = response.headers.get('Content-Disposition')
       const match = disp && disp.match(/filename="?([^"]+)"?/)
-      const filename = match ? match[1].trim() : (params.dataType ? `inspections-${params.dataType}-${new Date().toISOString().split('T')[0]}.csv` : `inspections-${new Date().toISOString().split('T')[0]}.csv`)
+      const date = new Date().toISOString().split('T')[0]
+      const filename = match ? match[1].trim() : (params.tab === 'tasks' && params.taskType ? `tasks-${params.taskType}-${date}.csv` : params.dataType ? `inspections-${params.dataType}-${date}.csv` : `inspections-${date}.csv`)
       a.download = filename
       document.body.appendChild(a)
       a.click()
@@ -149,11 +150,18 @@ export default function DownloadsPage() {
               Data type
             </h2>
             <p style={{ margin: '0 0 1.25rem', fontSize: '0.875rem', color: '#6b7280' }}>
-              Task / action downloads coming soon
+              Choose the type of data you wish to download
             </p>
-            <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
-              Use the Inspections tab to download inspection data. Tasks export will be added here.
-            </p>
+            <div>
+              <p style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                Tasks
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {filterButton('Raised', { tab: 'tasks', taskType: 'raised' }, 'tasks_raised')}
+                {filterButton('Completed', { tab: 'tasks', taskType: 'completed' }, 'tasks_completed')}
+                {filterButton('Outstanding', { tab: 'tasks', taskType: 'outstanding' }, 'tasks_outstanding')}
+              </div>
+            </div>
           </div>
         )}
       </div>
