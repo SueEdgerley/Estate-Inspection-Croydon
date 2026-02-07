@@ -16,6 +16,7 @@ export async function GET() {
     k.toUpperCase().includes('AIRTABLE')
   )
 
+  const noVarsAtAll = airtableEnvKeys.length === 0
   return NextResponse.json({
     configured: baseIdSet && apiKeySet,
     env: {
@@ -30,5 +31,13 @@ export async function GET() {
       : !baseIdSet
         ? 'Set AIRTABLE_BASE_ID in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
         : null,
+    checklist: noVarsAtAll
+      ? [
+          '1. You are on the PRODUCTION URL (e.g. your-app.vercel.app), not a Preview URL.',
+          '2. In Vercel → Project → Settings → Environment Variables, AIRTABLE_BASE_ID and AIRTABLE_API_KEY exist.',
+          '3. For each variable, "Production" is checked under Environments.',
+          '4. After saving, go to Deployments → open the latest Production deployment → ⋮ → Redeploy.',
+        ]
+      : null,
   })
 }
