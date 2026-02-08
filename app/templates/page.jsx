@@ -3,15 +3,25 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
+// Match Airtable "Question Type" values that mean Yes/No/NA
+function normalizeQuestionType(v) {
+  if (v == null || v === '') return 'text'
+  const raw = String(v).toLowerCase().trim()
+  if (/yes\s*[\/\-]?\s*no|yesno|yes\s+no/.test(raw)) return 'yes_no'
+  if (raw.includes('yes') && raw.includes('no')) return 'yes_no'
+  const s = raw.replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
+  return s === 'yesno' ? 'yes_no' : s
+}
+
 function QuestionPreview({ q }) {
-  const qType = (q.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
+  const qType = normalizeQuestionType(q.question_type)
   const opts = q.options || []
   const gradingOpts = q.grading_options || ['A', 'B', 'C', 'D', 'NA']
 
   if (qType === 'yes_no') {
     return (
-      <span style={{ display: 'inline-flex', gap: '0.25rem', marginLeft: '0.5rem' }}>
-        {['Yes', 'No'].map((opt) => (
+      <span style={{ display: 'inline-flex', gap: '0.25rem', marginLeft: '0.5rem', flexWrap: 'wrap' }}>
+        {['Yes', 'No', 'NA'].map((opt) => (
           <span
             key={opt}
             style={{
