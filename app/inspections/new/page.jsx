@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
@@ -14,15 +15,35 @@ function shouldShowQuestion(question, answers) {
   return depAnswer === showWhen
 }
 
-function InspectionQuestion({ question, value, onChange, error, answerExtras, onAnswerExtras, createActionOnNo }) {
+function normalizeYesNoNaValue(val) {
+  if (val == null) return ''
+  const s = String(val).toLowerCase().trim()
+  if (s === 'yes' || val === true) return 'Yes'
+  if (s === 'no' || val === false) return 'No'
+  if (s === 'na') return 'NA'
+  if (['yes', 'no', 'na'].includes(s)) return s.charAt(0).toUpperCase() + s.slice(1)
+  return ''
+}
+
+function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo }) {
   const qType = (question.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
   const opts = question.options || []
   const isRequired = question.is_required
-  const isNo = String(value).toLowerCase() === 'no'
-  const showIssueExtras = qType === 'yes_no' && isNo && createActionOnNo
+  const yesNoNaValue = normalizeYesNoNaValue(value)
+  const isNo = yesNoNaValue === 'No'
+  const commentWhen = question.comment_required_when
+  const photoWhen = question.photo_required_when
+  const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
+  const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
+  const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
   const extras = answerExtras || { comment: '', photoUrls: [] }
 
-  const handleChange = (val) => onChange(question.id, val)
+  const handleChange = (val) => {
+    onChange(question.id, val)
+    if (qType === 'yes_no' && (val === 'Yes' || val === 'NA') && onAnswerExtras) {
+      onAnswerExtras(question.id, { comment: '', photoUrls: [] })
+    }
+  }
 
   const setExtras = (updates) => {
     if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
@@ -83,45 +104,70 @@ function InspectionQuestion({ question, value, onChange, error, answerExtras, on
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
-        {buttonGroup(['Yes', 'No'])}
-        {showIssueExtras && (
-          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Resident-friendly message (for poster PDF)
-            </label>
-            <textarea
-              value={extras.comment || ''}
-              onChange={(e) => setExtras({ comment: e.target.value })}
-              placeholder="e.g. Please ensure the area is kept clear."
-              rows={2}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                fontFamily: 'inherit',
-                marginBottom: '0.75rem',
-              }}
-            />
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Photos (optional)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handlePhotoUpload}
-              style={{ fontSize: '0.875rem' }}
-            />
-            {(extras.photoUrls || []).length > 0 && (
-              <p style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-                {extras.photoUrls.length} photo(s) added
+        <YesNoNaButtons
+          value={yesNoNaValue}
+          onChange={(val) => handleChange(val)}
+        />
+        {(showComment || showPhoto || showActionBlock) && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
+            {showActionBlock && (
+              <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e' }}>
+                Action will be created automatically
+              </p>
+            )}
+            {showComment && (
+              <>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Resident-friendly message (for poster PDF){commentWhen === 'always' || (commentWhen === 'on_no' && isNo) ? ' ' : ''}
+                  {(commentWhen === 'always' || (commentWhen === 'on_no' && isNo)) && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+                <textarea
+                  value={extras.comment || ''}
+                  onChange={(e) => setExtras({ comment: e.target.value })}
+                  placeholder="e.g. Please ensure the area is kept clear."
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    fontFamily: 'inherit',
+                    marginBottom: '0.75rem',
+                  }}
+                />
+                {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+              </>
+            )}
+            {showPhoto && (
+              <>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Photos
+                  {(photoWhen === 'always' || (photoWhen === 'on_no' && isNo)) && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePhotoUpload}
+                  style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}
+                />
+                {(extras.photoUrls || []).length > 0 && (
+                  <p style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
+                    {(extras.photoUrls || []).length} photo(s) added
+                  </p>
+                )}
+                {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
+              </>
+            )}
+            {showActionBlock && question.action_category && (
+              <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                Action category: {question.action_category}
               </p>
             )}
           </div>
         )}
-        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+        {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
   }
@@ -273,7 +319,12 @@ export default function NewInspectionPage() {
 
   const handleAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
-    setValidationErrors((prev) => ({ ...prev, [questionId]: undefined }))
+    setValidationErrors((prev) => ({
+      ...prev,
+      [questionId]: undefined,
+      [`${questionId}_comment`]: undefined,
+      [`${questionId}_photos`]: undefined,
+    }))
   }
 
   const validate = () => {
@@ -285,8 +336,33 @@ export default function NewInspectionPage() {
     selectedTemplate.sections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
         if (!shouldShowQuestion(q, answers)) return
-        if (!q.is_required) return
+        const qType = (q.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
         const v = answers[q.id]
+
+        if (qType === 'yes_no') {
+          const validValues = ['Yes', 'No', 'NA']
+          const normalized = v != null ? String(v).trim() : ''
+          if (q.is_required && !validValues.includes(normalized)) {
+            errs[q.id] = 'Please select Yes, No, or NA'
+          }
+          const commentWhen = q.comment_required_when
+          const photoWhen = q.photo_required_when
+          const isNo = normalized === 'No'
+          const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
+          const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
+          const commentRequired = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
+          const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
+          const extras = answerExtras[q.id] || {}
+          if (showComment && commentRequired && !(extras.comment || '').trim()) {
+            errs[`${q.id}_comment`] = 'Comment is required'
+          }
+          if (showPhoto && photoRequired && !(extras.photoUrls || []).length) {
+            errs[`${q.id}_photos`] = 'At least one photo is required'
+          }
+          return
+        }
+
+        if (!q.is_required) return
         if (v === undefined || v === null || (typeof v === 'string' && !v.trim())) {
           errs[q.id] = 'Required'
         }
@@ -521,6 +597,8 @@ export default function NewInspectionPage() {
                       value={answers[q.id]}
                       onChange={handleAnswer}
                       error={validationErrors[q.id]}
+                      errorComment={validationErrors[`${q.id}_comment`]}
+                      errorPhotos={validationErrors[`${q.id}_photos`]}
                       answerExtras={answerExtras[q.id]}
                       onAnswerExtras={(questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))}
                       createActionOnNo={q.create_action_on_no}
