@@ -2,11 +2,17 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, TABLES } from '@/lib/airtable-client'
+import { getAuth, getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request) {
+  const { userId } = await getAuth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
   if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
     return NextResponse.json(
@@ -30,6 +36,9 @@ export async function POST(request) {
       { status: 400 }
     )
   }
+
+  const inspectorEmail = await getCurrentUserEmail()
+  const inspectorName = await getCurrentUserName()
 
   try {
     const nested = await getTemplatesNested()
@@ -104,14 +113,15 @@ export async function POST(request) {
       }
     }
 
-    // Also write to Postgres so the dashboard and app can see the inspection
+    // Also write to Postgres so the dashboard and app can see the inspection (linked to current user by email)
     if (process.env.POSTGRES_URL) {
       try {
         await ensureDatabase()
         await sql`
           INSERT INTO inspections (
             id, type, title, description, location_label,
-            template_id, template_name, status, submitted_at, created_at, updated_at
+            template_id, template_name, status, submitted_at, created_at, updated_at,
+            inspector_id, inspector_name
           )
           VALUES (
             ${inspectionId},
@@ -124,7 +134,9 @@ export async function POST(request) {
             'submitted',
             new Date(),
             new Date(),
-            new Date()
+            new Date(),
+            ${inspectorEmail || null},
+            ${inspectorName || null}
           )
           ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
@@ -134,6 +146,8 @@ export async function POST(request) {
             template_name = EXCLUDED.template_name,
             status = EXCLUDED.status,
             submitted_at = EXCLUDED.submitted_at,
+            inspector_id = COALESCE(EXCLUDED.inspector_id, inspections.inspector_id),
+            inspector_name = COALESCE(EXCLUDED.inspector_name, inspections.inspector_name),
             updated_at = ${new Date()}
         `
       } catch (dbErr) {

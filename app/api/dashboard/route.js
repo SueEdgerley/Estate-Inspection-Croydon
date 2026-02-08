@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
+import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request) {
   try {
+    const { userId } = await getAuth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     await ensureDatabase()
     
     if (!process.env.POSTGRES_URL) {
@@ -15,6 +21,9 @@ export async function GET(request) {
         { status: 503 }
       )
     }
+
+    const admin = await isAdmin()
+    const userEmail = await getCurrentUserEmail()
 
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
@@ -28,6 +37,11 @@ export async function GET(request) {
     // Build WHERE conditions using template literals
     let whereConditions = [sql`status = 'submitted'`]
     let conditions = []
+
+    // Non-admins only see their own inspections (by email)
+    if (!admin && userEmail) {
+      whereConditions.push(sql`inspector_id = ${userEmail}`)
+    }
 
     if (dateFrom) {
       whereConditions.push(sql`submitted_at >= ${dateFrom}`)
@@ -45,7 +59,7 @@ export async function GET(request) {
       whereConditions.push(sql`template_id = ${template}`)
       conditions.push(`template_id = '${template}'`)
     }
-    if (inspector && inspector !== 'all') {
+    if (admin && inspector && inspector !== 'all') {
       whereConditions.push(sql`inspector_id = ${inspector}`)
       conditions.push(`inspector_id = '${inspector}'`)
     }

@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
+import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request) {
   try {
+    const { userId } = await getAuth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     await ensureDatabase()
     
     if (!process.env.POSTGRES_URL) {
@@ -15,6 +21,9 @@ export async function GET(request) {
         { status: 503 }
       )
     }
+
+    const admin = await isAdmin()
+    const userEmail = await getCurrentUserEmail()
 
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
@@ -32,12 +41,16 @@ export async function GET(request) {
     // Tasks export: actions filtered by taskType (raised | completed | outstanding)
     if (tab === 'tasks' || taskType) {
       const taskFilter = taskType || 'raised'
-      let taskWhere = sql`true`
+      const taskConditions = []
       if (taskFilter === 'completed') {
-        taskWhere = sql`a.status = 'completed'`
+        taskConditions.push(sql`a.status = 'completed'`)
       } else if (taskFilter === 'outstanding') {
-        taskWhere = sql`(a.status IS DISTINCT FROM 'completed' OR a.status IS NULL)`
+        taskConditions.push(sql`(a.status IS DISTINCT FROM 'completed' OR a.status IS NULL)`)
       }
+      if (!admin && userEmail) {
+        taskConditions.push(sql`i.inspector_id = ${userEmail}`)
+      }
+      const taskWhere = taskConditions.length > 0 ? sql`WHERE ${sql.join(taskConditions, sql` AND `)}` : sql``
       const actionsResult = await sql`
         SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
                a.title, a.description, a.location, a.status, a.comment, a.auto_created,
@@ -47,7 +60,7 @@ export async function GET(request) {
         FROM actions a
         LEFT JOIN inspections i ON i.id = a.inspection_id
         LEFT JOIN people p ON p.id = a.recipient_person_id
-        WHERE ${taskWhere}
+        ${taskWhere}
         ORDER BY a.created_at DESC
       `
       const headers = ['Task ID', 'Inspection ID', 'Inspection', 'Completed', 'Section', 'Category', 'Priority', 'Title', 'Description', 'Location', 'Status', 'Recipient', 'Raised', 'Updated']
@@ -82,13 +95,16 @@ export async function GET(request) {
 
     // Questions & Answers export: inspection_answers for completed inspections
     if (dataType === 'questions_answers') {
+      const qaConditions = [sql`i.status = 'submitted'`]
+      if (!admin && userEmail) qaConditions.push(sql`i.inspector_id = ${userEmail}`)
+      const qaWhere = sql`WHERE ${sql.join(qaConditions, sql` AND `)}`
       const answersResult = await sql`
         SELECT i.id AS inspection_id, i.title, i.submitted_at,
                ia.section_id, ia.question_id, ia.question_type,
                ia.answer_value, ia.answer_text, ia.answer_number, ia.answer_boolean, ia.notes
         FROM inspection_answers ia
         JOIN inspections i ON i.id = ia.inspection_id
-        WHERE i.status = 'submitted'
+        ${qaWhere}
         ORDER BY i.submitted_at DESC, ia.section_id, ia.question_id
       `
       const headers = ['Inspection ID', 'Title', 'Completed', 'Section', 'Question', 'Type', 'Answer', 'Notes']
@@ -122,6 +138,9 @@ export async function GET(request) {
     } else {
       whereConditions.push(sql`status = 'submitted'`)
     }
+    if (!admin && userEmail) {
+      whereConditions.push(sql`inspector_id = ${userEmail}`)
+    }
 
     if (dateFrom) {
       if (missed === '1') {
@@ -143,7 +162,7 @@ export async function GET(request) {
     if (template && template !== 'all') {
       whereConditions.push(sql`template_id = ${template}`)
     }
-    if (inspector && inspector !== 'all') {
+    if (admin && inspector && inspector !== 'all') {
       whereConditions.push(sql`inspector_id = ${inspector}`)
     }
     if (scheduled && scheduled !== 'all') {

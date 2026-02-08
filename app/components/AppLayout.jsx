@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { UserButton } from '@clerk/nextjs'
 
 export default function AppLayout({ children }) {
   const pathname = usePathname()
@@ -75,8 +76,9 @@ export default function AppLayout({ children }) {
               ))}
             </nav>
           </div>
-          <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-            Croydon Council
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>Croydon Council</span>
+            <UserButton afterSignOutUrl="/login" />
           </div>
         </div>
       </header>
