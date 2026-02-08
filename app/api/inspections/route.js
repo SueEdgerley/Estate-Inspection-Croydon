@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
-import { getTemplatesNested, createAirtableRecord, TABLES } from '@/lib/airtable-client'
+import { getTemplatesNested, createAirtableRecord, updateAirtableRecord, getPeopleByEmail, TABLES } from '@/lib/airtable-client'
 import { getAuth, getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 
 export const runtime = 'nodejs'
@@ -59,6 +59,24 @@ export async function POST(request) {
     if (description && String(description).trim()) inspectionFields.Description = String(description).trim()
 
     const inspectionId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
+
+    // Link inspection to Person when submitted-by email matches exactly one Person (do not block on no match)
+    if (inspectorEmail && inspectorEmail.trim()) {
+      try {
+        const people = await getPeopleByEmail(inspectorEmail.trim())
+        if (people.length === 1) {
+          await updateAirtableRecord(TABLES.INSPECTIONS, inspectionId, {
+            'Submitted by person': [people[0].id],
+          })
+        } else if (people.length === 0) {
+          console.warn('[Inspections] No Person found for submitted-by email:', inspectorEmail.trim())
+        } else {
+          console.warn('[Inspections] Multiple People match submitted-by email:', inspectorEmail.trim(), '- inspection not linked')
+        }
+      } catch (linkErr) {
+        console.warn('[Inspections] Could not link inspection to Person by email:', linkErr.message)
+      }
+    }
 
     const questionsById = new Map()
     template.sections.forEach((sec) => {
