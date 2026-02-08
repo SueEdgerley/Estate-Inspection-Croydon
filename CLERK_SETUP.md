@@ -1,5 +1,7 @@
 # Clerk setup (email-only, no passwords)
 
+This app follows the [Clerk Next.js App Router quickstart](https://clerk.com/docs/nextjs/getting-started/quickstart): `clerkMiddleware()` in **middleware.js** (Next.js runs middleware from `middleware.ts`/`middleware.js` at project root), `<ClerkProvider>` in `app/layout.jsx`, and Clerk components (`SignInButton`, `SignUpButton`, `SignedIn`, `SignedOut`, `UserButton`) in the layout/header.
+
 ## 1. Environment variables
 
 Add to `.env.local` (and Vercel):
