@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-// Match Airtable "Question Type" values that mean Yes/No/NA
+// Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo")
 function normalizeQuestionType(v) {
   if (v == null || v === '') return 'text'
   const raw = String(v).toLowerCase().trim()
+  if (raw.includes('yes_no')) return 'yes_no'
   if (/yes\s*[\/\-]?\s*no|yesno|yes\s+no/.test(raw)) return 'yes_no'
   if (raw.includes('yes') && raw.includes('no')) return 'yes_no'
   const s = raw.replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
