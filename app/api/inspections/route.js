@@ -83,6 +83,7 @@ export async function POST(request) {
       (sec.questions || []).forEach((q) => questionsById.set(q.id, { ...q, sectionId: sec.id }))
     })
 
+    const responseField = process.env.AIRTABLE_RESPONSE_FIELD || 'Response'
     try {
       for (const [questionId, answer] of Object.entries(answers)) {
         if (answer === undefined || answer === null) continue
@@ -91,7 +92,7 @@ export async function POST(request) {
         await createAirtableRecord(TABLES.INSPECTION_RESPONSES, {
           Inspection: [inspectionId],
           Question: [questionId],
-          Answer: String(answer),
+          [responseField]: String(answer),
         })
       }
     } catch (responseErr) {
