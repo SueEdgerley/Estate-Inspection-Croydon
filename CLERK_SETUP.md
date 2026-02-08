@@ -44,3 +44,21 @@ One-way sync creates Airtable **People** records for Clerk users that don’t al
 - **Behaviour:** lists Clerk users, compares to Airtable People by email, creates missing ones with Name (from first/last or email), Email, Active = true
 
 Call from the front end (e.g. a “Sync users” button in Settings) or via cron/script.
+
+---
+
+## Build failed on Vercel
+
+If `npm run build` fails:
+
+1. **Set env vars in Vercel**  
+   Project → Settings → Environment Variables. Add:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (from Clerk Dashboard → API Keys)
+   - `CLERK_SECRET_KEY` (from Clerk Dashboard → API Keys)  
+   Redeploy after saving.
+
+2. **Reproduce locally**  
+   Run `npm install` then `npm run build` in the project root. The terminal error will point to the failing file or import.
+
+3. **Middleware**  
+   The app uses `middleware.js` at the project root (not `proxy.ts`). Next.js only runs middleware from a file named `middleware.js` or `middleware.ts`.

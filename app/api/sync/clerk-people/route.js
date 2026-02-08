@@ -26,7 +26,8 @@ export async function POST() {
       )
     }
 
-    const client = await clerkClient()
+    // Clerk v6: clerkClient is async; v5: clerkClient is the client object
+    const client = typeof clerkClient === 'function' ? await clerkClient() : clerkClient
     const users = await client.users.getUserList({ limit: 500 })
     const existingPeople = await getPeople()
     const emailToPerson = new Map()
