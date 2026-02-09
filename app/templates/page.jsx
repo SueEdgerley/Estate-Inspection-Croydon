@@ -15,7 +15,9 @@ function normalizeQuestionType(v) {
 }
 
 function QuestionPreview({ q }) {
-  const qType = normalizeQuestionType(q.question_type)
+  // Fallback: if comment/photo required when "on_no", treat as yes_no even if type isn't set
+  const hasYesNoBehavior = (q.comment_required_when === 'on_no' || q.photo_required_when === 'on_no') && !q.question_type
+  const qType = normalizeQuestionType(q.question_type || (hasYesNoBehavior ? 'yes_no' : 'text'))
   const opts = q.options || []
   const gradingOpts = q.grading_options || ['A', 'B', 'C', 'D', 'NA']
 
@@ -102,7 +104,7 @@ function QuestionPreview({ q }) {
 
   return (
     <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>
-      (text)
+      (text{q.question_type_raw ? ` - raw: "${q.question_type_raw}"` : q.question_type ? ` - type: "${q.question_type}"` : ''})
     </span>
   )
 }
