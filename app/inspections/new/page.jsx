@@ -33,8 +33,9 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   const isNo = yesNoNaValue === 'No'
   const commentWhen = question.comment_required_when
   const photoWhen = question.photo_required_when
+  const typeIncludesPhoto = !!question.type_includes_photo
   const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
-  const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
+  const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always' || (qType === 'yes_no' && typeIncludesPhoto)
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
   const extras = answerExtras || { comment: '', photoUrls: [] }
 

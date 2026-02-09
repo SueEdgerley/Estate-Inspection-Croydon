@@ -20,8 +20,9 @@ function QuestionPreview({ q }) {
   const gradingOpts = q.grading_options || ['A', 'B', 'C', 'D', 'NA']
 
   if (qType === 'yes_no') {
+    const hasPhoto = !!q.type_includes_photo
     return (
-      <span style={{ display: 'inline-flex', gap: '0.25rem', marginLeft: '0.5rem', flexWrap: 'wrap' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.5rem', flexWrap: 'wrap' }}>
         {['Yes', 'No', 'NA'].map((opt) => (
           <span
             key={opt}
@@ -37,6 +38,9 @@ function QuestionPreview({ q }) {
             {opt}
           </span>
         ))}
+        {hasPhoto && (
+          <span style={{ fontSize: '0.7rem', color: '#6b7280', marginLeft: '0.15rem' }}>+ photo</span>
+        )}
       </span>
     )
   }
