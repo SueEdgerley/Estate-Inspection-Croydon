@@ -11,6 +11,8 @@ export async function GET() {
       {
         error: 'Airtable not configured',
         details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY (or AIRTABLE_API_TOKEN) in environment variables.',
+        hint: 'Vercel → Settings → Environment Variables (Production), then Redeploy.',
+        envVarsUrl: 'https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings/environment-variables',
       },
       { status: 503, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )

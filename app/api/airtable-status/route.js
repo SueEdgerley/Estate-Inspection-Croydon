@@ -17,6 +17,21 @@ export async function GET() {
   )
 
   const noVarsAtAll = airtableEnvKeys.length === 0
+  const hint = !apiKeySet
+    ? 'Set AIRTABLE_API_TOKEN or AIRTABLE_API_KEY in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
+    : !baseIdSet
+      ? 'Set AIRTABLE_BASE_ID in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
+      : null
+
+  // Direct link to Photobook project env vars (paid project – use this one)
+  const envVarsUrl = 'https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings/environment-variables'
+  const checklist = [
+    '1. Use the PHOTOBOOK project (paid), not the trial project. Open: ' + envVarsUrl,
+    '2. Add AIRTABLE_BASE_ID and either AIRTABLE_API_KEY or AIRTABLE_API_TOKEN (values from your Airtable account).',
+    '3. For each variable, tick "Production" (and Preview if you use preview URLs). Save.',
+    '4. Deployments → latest Production deployment → ⋮ → Redeploy (env vars apply only after redeploy).',
+  ]
+
   return NextResponse.json({
     configured: baseIdSet && apiKeySet,
     env: {
@@ -26,18 +41,8 @@ export async function GET() {
       AIRTABLE_TOKEN: plainTokenSet ? 'set' : 'missing',
     },
     allAirtableEnvKeys: airtableEnvKeys,
-    hint: !apiKeySet
-      ? 'Set AIRTABLE_API_TOKEN or AIRTABLE_API_KEY in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
-      : !baseIdSet
-        ? 'Set AIRTABLE_BASE_ID in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
-        : null,
-    checklist: noVarsAtAll
-      ? [
-          '1. You are on the PRODUCTION URL (e.g. your-app.vercel.app), not a Preview URL.',
-          '2. In Vercel → Project → Settings → Environment Variables, AIRTABLE_BASE_ID and AIRTABLE_API_KEY exist.',
-          '3. For each variable, "Production" is checked under Environments.',
-          '4. After saving, go to Deployments → open the latest Production deployment → ⋮ → Redeploy.',
-        ]
-      : null,
+    hint,
+    envVarsUrl: noVarsAtAll ? envVarsUrl : undefined,
+    checklist: noVarsAtAll ? checklist : null,
   })
 }
