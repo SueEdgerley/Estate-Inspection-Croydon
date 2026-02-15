@@ -40,8 +40,8 @@ export default function RootLayout({ children }) {
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', backgroundColor: '#f9fafb' }}>
           <div style={{ textAlign: 'center', maxWidth: '28rem' }}>
             <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>Clerk is not configured.</p>
-            <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
-              Set <code style={{ background: '#e5e7eb', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> and <code style={{ background: '#e5e7eb', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>CLERK_SECRET_KEY</code> in Vercel → Project → Settings → Environment Variables.
+            <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginBottom: '1rem' }}>
+              In Vercel: Project → Settings → Environment Variables, add <code style={{ background: '#e5e7eb', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> and <code style={{ background: '#e5e7eb', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>CLERK_SECRET_KEY</code> (from <a href="https://dashboard.clerk.com/last-active?path=api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>Clerk Dashboard → API Keys</a>). Enable them for Production (and Preview if you use preview URLs). Then <strong>redeploy</strong> the project so the new build picks up the variables.
             </p>
           </div>
         </div>
