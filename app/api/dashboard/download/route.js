@@ -6,6 +6,17 @@ import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function asArray(v) {
+  if (Array.isArray(v)) return v
+  if (v == null) return []
+  return [v]
+}
+
+function safeJoin(v, sep = ', ') {
+  const arr = asArray(v).map((x) => (typeof x === 'string' ? x : x?.name ?? String(x)))
+  return arr.join(sep)
+}
+
 export async function GET(request) {
   try {
     const { userId } = await getAuth()
@@ -50,7 +61,7 @@ export async function GET(request) {
       if (!admin && userEmail) {
         taskConditions.push(sql`i.inspector_id = ${userEmail}`)
       }
-      const taskWhere = taskConditions.length > 0 ? sql`WHERE ${sql.join(taskConditions, sql` AND `)}` : sql``
+      const taskWhere = taskConditions.length > 0 ? sql`WHERE ${sql.join(asArray(taskConditions), sql` AND `)}` : sql``
       const actionsResult = await sql`
         SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
                a.title, a.description, a.location, a.status, a.comment, a.auto_created,
@@ -97,7 +108,7 @@ export async function GET(request) {
     if (dataType === 'questions_answers') {
       const qaConditions = [sql`i.status = 'submitted'`]
       if (!admin && userEmail) qaConditions.push(sql`i.inspector_id = ${userEmail}`)
-      const qaWhere = sql`WHERE ${sql.join(qaConditions, sql` AND `)}`
+      const qaWhere = sql`WHERE ${sql.join(asArray(qaConditions), sql` AND `)}`
       const answersResult = await sql`
         SELECT i.id AS inspection_id, i.title, i.submitted_at,
                ia.section_id, ia.question_id, ia.question_type,
@@ -114,7 +125,7 @@ export async function GET(request) {
         row.submitted_at ? new Date(row.submitted_at).toLocaleDateString('en-GB') : '',
         row.section_id || '',
         row.question_id || '',
-        row.question_type || '',
+        safeJoin(row.question_type),
         (row.answer_value ?? row.answer_text ?? row.answer_number ?? row.answer_boolean ?? '').toString(),
         row.notes || ''
       ])
@@ -177,7 +188,7 @@ export async function GET(request) {
     }
 
     const whereClause = whereConditions.length > 0
-      ? sql`WHERE ${sql.join(whereConditions, sql` AND `)}`
+      ? sql`WHERE ${sql.join(asArray(whereConditions), sql` AND `)}`
       : sql``
 
     const result = await sql`

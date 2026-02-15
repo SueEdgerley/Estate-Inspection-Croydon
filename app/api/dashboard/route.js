@@ -6,6 +6,12 @@ import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function asArray(v) {
+  if (Array.isArray(v)) return v
+  if (v == null) return []
+  return [v]
+}
+
 export async function GET(request) {
   try {
     const { userId } = await getAuth()
@@ -81,9 +87,9 @@ export async function GET(request) {
       conditions.push(`grading = '${grading}'`)
     }
 
-    // Combine conditions
+    // Combine conditions (ensure array so sql.join never gets non-array)
     const whereClause = whereConditions.length > 0 
-      ? sql`WHERE ${sql.join(whereConditions, sql` AND `)}`
+      ? sql`WHERE ${sql.join(asArray(whereConditions), sql` AND `)}`
       : sql``
 
     // Get stats
