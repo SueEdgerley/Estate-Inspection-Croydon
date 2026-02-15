@@ -84,10 +84,15 @@ export default function InspectionSection() {
     loadAnswers()
   }, [id, sectionId])
 
+  const isYesNoQuestion = (q) => {
+    const t = (q.question_type || '').toString().toLowerCase().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '')
+    return t === 'yes_no' || t === 'yesno'
+  }
+
   const validateNoAnswers = async (questions, answers) => {
     const errors = {}
     for (const question of questions) {
-      if (question.question_type !== 'yesno') continue
+      if (!isYesNoQuestion(question)) continue
       const answer = answers[question.id]
       const isNo = answer === false || answer === 'no' || answer === 'No'
       if (!isNo) continue
@@ -116,7 +121,7 @@ export default function InspectionSection() {
   const processNoAnswers = async (questions, answers) => {
     const sectionName = section?.name || `Section ${sectionId}`
     for (const question of questions) {
-      if (question.question_type !== 'yesno') continue
+      if (!isYesNoQuestion(question)) continue
       const answer = answers[question.id]
       const isNo = answer === false || answer === 'no' || answer === 'No'
       if (!isNo) {

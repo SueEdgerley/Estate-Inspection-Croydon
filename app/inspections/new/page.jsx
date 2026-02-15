@@ -25,8 +25,25 @@ function normalizeYesNoNaValue(val) {
   return ''
 }
 
+// Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo", "yesno", "Yes/No")
+function normalizeQuestionType(v) {
+  if (v == null || v === '') return 'text'
+  const raw = String(v).toLowerCase().trim()
+  if (raw.includes('yes_no')) return 'yes_no'
+  if (/yes\s*[\/\-]?\s*no|yesno|yes\s+no/.test(raw)) return 'yes_no'
+  if (raw.includes('yes') && raw.includes('no')) return 'yes_no'
+  const s = raw.replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
+  return s === 'yesno' ? 'yes_no' : s
+}
+
+function getQuestionType(question) {
+  const raw = question.question_type
+  const hasYesNoBehavior = (question.comment_required_when === 'on_no' || question.photo_required_when === 'on_no') && !raw
+  return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
+}
+
 function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo }) {
-  const qType = (question.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
+  const qType = getQuestionType(question)
   const opts = question.options || []
   const isRequired = question.is_required
   const yesNoNaValue = normalizeYesNoNaValue(value)
@@ -337,7 +354,7 @@ export default function NewInspectionPage() {
     selectedTemplate.sections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
         if (!shouldShowQuestion(q, answers)) return
-        const qType = (q.question_type || 'text').toString().toLowerCase().trim().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
+        const qType = getQuestionType(q)
         const v = answers[q.id]
 
         if (qType === 'yes_no') {

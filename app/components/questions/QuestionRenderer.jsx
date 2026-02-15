@@ -47,8 +47,12 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
     reader.readAsDataURL(file)
   }
 
+  // Normalize yes/no variants (yesno, yes_no, yes/no) so Yes/No/NA + photo render correctly
+  const qType = (question.question_type || '').toString().toLowerCase().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
+  const isYesNo = qType === 'yes_no' || qType === 'yesno'
+
   const renderQuestion = () => {
-    switch (question.question_type) {
+    switch (isYesNo ? QUESTION_TYPES.YESNO : question.question_type) {
       case QUESTION_TYPES.YESNO:
         return (
           <YesNoQuestion
