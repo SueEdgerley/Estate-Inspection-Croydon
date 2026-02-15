@@ -1,14 +1,14 @@
 import './styles/globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import AppLayout from './components/AppLayout'
 
-const geistSans = Geist({
+const fontSans = Inter({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 })
 
-const geistMono = Geist_Mono({
+const fontMono = JetBrains_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 })
@@ -22,7 +22,7 @@ export default function RootLayout({ children }) {
   return (
     <ClerkProvider>
       <html lang="en">
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
           <AppLayout>{children}</AppLayout>
         </body>
       </html>
