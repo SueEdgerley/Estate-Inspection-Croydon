@@ -1,39 +1,34 @@
 import { NextResponse } from 'next/server';
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isPublicRoute = createRouteMatcher([
-  '/login(.*)',
-  '/api/clerk(.*)',
-  '/api/webhooks/clerk(.*)',
-]);
+// Clerk middleware disabled to stop 500 at runtime.
+// App still uses Clerk in layout (sign in/out UI); routes are not protected here.
+// To re-enable: uncomment the block below and remove the direct return.
 
-const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
-const clerkHandler = clerkMiddleware(
-  async (auth, req) => {
-    if (!isPublicRoute(req)) {
-      await auth.protect();
-    }
-  },
-  // Pass publishable key explicitly so Clerk gets it in Edge (avoids missing key errors)
-  pk ? { publishableKey: pk } : undefined
-);
-
-export default async function middleware(req, event) {
-  try {
-    return await clerkHandler(req, event);
-  } catch (err) {
-    // Prevent 500 MIDDLEWARE_INVOCATION_FAILED; request continues (auth may be skipped)
-    console.error('[middleware] Clerk error:', err?.message || err);
-    return NextResponse.next();
-  }
+export default function middleware() {
+  return NextResponse.next();
 }
+
+// --- Re-enable Clerk auth (uncomment when 500 is resolved) ---
+// export default async function middleware(req, event) {
+//   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+//   const sk = process.env.CLERK_SECRET_KEY
+//   if (!pk || !sk) return NextResponse.next()
+//   try {
+//     const { clerkMiddleware, createRouteMatcher } = await import('@clerk/nextjs/server')
+//     const isPublicRoute = createRouteMatcher(['/login(.*)', '/api/clerk(.*)', '/api/webhooks/clerk(.*)'])
+//     const clerkHandler = clerkMiddleware(async (auth, request) => {
+//       if (!isPublicRoute(request)) await auth.protect()
+//     })
+//     return await clerkHandler(req, event)
+//   } catch (err) {
+//     console.error('[middleware] Clerk error:', err?.message || err)
+//     return NextResponse.next()
+//   }
+// }
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
     '/(api|trpc)(.*)',
   ],
 };
