@@ -25,8 +25,13 @@ export default function RootLayout({ children }) {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   // When key is set: full app with Clerk + AppLayout (nav, sign in, etc.)
   if (publishableKey) {
+    // Use custom domain for production (estateinspections.co.uk)
+    const domain = process.env.NEXT_PUBLIC_CLERK_DOMAIN || 'estateinspections.co.uk'
     return (
-      <ClerkProvider publishableKey={publishableKey}>
+      <ClerkProvider 
+        publishableKey={publishableKey}
+        domain={domain}
+      >
         <html lang="en">
           <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
             <AppLayout>{children}</AppLayout>
