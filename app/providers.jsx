@@ -2,6 +2,6 @@
 
 import { ClerkProvider } from "@clerk/nextjs";
 
-export function Providers({ children }) {
-  return <ClerkProvider>{children}</ClerkProvider>;
+export function Providers({ children, publishableKey }) {
+  return <ClerkProvider publishableKey={publishableKey}>{children}</ClerkProvider>;
 }
