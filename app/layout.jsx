@@ -25,6 +25,12 @@ export default function RootLayout({ children }) {
   // Read publishable key at server-side (available at request time with force-dynamic)
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   
+  // Debug: log to server console (check Vercel logs)
+  if (typeof process !== 'undefined' && process.env) {
+    console.log('[layout] NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY exists:', !!publishableKey);
+    console.log('[layout] Key prefix:', publishableKey ? publishableKey.substring(0, 10) + '...' : 'undefined');
+  }
+  
   return (
     <html lang="en">
       <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
