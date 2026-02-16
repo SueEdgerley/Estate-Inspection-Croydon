@@ -56,6 +56,19 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
 
+  const extras = answerExtras || { comment: '', photo_urls: [] }
+
+  const handleChange = (val) => {
+    onChange(question.id, val)
+    if (qType === 'yes_no' && (val === 'Yes' || val === 'NA') && onAnswerExtras) {
+      onAnswerExtras(question.id, { comment: '', photo_urls: [] })
+    }
+  }
+
+  const setExtras = (updates) => {
+    if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
+  }
+
   const photoBlock = (
     <div style={{ marginTop: '0.75rem' }}>
       <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
@@ -71,18 +84,6 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
       />
     </div>
   )
-  const extras = answerExtras || { comment: '', photo_urls: [] }
-
-  const handleChange = (val) => {
-    onChange(question.id, val)
-    if (qType === 'yes_no' && (val === 'Yes' || val === 'NA') && onAnswerExtras) {
-      onAnswerExtras(question.id, { comment: '', photo_urls: [] })
-    }
-  }
-
-  const setExtras = (updates) => {
-    if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
-  }
 
   const buttonGroup = (optionList) => (
     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
