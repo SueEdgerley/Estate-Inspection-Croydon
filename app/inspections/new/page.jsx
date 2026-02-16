@@ -53,15 +53,30 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   const photoWhen = question.photo_required_when
   const typeIncludesPhoto = !!question.type_includes_photo
   const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
-  const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always' || (qType === 'yes_no' && typeIncludesPhoto)
   const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
-  const extras = answerExtras || { comment: '', photoUrl: '', photoUrls: [] }
+
+  const photoBlock = (
+    <div style={{ marginTop: '0.75rem' }}>
+      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+        Add photo
+        {photoRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+      </label>
+      <PhotoUploadControl
+        value={extras.photo_urls || []}
+        onChange={(urls) => setExtras({ photo_urls: urls })}
+        required={photoRequired}
+        error={errorPhotos}
+        label="Add photo"
+      />
+    </div>
+  )
+  const extras = answerExtras || { comment: '', photo_urls: [] }
 
   const handleChange = (val) => {
     onChange(question.id, val)
     if (qType === 'yes_no' && (val === 'Yes' || val === 'NA') && onAnswerExtras) {
-      onAnswerExtras(question.id, { comment: '', photoUrl: '', photoUrls: [] })
+      onAnswerExtras(question.id, { comment: '', photo_urls: [] })
     }
   }
 
@@ -140,20 +155,6 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
               </>
             )}
-            {showPhoto && (
-              <>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                  {photoRequired ? 'Photo (required)' : 'Photos'}
-                  {photoRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
-                </label>
-                <PhotoUploadControl
-                  value={extras.photoUrl || ''}
-                  onChange={(url) => setExtras({ photoUrl: url })}
-                  required={photoRequired}
-                  error={errorPhotos}
-                />
-              </>
-            )}
             {showActionBlock && question.action_category && (
               <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem', fontStyle: 'italic' }}>
                 Action category: {question.action_category}
@@ -161,6 +162,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             )}
           </div>
         )}
+        {photoBlock}
         {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -178,6 +180,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {buttonGroup(gradingOpts)}
+        {photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -208,6 +211,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             <option key={o} value={o}>{o}</option>
           ))}
         </select>
+        {photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -241,6 +245,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             </button>
           ))}
         </div>
+        {photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -265,6 +270,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           fontSize: '1rem',
         }}
       />
+      {photoBlock}
       {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
     </div>
   )
@@ -350,9 +356,9 @@ export default function NewInspectionPage() {
           if (showComment && commentRequired && !(extras.comment || '').trim()) {
             errs[`${q.id}_comment`] = 'Comment is required'
           }
-          const hasPhoto = (typeof extras.photoUrl === 'string' && extras.photoUrl.trim()) || (Array.isArray(extras.photoUrls) && extras.photoUrls.length > 0)
-          if (showPhoto && photoRequired && !hasPhoto) {
-            errs[`${q.id}_photos`] = 'Photo is required'
+          const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
+          if (photoRequired && photoUrls.length === 0) {
+            errs[`${q.id}_photos`] = 'At least one photo is required'
           }
           return
         }

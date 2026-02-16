@@ -91,9 +91,13 @@ export async function POST(request) {
         const question = questionsById.get(questionId)
         if (!question) continue
         const extras = answer_extras[questionId] || {}
-        const photoUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
-        const photoUrls = Array.isArray(extras.photoUrls) ? extras.photoUrls.filter((u) => typeof u === 'string' && u) : []
-        const allPhotoUrls = photoUrl ? [photoUrl, ...photoUrls] : photoUrls
+        const photoUrlsArr = Array.isArray(extras.photo_urls)
+          ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
+          : Array.isArray(extras.photoUrls)
+            ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
+            : []
+        const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
+        const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
         const fields = {
           Inspection: [inspectionId],
@@ -109,6 +113,34 @@ export async function POST(request) {
       console.warn('[Inspections] Inspection Responses table may not exist or have different fields:', responseErr.message)
     }
 
+    // Store photos in inspection_photos for PDF/noticeboard pipeline
+    if (process.env.POSTGRES_URL) {
+      try {
+        await ensureDatabase()
+        for (const [questionId, answer] of Object.entries(answers)) {
+          if (answer === undefined || answer === null) continue
+          const extras = answer_extras[questionId] || {}
+          const urls = Array.isArray(extras.photo_urls)
+            ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
+            : Array.isArray(extras.photoUrls)
+              ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
+              : []
+          const singleUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
+          const allUrls = singleUrl ? [singleUrl, ...urls] : urls
+          for (let i = 0; i < allUrls.length; i++) {
+            const url = allUrls[i]
+            const photoId = `photo_${inspectionId}_${questionId}_${Date.now()}_${i}`
+            await sql`
+              INSERT INTO inspection_photos (id, inspection_id, question_id, blob_url, blob_key, filename)
+              VALUES (${photoId}, ${inspectionId}, ${questionId}, ${url}, null, null)
+            `
+          }
+        }
+      } catch (photoErr) {
+        console.warn('[Inspections] Could not store photos for PDF pipeline:', photoErr.message)
+      }
+    }
+
     // Create Issue/Action records for "fail" answers (e.g. Yes/No = No when create_action_on_no)
     for (const section of template.sections || []) {
       for (const q of section.questions || []) {
@@ -118,9 +150,13 @@ export async function POST(request) {
 
         const extras = answer_extras[q.id] || {}
         const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
-        const photoUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
-        const photoUrls = Array.isArray(extras.photoUrls) ? extras.photoUrls.filter((u) => typeof u === 'string' && u) : []
-        const allPhotoUrls = photoUrl ? [photoUrl, ...photoUrls] : photoUrls
+        const photoUrlsArr = Array.isArray(extras.photo_urls)
+          ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
+          : Array.isArray(extras.photoUrls)
+            ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
+            : []
+        const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
+        const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = q.action_category || 'Follow-up'
