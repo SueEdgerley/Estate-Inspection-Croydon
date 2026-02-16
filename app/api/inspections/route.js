@@ -84,16 +84,26 @@ export async function POST(request) {
     })
 
     const responseField = process.env.AIRTABLE_RESPONSE_FIELD || 'Response'
+    const photoField = process.env.AIRTABLE_PHOTO_FIELD || 'Photo'
     try {
       for (const [questionId, answer] of Object.entries(answers)) {
         if (answer === undefined || answer === null) continue
         const question = questionsById.get(questionId)
         if (!question) continue
-        await createAirtableRecord(TABLES.INSPECTION_RESPONSES, {
+        const extras = answer_extras[questionId] || {}
+        const photoUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
+        const photoUrls = Array.isArray(extras.photoUrls) ? extras.photoUrls.filter((u) => typeof u === 'string' && u) : []
+        const allPhotoUrls = photoUrl ? [photoUrl, ...photoUrls] : photoUrls
+
+        const fields = {
           Inspection: [inspectionId],
           Question: [questionId],
           [responseField]: String(answer),
-        })
+        }
+        if (allPhotoUrls.length > 0) {
+          fields[photoField] = allPhotoUrls.map((url) => ({ url }))
+        }
+        await createAirtableRecord(TABLES.INSPECTION_RESPONSES, fields)
       }
     } catch (responseErr) {
       console.warn('[Inspections] Inspection Responses table may not exist or have different fields:', responseErr.message)
@@ -108,7 +118,9 @@ export async function POST(request) {
 
         const extras = answer_extras[q.id] || {}
         const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+        const photoUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
         const photoUrls = Array.isArray(extras.photoUrls) ? extras.photoUrls.filter((u) => typeof u === 'string' && u) : []
+        const allPhotoUrls = photoUrl ? [photoUrl, ...photoUrls] : photoUrls
 
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = q.action_category || 'Follow-up'
@@ -120,8 +132,8 @@ export async function POST(request) {
           Description: residentMessage,
           'Resident Message': residentMessage,
         }
-        if (photoUrls.length > 0) {
-          actionFields.Photos = photoUrls.map((url) => ({ url }))
+        if (allPhotoUrls.length > 0) {
+          actionFields.Photos = allPhotoUrls.map((url) => ({ url }))
         }
 
         try {

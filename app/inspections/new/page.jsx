@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
+import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
@@ -53,37 +54,19 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   const typeIncludesPhoto = !!question.type_includes_photo
   const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
   const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always' || (qType === 'yes_no' && typeIncludesPhoto)
+  const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
-  const extras = answerExtras || { comment: '', photoUrls: [] }
+  const extras = answerExtras || { comment: '', photoUrl: '', photoUrls: [] }
 
   const handleChange = (val) => {
     onChange(question.id, val)
     if (qType === 'yes_no' && (val === 'Yes' || val === 'NA') && onAnswerExtras) {
-      onAnswerExtras(question.id, { comment: '', photoUrls: [] })
+      onAnswerExtras(question.id, { comment: '', photoUrl: '', photoUrls: [] })
     }
   }
 
   const setExtras = (updates) => {
     if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
-  }
-
-  const handlePhotoUpload = async (e) => {
-    const files = e.target.files
-    if (!files?.length || !onAnswerExtras) return
-    for (const file of Array.from(files)) {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('inspection_id', 'new')
-      fd.append('question_id', question.id)
-      try {
-        const res = await fetch('/api/photos/upload', { method: 'POST', body: fd })
-        const data = await res.json()
-        if (data?.url) setExtras({ photoUrls: [...(extras.photoUrls || []), data.url] })
-      } catch (err) {
-        console.error('Photo upload failed:', err)
-      }
-    }
-    e.target.value = ''
   }
 
   const buttonGroup = (optionList) => (
@@ -160,22 +143,15 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             {showPhoto && (
               <>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                  Photos
-                  {(photoWhen === 'always' || (photoWhen === 'on_no' && isNo)) && <span style={{ color: '#ef4444' }}>*</span>}
+                  {photoRequired ? 'Photo (required)' : 'Photos'}
+                  {photoRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
                 </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoUpload}
-                  style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}
+                <PhotoUploadControl
+                  value={extras.photoUrl || ''}
+                  onChange={(url) => setExtras({ photoUrl: url })}
+                  required={photoRequired}
+                  error={errorPhotos}
                 />
-                {(extras.photoUrls || []).length > 0 && (
-                  <p style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-                    {(extras.photoUrls || []).length} photo(s) added
-                  </p>
-                )}
-                {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
               </>
             )}
             {showActionBlock && question.action_category && (
@@ -374,8 +350,9 @@ export default function NewInspectionPage() {
           if (showComment && commentRequired && !(extras.comment || '').trim()) {
             errs[`${q.id}_comment`] = 'Comment is required'
           }
-          if (showPhoto && photoRequired && !(extras.photoUrls || []).length) {
-            errs[`${q.id}_photos`] = 'At least one photo is required'
+          const hasPhoto = (typeof extras.photoUrl === 'string' && extras.photoUrl.trim()) || (Array.isArray(extras.photoUrls) && extras.photoUrls.length > 0)
+          if (showPhoto && photoRequired && !hasPhoto) {
+            errs[`${q.id}_photos`] = 'Photo is required'
           }
           return
         }
