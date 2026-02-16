@@ -1,7 +1,7 @@
 import './styles/globals.css'
-import { ClerkProvider } from '@clerk/nextjs'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import AppLayout from './components/AppLayout'
+import { Providers } from './providers'
 
 const fontSans = Inter({
   variable: '--font-geist-sans',
@@ -22,40 +22,14 @@ export const metadata = {
 export const dynamic = 'force-dynamic'
 
 export default function RootLayout({ children }) {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  // When key is set: full app with Clerk + AppLayout (nav, sign in, etc.)
-  if (publishableKey) {
-    // Use custom domain for production (estateinspections.co.uk)
-    const domain = process.env.NEXT_PUBLIC_CLERK_DOMAIN || 'estateinspections.co.uk'
-    return (
-      <ClerkProvider 
-        publishableKey={publishableKey}
-        domain={domain}
-      >
-        <html lang="en">
-          <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
-            <AppLayout>{children}</AppLayout>
-          </body>
-        </html>
-      </ClerkProvider>
-    )
-  }
-  // When key is missing (e.g. Vercel build before env is set): minimal shell so prerender succeeds.
-  // Add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (and CLERK_SECRET_KEY) in Vercel → Project → Settings → Environment Variables.
+  // Removed conditional check - ClerkProvider will handle missing keys gracefully
+  // If key is missing, Clerk will show a clear error; if present, it works
   return (
     <html lang="en">
       <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', backgroundColor: '#f9fafb' }}>
-          <div style={{ textAlign: 'center', maxWidth: '28rem' }}>
-            <p style={{ color: '#6b7280', marginBottom: '0.5rem' }}>Clerk is not configured.</p>
-            <p style={{ fontSize: '1rem', fontWeight: 600, color: '#374151', marginBottom: '1rem', padding: '0.5rem', background: '#e5e7eb', borderRadius: '0.25rem' }}>
-              Env check: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = {process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? 'set (Yes)' : 'missing (No)'}
-            </p>
-            <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginBottom: '1rem' }}>
-              In Vercel: Project → Settings → Environment Variables, add <code style={{ background: '#e5e7eb', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> and <code style={{ background: '#e5e7eb', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>CLERK_SECRET_KEY</code> (from <a href="https://dashboard.clerk.com/last-active?path=api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>Clerk Dashboard → API Keys</a>). Enable them for Production (and Preview if you use preview URLs). Then <strong>redeploy</strong> the project so the new build picks up the variables.
-            </p>
-          </div>
-        </div>
+        <Providers>
+          <AppLayout>{children}</AppLayout>
+        </Providers>
       </body>
     </html>
   )
