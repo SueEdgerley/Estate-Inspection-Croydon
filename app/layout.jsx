@@ -16,7 +16,7 @@ const fontMono = JetBrains_Mono({
 export const metadata = {
   title: 'Estate Inspection - Croydon',
   description: 'Estate Inspection Management System for Croydon Council',
-}
+};
 
 export default function RootLayout({ children }) {
   return (
@@ -27,5 +27,5 @@ export default function RootLayout({ children }) {
         </Providers>
       </body>
     </html>
-  )
+  );
 }
