@@ -125,7 +125,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           value={yesNoNaValue}
           onChange={(val) => handleChange(val)}
         />
-        {(showComment || showPhoto || showActionBlock) && (
+        {(showComment || showActionBlock) && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
             {showActionBlock && (
               <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e' }}>
