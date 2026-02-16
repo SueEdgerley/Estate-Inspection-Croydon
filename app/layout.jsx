@@ -22,12 +22,13 @@ export const metadata = {
 export const dynamic = 'force-dynamic'
 
 export default function RootLayout({ children }) {
-  // Removed conditional check - ClerkProvider will handle missing keys gracefully
-  // If key is missing, Clerk will show a clear error; if present, it works
+  // Read publishable key at server-side (available at request time with force-dynamic)
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
   return (
     <html lang="en">
       <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
-        <Providers>
+        <Providers publishableKey={publishableKey}>
           <AppLayout>{children}</AppLayout>
         </Providers>
       </body>
