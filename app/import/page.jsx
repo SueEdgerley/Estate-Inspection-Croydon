@@ -19,8 +19,8 @@ export default function ImportPhotobookPage() {
       body: fd,
     })
 
-    const text = await res.text()
-    setResult(text)
+    const data = await res.text()
+    setResult(data)
   }
 
   return (
