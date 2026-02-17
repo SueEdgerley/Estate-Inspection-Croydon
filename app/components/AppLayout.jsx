@@ -18,6 +18,7 @@ export default function AppLayout({ children }) {
     { href: '/inspections', label: 'Manage Inspections' },
     { href: '/actions', label: 'Manage Tasks' },
     { href: '/templates', label: 'Templates' },
+    { href: '/import', label: 'Import' },
     { href: '/guides', label: 'Best Practice Guides' },
     { href: '/settings', label: 'Settings' },
     { href: '/downloads', label: 'Data Download' },
