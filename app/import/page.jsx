@@ -14,7 +14,7 @@ export default function ImportPhotobookPage() {
     const fd = new FormData()
     fd.append('file', file)
 
-    const res = await fetch(`/api/photobook/import?status=${status}`, {
+    const res = await fetch(`/api/import/photobook?status=${status}`, {
       method: 'POST',
       body: fd,
     })
