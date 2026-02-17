@@ -48,8 +48,21 @@ export async function POST(request, { params }) {
       answers[row.question_id] = row.answer_value || row.answer_text || row.answer_boolean || row.answer_number
     })
 
-    // Generate PDF with conditional sections
-    const pdfUrl = await generatePDF(inspection, answersResult.rows)
+    // Get all actions (for PDF poster and emails)
+    const allActionsResult = await sql`
+      SELECT 
+        a.*,
+        p.email as recipient_email,
+        p.name as recipient_name
+      FROM actions a
+      LEFT JOIN people p ON a.recipient_person_id = p.id
+      WHERE a.inspection_id = ${id} AND a.status = 'open'
+      ORDER BY a.category, a.created_at
+    `
+    const allActions = allActionsResult.rows
+
+    // Generate Estate Walkabout Poster PDF (uses actions with photo_urls)
+    const pdfUrl = await generatePDF(inspection, answersResult.rows, allActions)
 
     // Update inspection with PDF URL
     await sql`
@@ -79,20 +92,7 @@ export async function POST(request, { params }) {
       GROUP BY category
     `
     
-    // Get all actions with details for email
-    const allActionsResult = await sql`
-      SELECT 
-        a.*,
-        p.email as recipient_email,
-        p.name as recipient_name
-      FROM actions a
-      LEFT JOIN people p ON a.recipient_person_id = p.id
-      WHERE a.inspection_id = ${id} AND a.status = 'open'
-      ORDER BY a.category, a.created_at
-    `
-    
     const actionCategories = actionsResult.rows.map(row => row.category)
-    const allActions = allActionsResult.rows
 
     // Send emails
     const emailResults = await sendEmails({

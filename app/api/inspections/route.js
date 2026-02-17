@@ -177,6 +177,28 @@ export async function POST(request) {
         } catch (actionErr) {
           console.warn('[Inspections] Actions/Issues table may not exist or have different fields:', actionErr.message)
         }
+
+        // Also create Postgres action for poster PDF (with photo_urls)
+        if (process.env.POSTGRES_URL) {
+          try {
+            await ensureDatabase()
+            const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
+            await sql`
+              INSERT INTO actions (
+                id, inspection_id, section_id, section_name, question_id,
+                category, priority, title, description, location, status,
+                comment, auto_created, photo_urls
+              )
+              VALUES (
+                ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
+                ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
+                ${comment || null}, true, ${JSON.stringify(allPhotoUrls)}
+              )
+            `
+          } catch (pgErr) {
+            console.warn('[Inspections] Could not create Postgres action for poster:', pgErr.message)
+          }
+        }
       }
     }
 
