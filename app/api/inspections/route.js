@@ -3,6 +3,8 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, updateAirtableRecord, getPeopleByEmail, TABLES } from '@/lib/airtable-client'
 import { getAuth, getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
+import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
+import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -203,6 +205,7 @@ export async function POST(request) {
     }
 
     // Also write to Postgres so the dashboard and app can see the inspection (linked to current user by email)
+    let pdfUrl = null
     if (process.env.POSTGRES_URL) {
       try {
         await ensureDatabase()
@@ -239,12 +242,112 @@ export async function POST(request) {
             inspector_name = COALESCE(EXCLUDED.inspector_name, inspections.inspector_name),
             updated_at = ${new Date()}
         `
+
+        // Generate PDF and upload to Blob
+        try {
+          // Build PDF data structure from template, answers, and answer_extras
+          const pdfSections = []
+          const pdfPhotos = []
+
+          for (const section of template.sections || []) {
+            const sectionQuestions = []
+            
+            for (const question of section.questions || []) {
+              const answer = answers[question.id]
+              if (answer === undefined || answer === null) continue
+
+              const extras = answer_extras[question.id] || {}
+              const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+              
+              // Get photo URLs for this question
+              const photoUrlsArr = Array.isArray(extras.photo_urls)
+                ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
+                : Array.isArray(extras.photoUrls)
+                  ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
+                  : []
+              const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
+              const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
+
+              // Add photos to PDF photos array
+              allPhotoUrls.forEach((url) => {
+                pdfPhotos.push({
+                  url,
+                  linkedQuestionId: question.id,
+                  caption: comment || undefined,
+                })
+              })
+
+              // Determine if action was created (for Yes/No questions answered "No")
+              const isNo = String(answer).toLowerCase() === 'no'
+              const actionCreated = isNo && question.create_action_on_no
+
+              sectionQuestions.push({
+                id: question.id,
+                text: question.question_text || question.label || '',
+                answer: String(answer),
+                comment: comment || undefined,
+                grade: question.grading_scheme_name ? String(answer) : undefined,
+                actionCreated,
+              })
+            }
+
+            if (sectionQuestions.length > 0) {
+              pdfSections.push({
+                title: section.title || section.name || 'Section',
+                questions: sectionQuestions,
+              })
+            }
+          }
+
+          // Build PDF data
+          const pdfData = {
+            inspectionId,
+            templateName: template.name || templateName || 'Template',
+            blockName: title.trim() || location?.trim() || 'Block',
+            completedAt: new Date().toISOString(),
+            officerName: inspectorName || 'Officer',
+            sections: pdfSections,
+            photos: pdfPhotos,
+          }
+
+          // Generate PDF bytes
+          const pdfBytes = await buildInspectionReportPdf(pdfData)
+
+          // Upload to Vercel Blob
+          pdfUrl = await uploadInspectionPdfToBlob({
+            inspectionId,
+            pdfBytes,
+          })
+
+          // Update Postgres inspection with PDF URL
+          await sql`
+            UPDATE inspections 
+            SET pdf_url = ${pdfUrl}
+            WHERE id = ${inspectionId}
+          `
+
+          // Update Airtable inspection with PDF URL (if field exists)
+          try {
+            await updateAirtableRecord(TABLES.INSPECTIONS, inspectionId, {
+              'PDF URL': pdfUrl,
+            })
+          } catch (airtablePdfErr) {
+            console.warn('[Inspections] Could not update Airtable PDF URL (field may not exist):', airtablePdfErr.message)
+          }
+        } catch (pdfErr) {
+          console.error('[Inspections] Error generating PDF:', pdfErr)
+          // Don't fail the whole request if PDF generation fails
+        }
       } catch (dbErr) {
         console.warn('[Inspections] Could not save to database (dashboard may not show this inspection):', dbErr.message)
       }
     }
 
-    return NextResponse.json({ inspectionId, id: inspectionId }, { status: 201 })
+    return NextResponse.json({ 
+      inspectionId, 
+      id: inspectionId,
+      pdfUrl: pdfUrl || undefined,
+    }, { status: 201 })
   } catch (error) {
     console.error('Error creating inspection:', error)
     return NextResponse.json(
