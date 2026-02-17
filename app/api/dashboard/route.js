@@ -7,13 +7,7 @@ import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
-function asArray(v) {
-  if (Array.isArray(v)) return v
-  if (v == null) return []
-  return [v]
-}
-
-const safeJoin = (v, sep = ',') => (Array.isArray(v) ? v.join(sep) : (v ? String(v) : ''))
+const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 
 export async function GET(request) {
   try {
