@@ -13,10 +13,8 @@ function asArray(v) {
   return [v]
 }
 
-function safeJoin(v, sep = ', ') {
-  const arr = asArray(v).map((x) => (typeof x === 'string' ? x : x?.name ?? String(x)))
-  return arr.join(sep)
-}
+/** Safe join: forces value to array so .join() never throws */
+const safeJoin = (v, sep = ',') => (Array.isArray(v) ? v.join(sep) : (v ? String(v) : ''))
 
 export async function GET(request) {
   try {
@@ -93,8 +91,8 @@ export async function GET(request) {
         row.updated_at ? new Date(row.updated_at).toLocaleDateString('en-GB') : ''
       ])
       const csv = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(','))
+        safeJoin(headers, ','),
+        ...rows.map(row => safeJoin(row.map(cell => `"${String(cell).replace(/"/g, '""')}"`), ','))
       ].join('\n')
       const filename = `tasks-${taskFilter}-${new Date().toISOString().split('T')[0]}.csv`
       return new NextResponse(csv, {
@@ -120,19 +118,20 @@ export async function GET(request) {
         ORDER BY i.submitted_at DESC, ia.section_id, ia.question_id
       `
       const headers = ['Inspection ID', 'Title', 'Completed', 'Section', 'Question', 'Type', 'Answer', 'Notes']
+      const qaAsArray = (x) => (Array.isArray(x) ? x : x == null ? [] : [x])
       const rows = answersResult.rows.map(row => [
         row.inspection_id || '',
         row.title || '',
         row.submitted_at ? new Date(row.submitted_at).toLocaleDateString('en-GB') : '',
         row.section_id || '',
         row.question_id || '',
-        safeJoin(row.question_type),
+        safeJoin(qaAsArray(row.question_type)),
         (row.answer_value ?? row.answer_text ?? row.answer_number ?? row.answer_boolean ?? '').toString(),
         row.notes || ''
       ])
       const csv = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(','))
+        safeJoin(headers, ','),
+        ...rows.map(row => safeJoin(row.map(cell => `"${String(cell).replace(/"/g, '""')}"`), ','))
       ].join('\n')
       return new NextResponse(csv, {
         headers: {
@@ -213,8 +212,8 @@ export async function GET(request) {
     ])
 
     const csv = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell.toString().replace(/"/g, '""')}"`).join(','))
+      safeJoin(headers, ','),
+      ...rows.map(row => safeJoin(row.map(cell => `"${String(cell).replace(/"/g, '""')}"`), ','))
     ].join('\n')
 
     const filename = dataType ? `inspections-${dataType}-${new Date().toISOString().split('T')[0]}.csv` : `inspections-${new Date().toISOString().split('T')[0]}.csv`

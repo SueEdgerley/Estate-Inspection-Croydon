@@ -13,6 +13,8 @@ function asArray(v) {
   return [v]
 }
 
+const safeJoin = (v, sep = ',') => (Array.isArray(v) ? v.join(sep) : (v ? String(v) : ''))
+
 export async function GET(request) {
   try {
     const { userId } = await getAuth()
@@ -45,51 +47,29 @@ export async function GET(request) {
     const scheduled = searchParams.get('scheduled')
     const grading = searchParams.get('grading')
 
-    // Build WHERE conditions using template literals
-    let whereConditions = [sql`status = 'submitted'`]
-    let conditions = []
+    // Build WHERE conditions using template literals (keep as arrays so .join never throws)
+    const whereConditions = [sql`status = 'submitted'`]
 
     // Non-admins only see their own inspections (by email)
     if (!admin && userEmail) {
       whereConditions.push(sql`inspector_id = ${userEmail}`)
     }
 
-    if (dateFrom) {
-      whereConditions.push(sql`submitted_at >= ${dateFrom}`)
-      conditions.push(`submitted_at >= '${dateFrom}'`)
-    }
-    if (dateTo) {
-      whereConditions.push(sql`submitted_at <= ${dateTo + ' 23:59:59'}`)
-      conditions.push(`submitted_at <= '${dateTo} 23:59:59'`)
-    }
-    if (type && type !== 'all') {
-      whereConditions.push(sql`type = ${type}`)
-      conditions.push(`type = '${type}'`)
-    }
-    if (template && template !== 'all') {
-      whereConditions.push(sql`template_id = ${template}`)
-      conditions.push(`template_id = '${template}'`)
-    }
-    if (admin && inspector && inspector !== 'all') {
-      whereConditions.push(sql`inspector_id = ${inspector}`)
-      conditions.push(`inspector_id = '${inspector}'`)
-    }
+    if (dateFrom) whereConditions.push(sql`submitted_at >= ${dateFrom}`)
+    if (dateTo) whereConditions.push(sql`submitted_at <= ${dateTo + ' 23:59:59'}`)
+    if (type && type !== 'all') whereConditions.push(sql`type = ${type}`)
+    if (template && template !== 'all') whereConditions.push(sql`template_id = ${template}`)
+    if (admin && inspector && inspector !== 'all') whereConditions.push(sql`inspector_id = ${inspector}`)
     if (scheduled && scheduled !== 'all') {
       if (scheduled === 'scheduled') {
         whereConditions.push(sql`is_scheduled = true`)
-        conditions.push(`is_scheduled = true`)
       } else {
         whereConditions.push(sql`(is_scheduled = false OR is_scheduled IS NULL)`)
-        conditions.push(`(is_scheduled = false OR is_scheduled IS NULL)`)
       }
     }
-    if (grading && grading !== 'all') {
-      whereConditions.push(sql`grading = ${grading}`)
-      conditions.push(`grading = '${grading}'`)
-    }
+    if (grading && grading !== 'all') whereConditions.push(sql`grading = ${grading}`)
 
-    // Combine conditions (ensure array so sql.join never gets non-array)
-    const whereClause = whereConditions.length > 0 
+    const whereClause = whereConditions.length > 0
       ? sql`WHERE ${sql.join(asArray(whereConditions), sql` AND `)}`
       : sql``
 
