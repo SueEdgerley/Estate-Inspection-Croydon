@@ -19,6 +19,8 @@
     "@vercel/postgres": "^0.5.1",
     "@clerk/nextjs": "^6.0.0",
     "airtable": "^0.12.2",
+    "csv-parse": "^5.5.0",
+    "pg": "^8.11.0",
     "pdfkit": "^0.15.0",
     "sharp": "^0.33.0"
   },
