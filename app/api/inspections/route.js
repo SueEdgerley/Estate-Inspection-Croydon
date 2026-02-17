@@ -60,14 +60,16 @@ export async function POST(request) {
     if (location && String(location).trim()) inspectionFields.Location = String(location).trim()
     if (description && String(description).trim()) inspectionFields.Description = String(description).trim()
 
-    const inspectionId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
+    // App id (UUID) for Postgres and API; Airtable record id only for Airtable
+    const inspectionId = crypto.randomUUID()
+    const airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
 
     // Link inspection to Person when submitted-by email matches exactly one Person (do not block on no match)
     if (inspectorEmail && inspectorEmail.trim()) {
       try {
         const people = await getPeopleByEmail(inspectorEmail.trim())
         if (people.length === 1) {
-          await updateAirtableRecord(TABLES.INSPECTIONS, inspectionId, {
+          await updateAirtableRecord(TABLES.INSPECTIONS, airtableRecordId, {
             'Submitted by person': [people[0].id],
           })
         } else if (people.length === 0) {
@@ -102,7 +104,7 @@ export async function POST(request) {
         const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
         const fields = {
-          Inspection: [inspectionId],
+          Inspection: [airtableRecordId],
           Question: [questionId],
           [responseField]: String(answer),
         }
@@ -164,7 +166,7 @@ export async function POST(request) {
         const category = q.action_category || 'Follow-up'
 
         const actionFields = {
-          Inspection: [inspectionId],
+          Inspection: [airtableRecordId],
           'Action Category': category,
           Status: 'Open',
           Description: residentMessage,
@@ -211,12 +213,13 @@ export async function POST(request) {
         await ensureDatabase()
         await sql`
           INSERT INTO inspections (
-            id, type, title, description, location_label,
+            id, legacy_inspection_id, type, title, description, location_label,
             template_id, template_name, status, submitted_at, created_at, updated_at,
             inspector_id, inspector_name
           )
           VALUES (
             ${inspectionId},
+            NULL,
             'inspection',
             ${title.trim()},
             ${description && String(description).trim() ? String(description).trim() : null},
@@ -328,7 +331,7 @@ export async function POST(request) {
 
           // Update Airtable inspection with PDF URL (if field exists)
           try {
-            await updateAirtableRecord(TABLES.INSPECTIONS, inspectionId, {
+            await updateAirtableRecord(TABLES.INSPECTIONS, airtableRecordId, {
               'PDF URL': pdfUrl,
             })
           } catch (airtablePdfErr) {
