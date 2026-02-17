@@ -3,7 +3,8 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
 import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
 
-export const runtime = 'nodejs'
+// Node Postgres client requires Node runtime
+export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
 function asArray(v) {
