@@ -1,0 +1,54 @@
+import { NextResponse } from 'next/server'
+import { sql } from '@vercel/postgres'
+import { ensureDatabase } from '@/lib/db'
+import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+// POST - Generate poster PDF on demand, return PDF bytes
+export async function POST(request) {
+  try {
+    const body = await request.json().catch(() => ({}))
+    const { inspectionId } = body
+
+    if (!inspectionId) {
+      return new NextResponse('Missing inspectionId', { status: 400 })
+    }
+
+    if (!process.env.POSTGRES_URL) {
+      return new NextResponse('Database not configured', { status: 503 })
+    }
+
+    await ensureDatabase()
+
+    const inspectionResult = await sql`
+      SELECT * FROM inspections WHERE id = ${inspectionId}
+    `
+    if (inspectionResult.rows.length === 0) {
+      return new NextResponse('Inspection not found', { status: 404 })
+    }
+
+    const inspection = inspectionResult.rows[0]
+
+    const actionsResult = await sql`
+      SELECT * FROM actions
+      WHERE inspection_id = ${inspectionId} AND status = 'open'
+      ORDER BY category, created_at
+    `
+    const actions = actionsResult.rows
+
+    const pdfBuffer = await generatePosterPdfBuffer(inspection, actions)
+
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="poster-${inspectionId}.pdf"`,
+        'Cache-Control': 'no-store',
+      },
+    })
+  } catch (error) {
+    console.error('[Poster] Error:', error)
+    return new NextResponse(error.message || 'Poster generation failed', { status: 500 })
+  }
+}

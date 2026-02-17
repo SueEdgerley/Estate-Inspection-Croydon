@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { GeneratePosterButton } from '@/app/components/GeneratePosterButton'
 
 export default function InspectionDetail() {
   const params = useParams()
@@ -169,32 +170,38 @@ export default function InspectionDetail() {
         </p>
       </div>
 
-      {inspection.pdf_url && (
-        <div style={{
-          backgroundColor: 'white',
-          padding: '2rem',
-          borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <a
-            href={inspection.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-block',
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '0.5rem',
-              fontWeight: '500'
-            }}
-          >
-            View PDF
-          </a>
+      <div style={{
+        backgroundColor: 'white',
+        padding: '2rem',
+        borderRadius: '0.5rem',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        border: '1px solid #e5e7eb'
+      }}>
+        <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
+          Poster
+        </h2>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          {id && <GeneratePosterButton inspectionId={id} />}
+          {inspection.pdf_url && (
+            <a
+              href={inspection.pdf_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-block',
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '0.5rem',
+                fontWeight: '500'
+              }}
+            >
+              View PDF
+            </a>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
