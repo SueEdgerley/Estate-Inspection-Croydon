@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { parse } from 'csv-parse/sync'
 import { Pool } from 'pg'
-import { getConnectionString } from '@/lib/db'
+import { getConnectionString, ensureDatabase } from '@/lib/db'
 
 export const runtime = 'nodejs'
 
@@ -25,6 +25,21 @@ function toInt(v) {
   if (!s) return null
   const n = Number(s)
   return Number.isFinite(n) ? n : null
+}
+
+/** Parse date/datetime string to ISO or null. */
+function parseDateTime(str) {
+  if (str == null || String(str).trim() === '') return null
+  const d = new Date(String(str).trim())
+  return isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+/** Parse to YYYY-MM-DD for DATE columns. */
+function parseDate(str) {
+  if (str == null || String(str).trim() === '') return null
+  const d = new Date(String(str).trim())
+  if (isNaN(d.getTime())) return null
+  return d.toISOString().slice(0, 10)
 }
 
 export async function POST(req) {
@@ -54,6 +69,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'CSV had no rows' }, { status: 400 })
     }
 
+    await ensureDatabase()
     const pool = getPool()
     const client = await pool.connect()
     try {
@@ -118,8 +134,77 @@ export async function POST(req) {
         inserted += chunk.length
       }
 
+      // Sync into completed_inspections and inspections so dashboard shows the data
+      let syncedToCompleted = 0
+      let syncedToInspections = 0
+      for (const r of records) {
+        const id = toInt(r['Id'])
+        if (id == null) continue
+        const templateName = r['Template Name'] ?? null
+        const location = r['Location'] ?? null
+        const inspectorName = r['Inspector Name'] ?? null
+        const inspectorEmail = r['Inspector Email'] ?? null
+        const dueDate = parseDate(r['Due Date'])
+        const completedAt = parseDateTime(r['Completed DateTime'] ?? r['Completed Date'] ?? r['Inspection DateTime'])
+        const actualScore = toInt(r['Actual Score'])
+        const totalScore = toInt(r['Total Possible Score'])
+        const isAdHoc = toInt(r['Is Ad-Hoc']) === 1
+        const isCompleted = toInt(r['Is Completed']) !== 0
+
+        await client.query(
+          `INSERT INTO completed_inspections (
+            photobook_id, template_name, location_text, inspector_name, inspector_email,
+            due_date, completed_at, actual_score, total_possible_score, is_ad_hoc, is_completed
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (photobook_id) DO UPDATE SET
+            template_name = EXCLUDED.template_name,
+            location_text = EXCLUDED.location_text,
+            inspector_name = EXCLUDED.inspector_name,
+            inspector_email = EXCLUDED.inspector_email,
+            due_date = EXCLUDED.due_date,
+            completed_at = EXCLUDED.completed_at,
+            actual_score = EXCLUDED.actual_score,
+            total_possible_score = EXCLUDED.total_possible_score,
+            is_ad_hoc = EXCLUDED.is_ad_hoc,
+            is_completed = EXCLUDED.is_completed`,
+          [id, templateName, location, inspectorName, inspectorEmail, dueDate, completedAt, actualScore, totalScore, isAdHoc, isCompleted]
+        )
+        syncedToCompleted++
+
+        const inspectionId = `photobook-${id}`
+        const status = sourceStatus === 'completed' || sourceStatus === 'missed' ? 'submitted' : 'draft'
+        const isScheduled = sourceStatus === 'scheduled' || (sourceStatus === 'completed' && !isAdHoc)
+        const submittedAt = sourceStatus === 'completed' || sourceStatus === 'missed' ? (completedAt || new Date().toISOString()) : null
+
+        await client.query(
+          `INSERT INTO inspections (
+            id, legacy_inspection_id, type, location_label, inspector_name, inspector_id,
+            template_name, due_date, submitted_at, status, is_scheduled, created_at, updated_at
+          ) VALUES ($1, $2, 'estate_walkabout', $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($8, NOW()), COALESCE($8, NOW()))
+          ON CONFLICT (id) DO UPDATE SET
+            legacy_inspection_id = EXCLUDED.legacy_inspection_id,
+            location_label = EXCLUDED.location_label,
+            inspector_name = EXCLUDED.inspector_name,
+            inspector_id = EXCLUDED.inspector_id,
+            template_name = EXCLUDED.template_name,
+            due_date = EXCLUDED.due_date,
+            submitted_at = EXCLUDED.submitted_at,
+            status = EXCLUDED.status,
+            is_scheduled = EXCLUDED.is_scheduled,
+            updated_at = EXCLUDED.updated_at`,
+          [inspectionId, id, location, inspectorName, inspectorEmail, templateName, dueDate, submittedAt, status, isScheduled]
+        )
+        syncedToInspections++
+      }
+
       await client.query('COMMIT')
-      return NextResponse.json({ ok: true, inserted, status: sourceStatus })
+      return NextResponse.json({
+        ok: true,
+        inserted,
+        status: sourceStatus,
+        syncedToCompleted,
+        syncedToInspections,
+      })
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {})
       return NextResponse.json(
