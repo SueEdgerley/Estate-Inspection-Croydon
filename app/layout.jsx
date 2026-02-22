@@ -23,13 +23,57 @@ export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }) {
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const hasClerkKey = publishableKey && publishableKey.trim() !== '';
 
   return (
     <html lang="en">
       <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
-        <Providers publishableKey={publishableKey}>
-          <AppLayout>{children}</AppLayout>
-        </Providers>
+        {hasClerkKey ? (
+          <Providers publishableKey={publishableKey}>
+            <AppLayout>{children}</AppLayout>
+          </Providers>
+        ) : (
+          <div style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            fontFamily: 'var(--font-geist-sans), system-ui, sans-serif',
+            backgroundColor: '#f9fafb',
+          }}>
+            <div style={{
+              maxWidth: 480,
+              background: '#fff',
+              padding: 32,
+              borderRadius: 12,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            }}>
+              <h1 style={{ margin: '0 0 16px', fontSize: '1.25rem', color: '#111827' }}>
+                Clerk not configured
+              </h1>
+              <p style={{ margin: '0 0 16px', color: '#6b7280', lineHeight: 1.5 }}>
+                Add your Clerk publishable key so sign-in works. Get your key at:
+              </p>
+              <a
+                href="https://dashboard.clerk.com/last-active?path=api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#3b82f6', wordBreak: 'break-all' }}
+              >
+                https://dashboard.clerk.com/last-active?path=api-keys
+              </a>
+              <p style={{ margin: '16px 0 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
+                Then create <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>.env.local</code> with:
+                <br />
+                <code style={{ display: 'block', marginTop: 8, background: '#f3f4f6', padding: 12, borderRadius: 4, fontSize: '0.8125rem' }}>
+                  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+                </code>
+                Restart the dev server after adding the file.
+              </p>
+            </div>
+          </div>
+        )}
       </body>
     </html>
   );

@@ -11,16 +11,20 @@ export default function ImportPhotobookPage() {
     if (!file) return
     setResult('Uploading...')
 
-    const fd = new FormData();
-    fd.append("file", file);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
 
-    const res = await fetch(`/api/import/photobook?status=${status}`, {
-      method: "POST",
-      body: fd,
-    });
+      const res = await fetch(`/api/import/photobook?status=${status}`, {
+        method: "POST",
+        body: fd,
+      });
 
-    const data = await res.text();
-    setResult(data);
+      const data = await res.text();
+      setResult(data);
+    } catch (err) {
+      setResult(`Error: ${err?.message ?? String(err)}`);
+    }
   }
 
   return (
