@@ -22,7 +22,7 @@ export async function GET(request) {
       return NextResponse.json(
         {
           error: 'Database not configured',
-          hint: 'Set POSTGRES_URL in Vercel → Settings → Environment Variables (Production). Use your Neon connection string from https://neon.tech or Vercel Postgres.',
+          hint: 'Set one of POSTGRES_URL, DATABASE_URL, POSTGRES_PRISMA_URL, or DIRECT_URL in Vercel → Environment Variables. Value must match Neon (same host). See CONNECTION_AND_DASHBOARD_CHECK.md.',
           envVarsUrl: 'https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings/environment-variables',
         },
         { status: 503 }
