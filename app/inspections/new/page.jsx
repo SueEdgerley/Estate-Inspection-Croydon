@@ -283,7 +283,6 @@ export default function NewInspectionPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
-  const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [answers, setAnswers] = useState({})
@@ -330,7 +329,6 @@ export default function NewInspectionPage() {
 
   const validate = () => {
     const errs = {}
-    if (!title.trim()) errs.title = 'Title is required'
     if (!templateId) errs.template_id = 'Select a template'
     if (!selectedTemplate) return { ...errs }
 
@@ -388,7 +386,6 @@ export default function NewInspectionPage() {
         credentials: 'include',
         body: JSON.stringify({
           template_id: templateId,
-          title: title.trim(),
           location: location.trim() || undefined,
           description: description.trim() || undefined,
           answers,
@@ -527,43 +524,17 @@ export default function NewInspectionPage() {
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
-            htmlFor="title"
-            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
-          >
-            Title <span style={{ color: '#ef4444' }}>*</span>
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Block A – Ground Floor"
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: validationErrors.title ? '1px solid #ef4444' : '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-            }}
-          />
-          {validationErrors.title && (
-            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.title}</p>
-          )}
-        </div>
-
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label
             htmlFor="location"
             style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
-            Location
+            Block / Estate or Location (optional)
           </label>
           <input
             type="text"
             id="location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Block A, Flat 12"
+            placeholder="e.g. Block A, Estate name, or Flat 12"
             style={{
               width: '100%',
               padding: '0.75rem',

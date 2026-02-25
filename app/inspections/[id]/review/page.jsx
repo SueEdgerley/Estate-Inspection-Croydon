@@ -127,10 +127,25 @@ export default function InspectionReview() {
           <div>
             <strong>Inspection ID:</strong> {inspection.id ?? id}
           </div>
+          {inspection.template_name && (
+            <div>
+              <strong>Template:</strong> {inspection.template_name}
+            </div>
+          )}
+          {(inspection.location_label || inspection.location) && (
+            <div>
+              <strong>Block / Estate:</strong> {inspection.location_label || inspection.location}
+            </div>
+          )}
+          {(inspection.submitted_at || inspection.created_at || inspection.createdAt) && (
+            <div>
+              <strong>Date:</strong> {new Date(inspection.submitted_at || inspection.created_at || inspection.createdAt).toLocaleDateString('en-GB')}
+            </div>
+          )}
           <div>
             <strong>Type:</strong> {ISSUE_TYPE_LABELS[inspection.type] || inspection.type}
           </div>
-          {inspection.location && (
+          {inspection.location && !inspection.location_label && (
             <div>
               <strong>Location:</strong> {inspection.location}
             </div>

@@ -95,9 +95,9 @@ export async function POST(request) {
 
   const { template_id, title, location, description, answers = {}, answer_extras = {} } = body
 
-  if (!template_id || !title || typeof title !== 'string' || !title.trim()) {
+  if (!template_id) {
     return NextResponse.json(
-      { error: 'template_id and title are required' },
+      { error: 'template_id is required' },
       { status: 400 }
     )
   }
@@ -129,7 +129,6 @@ export async function POST(request) {
     console.log('Airtable user record:', airtableUserRecordId)
 
     const inspectionFields = {
-      'Inspection ID': inspectionId,
       Template: [template_id],
       Status: 'Draft',
     }
@@ -304,6 +303,9 @@ export async function POST(request) {
     if (process.env.POSTGRES_URL) {
       try {
         await ensureDatabase()
+        const displayTitle = (typeof title === 'string' && title.trim())
+          ? title.trim()
+          : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
         await sql`
           INSERT INTO inspections (
             id, legacy_inspection_id, type, title, description, location_label,
@@ -314,7 +316,7 @@ export async function POST(request) {
             ${inspectionId},
             NULL,
             'inspection',
-            ${title.trim()},
+            ${displayTitle},
             ${description && String(description).trim() ? String(description).trim() : null},
             ${location && String(location).trim() ? String(location).trim() : null},
             ${template_id},
@@ -399,7 +401,7 @@ export async function POST(request) {
           const pdfData = {
             inspectionId,
             templateName: template.name || templateName || 'Template',
-            blockName: title.trim() || location?.trim() || 'Block',
+            blockName: (typeof title === 'string' && title.trim()) || location?.trim() || 'Block',
             completedAt: new Date().toISOString(),
             officerName: inspectorName || 'Officer',
             sections: pdfSections,

@@ -265,7 +265,7 @@ export default function InspectionSection() {
           Section {sectionId}
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          {inspection.title}
+          {[inspection.id?.slice(0, 8), inspection.template_name, inspection.location_label || inspection.location, inspection.submitted_at || inspection.created_at ? new Date(inspection.submitted_at || inspection.created_at).toLocaleDateString('en-GB') : null].filter(Boolean).join(' · ')}
         </p>
       </div>
 
