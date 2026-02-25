@@ -125,7 +125,7 @@ export default function InspectionReview() {
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <strong>Title:</strong> {inspection.title}
+            <strong>Inspection ID:</strong> {inspection.id ?? id}
           </div>
           <div>
             <strong>Type:</strong> {ISSUE_TYPE_LABELS[inspection.type] || inspection.type}
