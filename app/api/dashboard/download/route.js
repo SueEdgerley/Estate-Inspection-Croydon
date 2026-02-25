@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
-import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
+import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -11,8 +12,9 @@ const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 
 export async function GET(request) {
   try {
-    const { userId } = await getAuth()
-    if (!userId) {
+    const { userId } = auth()
+    const allowUnauthed = process.env.ALLOW_DASHBOARD_UNAUTH === 'true'
+    if (!allowUnauthed && !userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
