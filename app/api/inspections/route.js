@@ -11,6 +11,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  console.log('VERSION CHECK - middleware fix deployed')
   const { userId } = await getAuth()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
