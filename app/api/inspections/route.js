@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, updateAirtableRecord, getPeopleByEmail, TABLES } from '@/lib/airtable-client'
-import { getAuth, getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
+import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { getOrCreateAirtableUser } from '@/lib/get-or-create-airtable-user'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
@@ -11,10 +12,9 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  console.log('VERSION CHECK - middleware fix deployed')
-  const { userId } = await getAuth()
+  const { userId } = await auth()
   if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
     await ensureDatabase()
@@ -64,11 +64,10 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  const { userId } = await getAuth()
+  const { userId } = await auth()
   if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  console.log('Clerk userId:', userId)
 
   const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
   if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
