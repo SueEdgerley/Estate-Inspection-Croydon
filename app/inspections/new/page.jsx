@@ -400,11 +400,15 @@ export default function NewInspectionPage() {
         setSubmitError(msg)
         return
       }
+      if (data.error) {
+        setSubmitError(data.error || data.details || 'Save failed')
+        return
+      }
       const inspectionId = data.inspectionId ?? data.id
       if (inspectionId) {
         router.push(`/inspections/${inspectionId}`)
       } else {
-        router.push('/inspections')
+        setSubmitError('Save reported success but no inspection ID was returned. Check the inspections list.')
       }
     } catch (err) {
       setSubmitError(err.message || 'Something went wrong')
