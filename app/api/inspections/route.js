@@ -84,6 +84,14 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
+  if (body && body.test === true) {
+    return NextResponse.json({
+      ok: true,
+      message: 'POST /api/inspections reachable',
+      userId,
+    })
+  }
+
   const { template_id, title, location, description, answers = {}, answer_extras = {} } = body
 
   if (!template_id || !title || typeof title !== 'string' || !title.trim()) {
