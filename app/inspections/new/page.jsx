@@ -385,6 +385,7 @@ export default function NewInspectionPage() {
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           template_id: templateId,
           title: title.trim(),
@@ -396,7 +397,10 @@ export default function NewInspectionPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setSubmitError(data.error || data.details || `Request failed (${res.status})`)
+        const msg = res.status === 401
+          ? 'Please sign in at the top of the page, then try submitting again.'
+          : (data.error || data.details || `Request failed (${res.status})`)
+        setSubmitError(msg)
         return
       }
       const inspectionId = data.inspectionId ?? data.id

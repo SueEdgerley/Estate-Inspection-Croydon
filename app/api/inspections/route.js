@@ -72,7 +72,21 @@ export async function POST(request) {
     if (location && String(location).trim()) inspectionFields.Location = String(location).trim()
     if (description && String(description).trim()) inspectionFields.Description = String(description).trim()
 
-    const airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
+    let airtableRecordId
+    try {
+      airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
+    } catch (createErr) {
+      if (inspectionFields.User && (createErr?.message || '').toLowerCase().includes('airtable')) {
+        delete inspectionFields.User
+        try {
+          airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
+        } catch (retryErr) {
+          throw createErr
+        }
+      } else {
+        throw createErr
+      }
+    }
 
     // Link inspection to Person when submitted-by email matches exactly one Person (do not block on no match)
     if (inspectorEmail && inspectorEmail.trim()) {
