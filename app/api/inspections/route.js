@@ -15,6 +15,7 @@ export async function POST(request) {
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  console.log('Clerk userId:', userId)
 
   const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
   if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
@@ -62,6 +63,7 @@ export async function POST(request) {
     } catch (userErr) {
       console.warn('[Inspections] Could not get/create Airtable User (ensure Users table has Clerk User ID):', userErr?.message ?? userErr)
     }
+    console.log('Airtable user record:', airtableUserRecordId)
 
     const inspectionFields = {
       Title: title.trim(),
