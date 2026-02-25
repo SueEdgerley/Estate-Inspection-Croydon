@@ -2,13 +2,65 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, updateAirtableRecord, getPeopleByEmail, TABLES } from '@/lib/airtable-client'
-import { getAuth, getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
+import { getAuth, getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { getOrCreateAirtableUser } from '@/lib/get-or-create-airtable-user'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+export async function GET() {
+  const { userId } = await getAuth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  try {
+    await ensureDatabase()
+    if (!process.env.POSTGRES_URL) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      )
+    }
+    const userEmail = await getCurrentUserEmail()
+    const admin = await isAdmin()
+    let result
+    if (admin) {
+      result = await sql`
+        SELECT id, type, location_label, inspector_name, inspector_id, template_id, template_name,
+               due_date, submitted_at, grading, pdf_url, status, is_scheduled, title, description, created_at, updated_at
+        FROM inspections
+        ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+        LIMIT 200
+      `
+    } else if (userEmail) {
+      result = await sql`
+        SELECT id, type, location_label, inspector_name, inspector_id, template_id, template_name,
+               due_date, submitted_at, grading, pdf_url, status, is_scheduled, title, description, created_at, updated_at
+        FROM inspections
+        WHERE inspector_id = ${userEmail}
+        ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+        LIMIT 200
+      `
+    } else {
+      result = await sql`
+        SELECT id, type, location_label, inspector_name, inspector_id, template_id, template_name,
+               due_date, submitted_at, grading, pdf_url, status, is_scheduled, title, description, created_at, updated_at
+        FROM inspections
+        ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+        LIMIT 50
+      `
+    }
+    return NextResponse.json(result.rows)
+  } catch (error) {
+    console.error('Error listing inspections:', error)
+    return NextResponse.json(
+      { error: 'Failed to list inspections', details: error?.message },
+      { status: 500 }
+    )
+  }
+}
 
 export async function POST(request) {
   const { userId } = await getAuth()
