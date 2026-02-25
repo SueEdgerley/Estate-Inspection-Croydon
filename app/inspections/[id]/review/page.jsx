@@ -49,9 +49,8 @@ export default function InspectionReview() {
     try {
       const response = await fetch(`/api/inspections/${id}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
       })
 
       if (!response.ok) {

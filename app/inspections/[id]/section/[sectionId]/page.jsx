@@ -65,7 +65,7 @@ export default function InspectionSection() {
     const loadAnswers = async () => {
       if (!id || !sectionId) return
       try {
-        const response = await fetch(`/api/inspections/${id}/answers?section_id=${sectionId}`)
+        const response = await fetch(`/api/inspections/${id}/answers?section_id=${sectionId}`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           const answerMap = {}
@@ -166,11 +166,12 @@ export default function InspectionSection() {
   const saveAnswers = async () => {
     if (!id || !sectionId || Object.keys(answers).length === 0) return
     try {
-      await fetch(`/api/inspections/${id}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section_id: sectionId, answers: answers })
-      })
+await fetch(`/api/inspections/${id}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ section_id: sectionId, answers: answers }),
+    })
     } catch (error) {
       console.error('Error saving answers:', error)
       throw error

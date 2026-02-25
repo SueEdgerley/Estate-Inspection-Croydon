@@ -116,7 +116,7 @@ export default function TemplatesPage() {
   const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
-    fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store' })
+    fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store', credentials: 'include' })
       .then(async (res) => {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {

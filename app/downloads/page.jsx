@@ -11,7 +11,7 @@ export default function DownloadsPage() {
     setDownloading(key)
     try {
       const qs = new URLSearchParams(params).toString()
-      const response = await fetch(`/api/dashboard/download?${qs}`)
+      const response = await fetch(`/api/dashboard/download?${qs}`, { credentials: 'include' })
       if (!response.ok) throw new Error('Download failed')
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)

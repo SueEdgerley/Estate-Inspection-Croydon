@@ -40,7 +40,7 @@ export default function DashboardHome() {
       if (filters.scheduled !== 'all') params.append('scheduled', filters.scheduled)
       if (filters.grading !== 'all') params.append('grading', filters.grading)
 
-      const response = await fetch(`/api/dashboard?${params.toString()}`)
+      const response = await fetch(`/api/dashboard?${params.toString()}`, { credentials: 'include' })
       if (response.ok) {
         const data = await response.json()
         setStats(data.stats)
@@ -69,7 +69,7 @@ export default function DashboardHome() {
         }
       })
 
-      const response = await fetch(`/api/dashboard/download?${params.toString()}`)
+      const response = await fetch(`/api/dashboard/download?${params.toString()}`, { credentials: 'include' })
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)

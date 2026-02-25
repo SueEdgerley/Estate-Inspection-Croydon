@@ -293,7 +293,7 @@ export default function NewInspectionPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/templates')
+    fetch('/api/templates', { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error(res.status === 503 ? 'Airtable not configured' : 'Failed to load templates')
         return res.json()

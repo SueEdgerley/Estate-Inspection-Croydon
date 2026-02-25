@@ -17,6 +17,7 @@ export default function ImportPhotobookPage() {
 
       const res = await fetch(`/api/import/photobook?status=${status}`, {
         method: "POST",
+        credentials: "include",
         body: fd,
       });
 
