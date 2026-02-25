@@ -3,6 +3,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, updateAirtableRecord, getPeopleByEmail, TABLES } from '@/lib/airtable-client'
 import { getAuth, getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
+import { getOrCreateAirtableUser } from '@/lib/get-or-create-airtable-user'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 
@@ -52,16 +53,25 @@ export async function POST(request) {
       )
     }
 
+    const inspectionId = crypto.randomUUID()
+
+    // Get or create Airtable Users record for current Clerk user; link inspection to it
+    let airtableUserRecordId = null
+    try {
+      airtableUserRecordId = await getOrCreateAirtableUser()
+    } catch (userErr) {
+      console.warn('[Inspections] Could not get/create Airtable User (ensure Users table has Clerk User ID):', userErr?.message ?? userErr)
+    }
+
     const inspectionFields = {
       Title: title.trim(),
       Template: [template_id],
       Status: 'Draft',
     }
+    if (airtableUserRecordId) inspectionFields.User = [airtableUserRecordId]
     if (location && String(location).trim()) inspectionFields.Location = String(location).trim()
     if (description && String(description).trim()) inspectionFields.Description = String(description).trim()
 
-    // App id (UUID) for Postgres and API; Airtable record id only for Airtable
-    const inspectionId = crypto.randomUUID()
     const airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
 
     // Link inspection to Person when submitted-by email matches exactly one Person (do not block on no match)
