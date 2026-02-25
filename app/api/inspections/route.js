@@ -61,6 +61,8 @@ export async function POST(request) {
     try {
       airtableUserRecordId = await getOrCreateAirtableUser()
     } catch (userErr) {
+      console.error('Airtable error:', userErr)
+      console.error('Airtable error JSON:', userErr?.error ?? userErr)
       console.warn('[Inspections] Could not get/create Airtable User (ensure Users table has Clerk User ID):', userErr?.message ?? userErr)
     }
     console.log('Airtable user record:', airtableUserRecordId)
@@ -78,11 +80,15 @@ export async function POST(request) {
     try {
       airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
     } catch (createErr) {
+      console.error('Airtable error:', createErr)
+      console.error('Airtable error JSON:', createErr?.error ?? createErr)
       if (inspectionFields.User && (createErr?.message || '').toLowerCase().includes('airtable')) {
         delete inspectionFields.User
         try {
           airtableRecordId = await createAirtableRecord(TABLES.INSPECTIONS, inspectionFields)
         } catch (retryErr) {
+          console.error('Airtable error (retry):', retryErr)
+          console.error('Airtable error JSON (retry):', retryErr?.error ?? retryErr)
           throw createErr
         }
       } else {
