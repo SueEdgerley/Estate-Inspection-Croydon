@@ -129,7 +129,7 @@ export async function POST(request) {
     console.log('Airtable user record:', airtableUserRecordId)
 
     const inspectionFields = {
-      Title: title.trim(),
+      'Inspection ID': inspectionId,
       Template: [template_id],
       Status: 'Draft',
     }
