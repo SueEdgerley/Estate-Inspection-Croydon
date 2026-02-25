@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const { userId } = await auth()
+  console.log('auth userId', userId)
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -65,6 +66,7 @@ export async function GET() {
 
 export async function POST(request) {
   const { userId } = await auth()
+  console.log('auth userId', userId)
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
