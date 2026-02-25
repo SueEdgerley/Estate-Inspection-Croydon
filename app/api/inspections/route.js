@@ -125,15 +125,23 @@ export async function POST(request) {
       console.error('Airtable error JSON:', userErr?.error ?? userErr)
       console.warn('[Inspections] Could not get/create Airtable User (ensure Users table has Clerk User ID):', userErr?.message ?? userErr)
     }
-    console.log('Airtable user record:', airtableUserRecordId)
+    const templateRecordId = template_id
+    const userRecordId = airtableUserRecordId
 
     const inspectionFields = {
-      'Template Used': [template_id],
-      Status: 'Draft',
+      'Template Used': [templateRecordId],
+      'Location Type': body.location_type && String(body.location_type).trim() ? String(body.location_type).trim() : 'Street',
+      'Scheduled vs Ad Hoc': body.scheduled_vs_ad_hoc === 'Scheduled' ? 'Scheduled' : 'Ad Hoc',
+      'Completed Date/Time': new Date().toISOString(),
     }
-    if (airtableUserRecordId) inspectionFields.User = [airtableUserRecordId]
+    if (userRecordId) inspectionFields.User = [userRecordId]
+    if (body.scheduled_due_date) inspectionFields['Scheduled Due Date'] = body.scheduled_due_date
     if (location && String(location).trim()) inspectionFields.Location = String(location).trim()
     if (description && String(description).trim()) inspectionFields.Description = String(description).trim()
+    if (body.estate_record_id) inspectionFields.Estate = [body.estate_record_id]
+    if (body.block_record_id) inspectionFields.Block = [body.block_record_id]
+
+    console.log('Creating inspection fields:', JSON.stringify(inspectionFields, null, 2))
 
     let airtableRecordId
     try {
