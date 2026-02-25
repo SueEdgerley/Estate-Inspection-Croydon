@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import type { NextRequest, NextFetchEvent } from "next/server";
+import type { NextRequest } from "next/server";
 import { clerkMiddleware } from "@clerk/nextjs/server";
 
-export default async function middleware(req: NextRequest, event: NextFetchEvent) {
+export default async function middleware(
+  req: NextRequest,
+  event?: { waitUntil: (p: Promise<unknown>) => void }
+) {
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   const sk = process.env.CLERK_SECRET_KEY;
 
@@ -13,7 +16,7 @@ export default async function middleware(req: NextRequest, event: NextFetchEvent
 
   try {
     const handler = clerkMiddleware();
-    return await handler(req, event);
+    return await handler(req, event ?? { waitUntil: async () => {} });
   } catch (err) {
     console.error("[middleware] Clerk error:", (err as Error)?.message ?? err);
     return NextResponse.next();
