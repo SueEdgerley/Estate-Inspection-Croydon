@@ -128,7 +128,7 @@ export async function POST(request) {
     console.log('Airtable user record:', airtableUserRecordId)
 
     const inspectionFields = {
-      Template: [template_id],
+      'Template Used': [template_id],
       Status: 'Draft',
     }
     if (airtableUserRecordId) inspectionFields.User = [airtableUserRecordId]
