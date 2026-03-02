@@ -104,7 +104,7 @@ export default function InspectionSection() {
         }
       }
       if (question.require_photo_on_no !== false) {
-        const photos = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`)
+        const photos = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
         if (photos.ok) {
           const photoData = await photos.json()
           if (photoData.length === 0) {
@@ -130,7 +130,7 @@ export default function InspectionSection() {
       }
       if (question.create_action_on_no === false) continue
       const comment = answers[`${question.id}_comment`] || ''
-      const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`)
+      const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
       const photos = photosResponse.ok ? await photosResponse.json() : []
       const photoIds = photos.map(p => p.id)
       const priority = answers[`${question.id}_priority`] || question.action_priority || null
