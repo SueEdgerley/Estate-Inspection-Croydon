@@ -13,6 +13,7 @@ const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 export async function GET(request) {
   try {
     const { userId } = auth()
+    return NextResponse.json({ userId, cookies: request.headers.get('cookie') ? true : false })
     const allowUnauthed = process.env.ALLOW_DASHBOARD_UNAUTH === 'true'
     if (!allowUnauthed && !userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -39,7 +40,7 @@ export async function GET(request) {
     const scheduled = searchParams.get('scheduled')
     const grading = searchParams.get('grading')
 
-    // Build WHERE conditions using template literals (keep as arrays so .join never throws)
+    // Build WHERE conditions
     const whereConditions = [sql`status = 'submitted'`]
 
     // Non-admins only see their own inspections (by email)
@@ -61,9 +62,15 @@ export async function GET(request) {
     }
     if (grading && grading !== 'all') whereConditions.push(sql`grading = ${grading}`)
 
-    const whereClause = whereConditions.length > 0
-      ? sql`WHERE ${sql.join(asArray(whereConditions), sql` AND `)}`
-      : sql``
+    // Combine conditions safely without sql.join
+    let whereClause = sql``
+    if (whereConditions.length) {
+      let combined = whereConditions[0]
+      for (let i = 1; i < whereConditions.length; i++) {
+        combined = sql`${combined} AND ${whereConditions[i]}`
+      }
+      whereClause = sql`WHERE ${combined}`
+    }
 
     // Get stats
     const statsResult = await sql`
