@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getBlocks } from '@/lib/airtable-client'
+import { getBlocksCached } from '@/lib/airtable-client'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,7 +22,7 @@ export async function GET() {
   }
 
   try {
-    const blocks = await getBlocks()
+    const blocks = await getBlocksCached()
 
     return NextResponse.json(
       { blocks },

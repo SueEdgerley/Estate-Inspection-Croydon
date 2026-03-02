@@ -6,6 +6,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const UPLOAD_ENDPOINT = '/api/upload/photo'
 
 export default function PhotoUploadControl({
+  id,
   value = [],
   onChange,
   required = false,
@@ -116,6 +117,7 @@ export default function PhotoUploadControl({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <input
         ref={inputRef}
+        id={id}
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
         capture="environment"
@@ -123,6 +125,7 @@ export default function PhotoUploadControl({
         disabled={disabled || uploading}
         multiple={multiple}
         style={{ display: 'none' }}
+        aria-label={label}
       />
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <button

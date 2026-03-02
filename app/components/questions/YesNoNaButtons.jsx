@@ -10,13 +10,13 @@ import { colours, yesColour, noColour, naColour } from '@/lib/nv-theme'
  */
 const OPTIONS = ['Yes', 'No', 'NA']
 
-export default function YesNoNaButtons({ value, onChange, disabled = false }) {
+export default function YesNoNaButtons({ id, value, onChange, disabled = false }) {
   const normalized = value == null ? '' : String(value).trim()
   const selected = OPTIONS.includes(normalized) ? normalized : ''
 
   return (
     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-      {OPTIONS.map((opt) => {
+      {OPTIONS.map((opt, idx) => {
         const isSelected = selected === opt
         const isYes = opt === 'Yes'
         const isNo = opt === 'No'
@@ -30,6 +30,7 @@ export default function YesNoNaButtons({ value, onChange, disabled = false }) {
           <button
             key={opt}
             type="button"
+            id={idx === 0 && id ? id : undefined}
             disabled={disabled}
             onClick={() => onChange(opt)}
             style={{

@@ -44,6 +44,7 @@ function getQuestionType(question) {
 }
 
 function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo }) {
+  const id = `answer-${question.id}`
   const qType = getQuestionType(question)
   const opts = question.options || []
   const isRequired = question.is_required
@@ -69,13 +70,15 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
   }
 
+  const photoId = `photo-${question.id}`
   const photoBlock = (
     <div style={{ marginTop: '0.75rem' }}>
-      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+      <label htmlFor={photoId} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
         Add photo
         {photoRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
       </label>
       <PhotoUploadControl
+        id={photoId}
         value={extras.photo_urls || []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
         required={photoRequired}
@@ -85,9 +88,9 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     </div>
   )
 
-  const buttonGroup = (optionList) => (
+  const buttonGroup = (optionList, firstButtonId) => (
     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-      {(optionList || []).map((opt) => {
+      {(optionList || []).map((opt, idx) => {
         const label = typeof opt === 'string' ? opt : (opt?.label ?? opt?.value ?? opt)
         const val = typeof opt === 'string' ? opt : (opt?.value ?? opt?.label ?? opt)
         const isSelected = value === val || value === label
@@ -95,6 +98,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           <button
             key={val}
             type="button"
+            id={idx === 0 && firstButtonId ? firstButtonId : undefined}
             onClick={() => handleChange(val)}
             style={{
               padding: '0.5rem 1rem',
@@ -117,11 +121,12 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   if (qType === 'yes_no') {
     return (
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <YesNoNaButtons
+          id={id}
           value={yesNoNaValue}
           onChange={(val) => handleChange(val)}
         />
@@ -134,11 +139,13 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             )}
             {showComment && (
               <>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                   Resident-friendly message (for poster PDF){commentWhen === 'always' || (commentWhen === 'on_no' && isNo) ? ' ' : ''}
                   {(commentWhen === 'always' || (commentWhen === 'on_no' && isNo)) && <span style={{ color: '#ef4444' }}>*</span>}
                 </label>
                 <textarea
+                  id={`comment-${question.id}`}
+                  name={`comment-${question.id}`}
                   value={extras.comment || ''}
                   onChange={(e) => setExtras({ comment: e.target.value })}
                   placeholder="e.g. Please ensure the area is kept clear."
@@ -173,14 +180,14 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     const gradingOpts = question.grading_options || ['A', 'B', 'C', 'D', 'NA']
     return (
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {question.grading_scheme_name && (
             <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({question.grading_scheme_name})</span>
           )}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
-        {buttonGroup(gradingOpts)}
+        {buttonGroup(gradingOpts, id)}
         {photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -191,11 +198,13 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     const options = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o))).filter(Boolean)
     return (
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <select
+          id={id}
+          name={id}
           value={value ?? ''}
           onChange={(e) => handleChange(e.target.value)}
           style={{
@@ -222,7 +231,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     const max = 5
     return (
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
@@ -231,6 +240,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             <button
               key={n}
               type="button"
+              id={n === 1 ? id : undefined}
               onClick={() => handleChange(n)}
               style={{
                 padding: '0.5rem 1rem',
@@ -255,11 +265,13 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   // text and fallback
   return (
     <div style={{ marginBottom: '1rem' }}>
-      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+      <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
         {question.question_text}
         {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
       </label>
       <input
+        id={id}
+        name={id}
         type="text"
         value={value ?? ''}
         onChange={(e) => handleChange(e.target.value)}
@@ -277,10 +289,10 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   )
 }
 
-export default function NewInspectionForm({ initialBlocks = [] }) {
+export default function NewInspectionForm({ initialBlocks }) {
   const router = useRouter()
   const [apiPayload, setApiPayload] = useState({ templates: [] })
-  const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
+  const [blocks, setBlocks] = useState(Array.isArray(initialBlocks) ? initialBlocks : [])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
@@ -339,7 +351,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
     async function load() {
       try {
-        const templatesRes = await fetch('/api/templates', { credentials: 'include' })
+        const [templatesRes, blocksRes] = await Promise.all([
+          fetch('/api/templates', { credentials: 'include' }),
+          fetch('/api/blocks', { credentials: 'include' }),
+        ])
 
         if (!templatesRes.ok) {
           throw new Error(
@@ -348,11 +363,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         }
 
         const templatesData = await templatesRes.json()
+        const blocksData = blocksRes.ok ? await blocksRes.json().catch(() => ({})) : {}
 
         if (!cancelled) {
           setApiPayload(templatesData)
           const list = templatesData.templates || []
           if (list.length > 0 && !templateId) setTemplateId(list[0].id)
+          if (Array.isArray(blocksData.blocks)) setBlocks(blocksData.blocks)
         }
       } catch (err) {
         if (!cancelled) setLoadError(err.message)
@@ -549,6 +566,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </label>
           <select
             id="template_id"
+            name="template_id"
             value={templateId}
             onChange={(e) => {
               setTemplateId(e.target.value)
@@ -621,6 +639,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </label>
           <select
             id="block"
+            name="block"
             value={blockRecordId}
             onChange={(e) => setBlockRecordId(e.target.value)}
             style={{
@@ -655,6 +674,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           <input
             type="text"
             id="location"
+            name="location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="e.g. Stairwell, entrance, or flat number"
@@ -719,6 +739,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </label>
           <textarea
             id="description"
+            name="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
