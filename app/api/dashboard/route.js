@@ -56,9 +56,8 @@ export async function GET(request) {
     }
     if (grading && grading !== 'all') conditions.push(sql`grading = ${grading}`)
 
-    // Create WHERE clause without nesting placeholders weirdly
     const whereClause = conditions.length
-      ? sql`WHERE ${conditions.reduce((acc, c, idx) => (idx === 0 ? c : sql`${acc} AND ${c}`), sql``)}`
+      ? sql`WHERE ${sql.join(asArray(conditions), sql` AND `)}`
       : sql``
 
     // Get stats
