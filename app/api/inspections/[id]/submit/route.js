@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
 import { getTemplateQuestions, normalizeQuestion } from '@/lib/airtable-client'
 import { generatePDF } from '@/lib/pdf-generator'
@@ -13,14 +13,13 @@ export const dynamic = 'force-dynamic'
 export async function POST(request, { params }) {
   try {
     await ensureDatabase()
-    
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-
     const { id } = await params
 
     // Get inspection
