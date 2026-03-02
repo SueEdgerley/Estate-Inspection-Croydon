@@ -13,8 +13,7 @@ const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 export async function GET(request) {
   try {
     const { userId } = auth()
-    const allowUnauthed = process.env.ALLOW_DASHBOARD_UNAUTH === 'true'
-    if (!allowUnauthed && !userId) {
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

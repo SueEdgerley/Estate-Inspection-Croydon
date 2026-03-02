@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 
 export default function DashboardHome() {
+  const { isSignedIn } = useAuth()
   const [stats, setStats] = useState({
     totalCompleted: 0,
     scheduledCompleted: 0,
@@ -24,8 +26,8 @@ export default function DashboardHome() {
   })
 
   useEffect(() => {
-    loadDashboardData()
-  }, [filters])
+    if (isSignedIn) loadDashboardData()
+  }, [isSignedIn, filters])
 
   async function loadDashboardData() {
     setLoading(true)
@@ -107,6 +109,50 @@ export default function DashboardHome() {
   }
 
   return (
+    <>
+      <SignedOut>
+        <div style={{
+          minHeight: '60vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem',
+        }}>
+          <div style={{
+            textAlign: 'center',
+            maxWidth: '28rem',
+          }}>
+            <div style={{
+              fontSize: '1.125rem',
+              color: '#6b7280',
+              marginBottom: '1.5rem',
+              lineHeight: 1.6,
+            }}>
+              Please sign in to view the dashboard.
+            </div>
+            <SignInButton mode="modal" forceRedirectUrl="/dashboard">
+              <button
+                type="button"
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  color: '#fff',
+                  backgroundColor: '#0f766e',
+                  border: 'none',
+                  borderRadius: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+              >
+                Sign in
+              </button>
+            </SignInButton>
+          </div>
+        </div>
+      </SignedOut>
+
+      <SignedIn>
     <div>
       <p style={{
         margin: '0 0 1.5rem 0',
@@ -462,5 +508,7 @@ export default function DashboardHome() {
         </table>
       </div>
     </div>
+      </SignedIn>
+    </>
   )
 }
