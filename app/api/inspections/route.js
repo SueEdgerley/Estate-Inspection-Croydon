@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
+import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 
 export const runtime = 'nodejs'
@@ -94,7 +95,7 @@ export async function POST(request) {
     })
   }
 
-  const { template_id, title, location, description, answers = {}, answer_extras = {} } = body
+  const { template_id, title, location, description, estate_id: bodyEstateId, block_id: bodyBlockId, answers = {}, answer_extras = {} } = body
 
   if (!template_id) {
     return NextResponse.json(
@@ -125,6 +126,31 @@ export async function POST(request) {
 
     const inspectionId = crypto.randomUUID()
 
+    const templateVersionSnapshot = JSON.stringify({
+      id: template.id,
+      name: template.name,
+      sections: (template.sections || []).map((sec) => ({
+        id: sec.id,
+        title: sec.title ?? sec.name,
+        questions: (sec.questions || []).map((q) => ({
+          id: q.id,
+          question_text: q.question_text ?? q.label,
+          question_type: q.question_type,
+          options: q.options,
+          action_category: q.action_category,
+          triggers_task: q.triggers_task,
+          triggers_email: q.triggers_email,
+          email_routing: q.email_routing,
+          issue_type: q.issue_type,
+          programme_tag: q.programme_tag,
+          category: q.category,
+        })),
+      })),
+    })
+
+    const estateId = bodyEstateId && String(bodyEstateId).trim() ? String(bodyEstateId).trim() : null
+    const blockId = bodyBlockId && String(bodyBlockId).trim() ? String(bodyBlockId).trim() : null
+
     await ensureDatabase()
 
     const displayTitle = (typeof title === 'string' && title.trim())
@@ -134,8 +160,8 @@ export async function POST(request) {
     await sql`
       INSERT INTO inspections (
         id, legacy_inspection_id, type, title, description, location_label,
-        template_id, template_name, status, submitted_at, created_at, updated_at,
-        inspector_id, inspector_name
+        template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
+        inspector_id, inspector_name, estate_id, block_id
       )
       VALUES (
         ${inspectionId},
@@ -146,12 +172,15 @@ export async function POST(request) {
         ${location && String(location).trim() ? String(location).trim() : null},
         ${template_id},
         ${template.name || null},
+        ${templateVersionSnapshot}::jsonb,
         'submitted',
         ${new Date()},
         ${new Date()},
         ${new Date()},
         ${inspectorEmail || null},
-        ${inspectorName || null}
+        ${inspectorName || null},
+        ${estateId},
+        ${blockId}
       )
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
@@ -159,10 +188,13 @@ export async function POST(request) {
         location_label = EXCLUDED.location_label,
         template_id = EXCLUDED.template_id,
         template_name = EXCLUDED.template_name,
+        template_version = EXCLUDED.template_version,
         status = EXCLUDED.status,
         submitted_at = EXCLUDED.submitted_at,
         inspector_id = COALESCE(EXCLUDED.inspector_id, inspections.inspector_id),
         inspector_name = COALESCE(EXCLUDED.inspector_name, inspections.inspector_name),
+        estate_id = COALESCE(EXCLUDED.estate_id, inspections.estate_id),
+        block_id = COALESCE(EXCLUDED.block_id, inspections.block_id),
         updated_at = ${new Date()}
     `
 
@@ -248,13 +280,12 @@ export async function POST(request) {
       console.warn('[Inspections] Could not store photos for PDF pipeline:', photoErr.message)
     }
 
-    // Create Postgres action records for "fail" answers (e.g. Yes/No = No when create_action_on_no)
+    const actionsForPoster = []
+
     for (const section of template.sections || []) {
       for (const q of section.questions || []) {
         const answer = answers[q.id]
-        const isNo = String(answer).toLowerCase() === 'no'
-        if (!isNo || !q.create_action_on_no) continue
-
+        if (answer === undefined || answer === null) continue
         const extras = answer_extras[q.id] || {}
         const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
         const photoUrlsArr = Array.isArray(extras.photo_urls)
@@ -265,32 +296,73 @@ export async function POST(request) {
         const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
         const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
+        const isNo = String(answer).toLowerCase() === 'no'
+        const isIssue = isNo || (String(answer).toLowerCase() === 'yes' && comment)
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
-        const category = q.action_category || 'Follow-up'
+        const category = q.action_category || q.category || 'Follow-up'
 
-        try {
-          const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
-          await sql`
-            INSERT INTO actions (
-              id, inspection_id, section_id, section_name, question_id,
-              category, priority, title, description, location, status,
-              comment, auto_created, photo_urls
-            )
-            VALUES (
-              ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
-              ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
-              ${comment || null}, true, ${JSON.stringify(allPhotoUrls)}
-            )
-          `
-        } catch (pgErr) {
-          console.warn('[Inspections] Could not create Postgres action for poster:', pgErr.message)
+        if (isNo && q.create_action_on_no) {
+          try {
+            const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
+            await sql`
+              INSERT INTO actions (
+                id, inspection_id, section_id, section_name, question_id,
+                category, priority, title, description, location, status,
+                comment, auto_created, photo_urls
+              )
+              VALUES (
+                ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
+                ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
+                ${comment || null}, true, ${JSON.stringify(allPhotoUrls)}
+              )
+            `
+            actionsForPoster.push({
+              id: actionId,
+              category,
+              title: residentMessage,
+              description: residentMessage,
+              comment: comment || null,
+              photo_urls: allPhotoUrls,
+              created_at: new Date(),
+            })
+          } catch (pgErr) {
+            console.warn('[Inspections] Could not create Postgres action for poster:', pgErr.message)
+          }
+        }
+
+        if (isIssue && q.triggers_task) {
+          try {
+            const taskId = `task_${inspectionId}_${q.id}_${Date.now()}`
+            await sql`
+              INSERT INTO tasks (id, inspection_id, question_id, category, issue_type, programme_tag, description, status)
+              VALUES (${taskId}, ${inspectionId}, ${q.id}, ${q.category || category}, ${q.issue_type || null}, ${q.programme_tag || null}, ${residentMessage}, 'open')
+            `
+          } catch (taskErr) {
+            console.warn('[Inspections] Could not create task:', taskErr.message)
+          }
+        }
+
+        if (isIssue && q.triggers_email) {
+          try {
+            const emailTo = q.email_routing || inspectorEmail || ''
+            const emailId = `email_${inspectionId}_${q.id}_${Date.now()}`
+            await sql`
+              INSERT INTO outbound_emails (id, inspection_id, question_id, email_to, email_routing, status)
+              VALUES (${emailId}, ${inspectionId}, ${q.id}, ${emailTo}, ${q.email_routing || null}, 'pending')
+            `
+            if (emailTo) {
+              await sql`UPDATE outbound_emails SET sent_at = CURRENT_TIMESTAMP, status = 'sent' WHERE id = ${emailId}`
+            }
+          } catch (emailErr) {
+            console.warn('[Inspections] Could not log outbound email:', emailErr.message)
+          }
         }
       }
     }
 
-    let pdfUrl = null
+    let fullPdfUrl = null
+    let posterPdfUrl = null
     try {
-      // Build PDF data structure from template, answers, and answer_extras
       const pdfSections = []
       const pdfPhotos = []
 
@@ -351,27 +423,42 @@ export async function POST(request) {
         photos: pdfPhotos,
       }
 
-      const pdfBytes = await buildInspectionReportPdf(pdfData)
-      pdfUrl = await uploadInspectionPdfToBlob({
+      const fullPdfBytes = await buildInspectionReportPdf(pdfData)
+      fullPdfUrl = await uploadInspectionPdfToBlob({
         inspectionId,
-        pdfBytes,
+        pdfBytes: fullPdfBytes,
+        kind: 'report',
       })
 
-      // Update Postgres inspection with PDF URL
+      const inspectionForPoster = {
+        id: inspectionId,
+        title: displayTitle,
+        location_label: location || null,
+        submitted_at: new Date(),
+        inspector_name: inspectorName || '',
+      }
+      const posterPdfBytes = await generatePosterPdfBuffer(inspectionForPoster, actionsForPoster)
+      posterPdfUrl = await uploadInspectionPdfToBlob({
+        inspectionId,
+        pdfBytes: posterPdfBytes,
+        kind: 'poster',
+      })
+
       await sql`
         UPDATE inspections 
-        SET pdf_url = ${pdfUrl}
+        SET pdf_url = ${fullPdfUrl}, full_pdf_url = ${fullPdfUrl}, poster_pdf_url = ${posterPdfUrl}
         WHERE id = ${inspectionId}
       `
     } catch (pdfErr) {
-      console.error('[Inspections] Error generating PDF:', pdfErr)
-      // Don't fail the whole request if PDF generation fails
+      console.error('[Inspections] Error generating PDFs:', pdfErr)
     }
 
-    return NextResponse.json({ 
-      inspectionId, 
+    return NextResponse.json({
+      inspectionId,
       id: inspectionId,
-      pdfUrl: pdfUrl || undefined,
+      pdfUrl: fullPdfUrl || undefined,
+      fullPdfUrl: fullPdfUrl || undefined,
+      posterPdfUrl: posterPdfUrl || undefined,
     }, { status: 201 })
   } catch (error) {
     console.error('Error creating inspection:', error)
