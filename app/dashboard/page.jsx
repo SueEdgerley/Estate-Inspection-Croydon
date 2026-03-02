@@ -55,6 +55,13 @@ export default function DashboardHome() {
 
       const data = await res.json()
 
+      if (res.status === 401) {
+        setAuthCode('UNAUTHORIZED')
+        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+        setInspections([])
+        return
+      }
+
       if (res.status === 403 && data?.code) {
         setAuthCode(data.code)
         setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
@@ -194,6 +201,7 @@ export default function DashboardHome() {
           boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
         }}>
           <p style={{ margin: 0, fontSize: '1.0625rem', color: '#374151', lineHeight: 1.6 }}>
+            {authCode === 'UNAUTHORIZED' && 'Please sign in again to view the dashboard.'}
             {authCode === 'USER_NOT_PROVISIONED' && 'Your account isn\'t set up yet. Ask an admin to assign your role/estates.'}
             {authCode === 'USER_INACTIVE' && 'Your account is inactive. Contact an admin if you need access.'}
             {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard.'}

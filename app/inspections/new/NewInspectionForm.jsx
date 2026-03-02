@@ -289,10 +289,10 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   )
 }
 
-export default function NewInspectionForm({ initialBlocks }) {
+export default function NewInspectionForm({ initialBlocks = [] }) {
   const router = useRouter()
   const [apiPayload, setApiPayload] = useState({ templates: [] })
-  const [blocks, setBlocks] = useState(Array.isArray(initialBlocks) ? initialBlocks : [])
+  const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
@@ -351,10 +351,7 @@ export default function NewInspectionForm({ initialBlocks }) {
 
     async function load() {
       try {
-        const [templatesRes, blocksRes] = await Promise.all([
-          fetch('/api/templates', { credentials: 'include' }),
-          fetch('/api/blocks', { credentials: 'include' }),
-        ])
+        const templatesRes = await fetch('/api/templates', { credentials: 'include' })
 
         if (!templatesRes.ok) {
           throw new Error(
@@ -363,13 +360,11 @@ export default function NewInspectionForm({ initialBlocks }) {
         }
 
         const templatesData = await templatesRes.json()
-        const blocksData = blocksRes.ok ? await blocksRes.json().catch(() => ({})) : {}
 
         if (!cancelled) {
           setApiPayload(templatesData)
           const list = templatesData.templates || []
           if (list.length > 0 && !templateId) setTemplateId(list[0].id)
-          if (Array.isArray(blocksData.blocks)) setBlocks(blocksData.blocks)
         }
       } catch (err) {
         if (!cancelled) setLoadError(err.message)

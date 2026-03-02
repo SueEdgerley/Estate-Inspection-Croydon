@@ -10,7 +10,7 @@ const ALLOWED_DASHBOARD_ROLES = ['admin', 'caretaker', 'esm', 'ho']
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
-function logDashboardAuth(clerkUserId, email, internalUserId, role, assignedEstateCount, statusCode) {
+function logDashboardAuth(clerkUserId, email, internalUserId, role, assignedEstateCount, statusCode, reason) {
   console.log('[Dashboard] auth:', {
     clerkUserId: clerkUserId ?? null,
     email: email ?? null,
@@ -18,6 +18,7 @@ function logDashboardAuth(clerkUserId, email, internalUserId, role, assignedEsta
     role: role ?? null,
     assignedEstateCount: assignedEstateCount ?? null,
     statusCode,
+    reason: reason ?? null,
   })
 }
 
@@ -27,14 +28,14 @@ export async function GET(request) {
 
   try {
     if (!clerkUserId) {
-      logDashboardAuth(clerkUserId, userEmail, null, null, null, 401)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 401, 'Missing clerk userId')
+      return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED', reason: 'Not signed in' }, { status: 401 })
     }
 
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
-      logDashboardAuth(clerkUserId, userEmail, null, null, null, 503)
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 503, 'Database not configured')
       return NextResponse.json(
         { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
@@ -47,7 +48,7 @@ export async function GET(request) {
       userResult = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
     } catch (e) {
       console.error('[Dashboard] users table lookup failed:', e.message)
-      logDashboardAuth(clerkUserId, userEmail, null, null, null, 500)
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 500, 'Users table lookup failed')
       return NextResponse.json(
         { error: 'Failed to resolve user', details: e.message },
         { status: 500 }
@@ -56,41 +57,46 @@ export async function GET(request) {
 
     let internalUser = userResult.rows[0] || null
 
-    // Optional: create internal user row on first sign-in so admin can assign role/estates (still return 403 until they do)
+    // On first sign-in: create internal user row and temporarily set admin + active so you can access dashboard
     if (!internalUser) {
       try {
         const newId = crypto.randomUUID()
         await sql`
           INSERT INTO users (id, clerk_user_id, email, role, is_active)
-          VALUES (${newId}, ${clerkUserId}, ${userEmail || ''}, null, false)
-          ON CONFLICT (clerk_user_id) DO UPDATE SET email = EXCLUDED.email
+          VALUES (${newId}, ${clerkUserId}, ${userEmail || ''}, 'admin', true)
+          ON CONFLICT (clerk_user_id) DO UPDATE SET
+            email = EXCLUDED.email,
+            role = COALESCE(users.role, 'admin'),
+            is_active = COALESCE(users.is_active, true)
         `
+        const refetch = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
+        internalUser = refetch.rows[0] || null
       } catch (e) {
         console.warn('[Dashboard] Auto-create user row failed:', e.message)
       }
     }
 
     if (!internalUser) {
-      logDashboardAuth(clerkUserId, userEmail, null, null, null, 403)
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 403, 'USER_NOT_PROVISIONED')
       return NextResponse.json(
-        { error: 'User not provisioned', code: 'USER_NOT_PROVISIONED' },
+        { error: 'User not provisioned', code: 'USER_NOT_PROVISIONED', reason: 'No internal user row for this Clerk user' },
         { status: 403 }
       )
     }
 
     if (!internalUser.is_active) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403)
+      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403, 'USER_INACTIVE')
       return NextResponse.json(
-        { error: 'User inactive', code: 'USER_INACTIVE' },
+        { error: 'User inactive', code: 'USER_INACTIVE', reason: 'Account is inactive' },
         { status: 403 }
       )
     }
 
     const role = (internalUser.role || '').toLowerCase().trim()
     if (role && !ALLOWED_DASHBOARD_ROLES.includes(role)) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403)
+      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
-        { error: 'Role not permitted', code: 'ROLE_NOT_PERMITTED' },
+        { error: 'Role not permitted', code: 'ROLE_NOT_PERMITTED', reason: 'Role not allowed for dashboard' },
         { status: 403 }
       )
     }
@@ -108,7 +114,7 @@ export async function GET(request) {
 
     // Signed in and provisioned but no estates assigned → 200 with empty data and message (not 403)
     if (!admin && assignedEstateCount === 0) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200)
+      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200, 'ok_no_estates')
       return NextResponse.json({
         stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
         inspections: [],
@@ -207,7 +213,7 @@ export async function GET(request) {
       adHocCompleted: parseInt(statsResult.rows[0]?.ad_hoc_completed || 0),
     }
 
-    logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200)
+    logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200, 'ok')
     return NextResponse.json({
       stats,
       inspections: inspectionsResult.rows,
