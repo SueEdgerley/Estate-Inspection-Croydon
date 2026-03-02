@@ -128,17 +128,14 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await ensureDatabase()
-    
-    // Check if database is configured
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Vercel Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-    
     const { id } = await params
-    
     const result = await sql`
       DELETE FROM issues
       WHERE id = ${id}
