@@ -119,6 +119,11 @@ All templates, sections, questions, and people are now read from Airtable:
 | Create Action on No | Checkbox | Default: true |
 | Order | Number | Display order |
 | Active | Checkbox | Is question active |
+| **Triggers Task** | Checkbox | When issue (N or raiseIssue): create task/action row |
+| **Triggers Email** | Checkbox | When issue: create outbound_emails row (grouped by team) |
+| **Email Route Team Id** | Single line text | Team identifier for grouping outbound emails |
+| **Issue Type** | Single line text | Stored on answer/task for reporting |
+| **Programme Tag** | Single line text | Stored on answer/task for reporting |
 
 ### People Table
 | Field | Type | Description |

@@ -141,6 +141,7 @@ export async function POST(request) {
           triggers_task: q.triggers_task,
           triggers_email: q.triggers_email,
           email_routing: q.email_routing,
+          email_route_team_id: q.email_route_team_id,
           issue_type: q.issue_type,
           programme_tag: q.programme_tag,
           category: q.category,
@@ -224,11 +225,17 @@ export async function POST(request) {
             questionType === 'number' && Number.isFinite(asNumber) ? asNumber : null
 
           const answerId = `answer_${inspectionId}_${questionId}`
+          const triggersTask = !!question.triggers_task
+          const triggersEmail = !!question.triggers_email
+          const emailRouteTeamId = question.email_route_team_id && String(question.email_route_team_id).trim() ? String(question.email_route_team_id).trim() : null
+          const issueType = question.issue_type && String(question.issue_type).trim() ? String(question.issue_type).trim() : null
+          const programmeTag = question.programme_tag && String(question.programme_tag).trim() ? String(question.programme_tag).trim() : null
 
           await sql`
             INSERT INTO inspection_answers (
               id, inspection_id, section_id, question_id, question_type,
-              answer_value, answer_text, answer_number, answer_boolean, notes
+              answer_value, answer_text, answer_number, answer_boolean, notes,
+              triggers_task, triggers_email, email_route_team_id, issue_type, programme_tag
             )
             VALUES (
               ${answerId},
@@ -240,7 +247,12 @@ export async function POST(request) {
               ${rawValue},
               ${answerNumber},
               ${answerBoolean},
-              ${comment || null}
+              ${comment || null},
+              ${triggersTask},
+              ${triggersEmail},
+              ${emailRouteTeamId},
+              ${issueType},
+              ${programmeTag}
             )
             ON CONFLICT (inspection_id, question_id) DO UPDATE SET
               answer_value = EXCLUDED.answer_value,
@@ -248,6 +260,11 @@ export async function POST(request) {
               answer_number = EXCLUDED.answer_number,
               answer_boolean = EXCLUDED.answer_boolean,
               notes = EXCLUDED.notes,
+              triggers_task = EXCLUDED.triggers_task,
+              triggers_email = EXCLUDED.triggers_email,
+              email_route_team_id = EXCLUDED.email_route_team_id,
+              issue_type = EXCLUDED.issue_type,
+              programme_tag = EXCLUDED.programme_tag,
               updated_at = CURRENT_TIMESTAMP
           `
         }
@@ -281,6 +298,7 @@ export async function POST(request) {
     }
 
     const actionsForPoster = []
+    let emailGroupsByTeam = null
 
     for (const section of template.sections || []) {
       for (const q of section.questions || []) {
@@ -343,19 +361,36 @@ export async function POST(request) {
         }
 
         if (isIssue && q.triggers_email) {
-          try {
-            const emailTo = q.email_routing || inspectorEmail || ''
-            const emailId = `email_${inspectionId}_${q.id}_${Date.now()}`
-            await sql`
-              INSERT INTO outbound_emails (id, inspection_id, question_id, email_to, email_routing, status)
-              VALUES (${emailId}, ${inspectionId}, ${q.id}, ${emailTo}, ${q.email_routing || null}, 'pending')
-            `
-            if (emailTo) {
-              await sql`UPDATE outbound_emails SET sent_at = CURRENT_TIMESTAMP, status = 'sent' WHERE id = ${emailId}`
-            }
-          } catch (emailErr) {
-            console.warn('[Inspections] Could not log outbound email:', emailErr.message)
+          // Collect for grouping by team (done below)
+          if (!emailGroupsByTeam) emailGroupsByTeam = new Map()
+          const teamKey = (q.email_route_team_id && String(q.email_route_team_id).trim()) || `_q_${q.id}`
+          const emailTo = (q.email_routing && String(q.email_routing).trim()) || inspectorEmail || ''
+          if (!emailGroupsByTeam.has(teamKey)) {
+            emailGroupsByTeam.set(teamKey, { emailTo, questionIds: [] })
           }
+          const entry = emailGroupsByTeam.get(teamKey)
+          entry.questionIds.push(q.id)
+          if (emailTo) entry.emailTo = emailTo
+        }
+      }
+    }
+
+    // Create one outbound_email row per team (grouped by email_route_team_id)
+    if (emailGroupsByTeam) {
+      for (const [teamKey, { emailTo, questionIds }] of emailGroupsByTeam) {
+        try {
+          const isTeam = !teamKey.startsWith('_q_')
+          const emailId = `email_${inspectionId}_${teamKey.replace(/\W/g, '_')}_${Date.now()}`
+          const toAddress = emailTo || (isTeam ? teamKey : '')
+          await sql`
+            INSERT INTO outbound_emails (id, inspection_id, question_id, email_to, email_routing, status)
+            VALUES (${emailId}, ${inspectionId}, ${questionIds[0] || null}, ${toAddress || 'pending'}, ${isTeam ? teamKey : null}, 'pending')
+          `
+          if (toAddress) {
+            await sql`UPDATE outbound_emails SET sent_at = CURRENT_TIMESTAMP, status = 'sent' WHERE id = ${emailId}`
+          }
+        } catch (emailErr) {
+          console.warn('[Inspections] Could not log outbound email:', emailErr.message)
         }
       }
     }

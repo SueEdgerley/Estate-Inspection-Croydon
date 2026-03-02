@@ -163,18 +163,24 @@ model InspectionPhoto {
 }
 
 model InspectionAnswer {
-  id           String   @id @db.VarChar(255)
-  inspectionId String   @map("inspection_id") @db.VarChar(255)
-  sectionId    String   @map("section_id") @db.VarChar(50)
-  questionId   String   @map("question_id") @db.VarChar(255)
-  questionType String   @map("question_type") @db.VarChar(50)
-  answerValue  String?  @map("answer_value") @db.Text
-  answerText   String?  @map("answer_text") @db.Text
-  answerNumber Decimal? @map("answer_number") @db.Decimal
-  answerBoolean Boolean? @map("answer_boolean")
-  notes        String?  @db.Text
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id               String   @id @db.VarChar(255)
+  inspectionId     String   @map("inspection_id") @db.VarChar(255)
+  sectionId        String   @map("section_id") @db.VarChar(50)
+  questionId       String   @map("question_id") @db.VarChar(255)
+  questionType     String   @map("question_type") @db.VarChar(50)
+  answerValue      String?  @map("answer_value") @db.Text
+  answerText       String?  @map("answer_text") @db.Text
+  answerNumber     Decimal? @map("answer_number") @db.Decimal
+  answerBoolean    Boolean? @map("answer_boolean")
+  notes            String?  @db.Text
+  // Resolved routing from template (for reporting stability)
+  triggersTask     Boolean? @map("triggers_task")
+  triggersEmail    Boolean? @map("triggers_email")
+  emailRouteTeamId String?  @map("email_route_team_id") @db.VarChar(255)
+  issueType        String?  @map("issue_type") @db.VarChar(100)
+  programmeTag     String?  @map("programme_tag") @db.VarChar(255)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 

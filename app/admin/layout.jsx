@@ -44,6 +44,7 @@ export default function AdminLayout({ children }) {
         <Link href="/admin/assignments">Assignments</Link>
         <Link href="/admin/estates">Estates</Link>
         <Link href="/admin/blocks">Blocks</Link>
+        <Link href="/admin/inspections">Inspections</Link>
         <Link href="/dashboard">Dashboard</Link>
       </nav>
       {children}

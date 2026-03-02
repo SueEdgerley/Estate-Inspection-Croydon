@@ -118,12 +118,7 @@ export async function POST(request, { params }) {
       `
     }
 
-    return NextResponse.json({
-      success: true,
-      pdf_url: pdfUrl,
-      emails_sent: emailResults.sent.length,
-      recipients: emailResults.sent
-    })
+    return NextResponse.json({ inspectionId: id }, { status: 201 })
   } catch (error) {
     console.error('Error submitting inspection:', error)
     return NextResponse.json(
