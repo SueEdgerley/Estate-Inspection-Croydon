@@ -2,30 +2,119 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
-import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
+import { getCurrentUserEmail } from '@/lib/auth'
+
+const ALLOWED_DASHBOARD_ROLES = ['admin', 'caretaker', 'esm', 'ho']
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
+function logDashboardAuth(clerkUserId, email, internalUserId, role, assignedEstateCount, statusCode) {
+  console.log('[Dashboard] auth:', {
+    clerkUserId: clerkUserId ?? null,
+    email: email ?? null,
+    internalUserId: internalUserId ?? null,
+    role: role ?? null,
+    assignedEstateCount: assignedEstateCount ?? null,
+    statusCode,
+  })
+}
+
 export async function GET(request) {
+  const { userId: clerkUserId } = await auth()
+  const userEmail = await getCurrentUserEmail()
+
   try {
-    const { userId } = auth()
-    if (!userId) {
+    if (!clerkUserId) {
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 401)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 503)
       return NextResponse.json(
         { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
 
-    const admin = await isAdmin()
-    const userEmail = await getCurrentUserEmail()
+    // Resolve Clerk user to internal user (users table)
+    let userResult
+    try {
+      userResult = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
+    } catch (e) {
+      console.error('[Dashboard] users table lookup failed:', e.message)
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 500)
+      return NextResponse.json(
+        { error: 'Failed to resolve user', details: e.message },
+        { status: 500 }
+      )
+    }
+
+    let internalUser = userResult.rows[0] || null
+
+    // Optional: create internal user row on first sign-in so admin can assign role/estates (still return 403 until they do)
+    if (!internalUser) {
+      try {
+        const newId = crypto.randomUUID()
+        await sql`
+          INSERT INTO users (id, clerk_user_id, email, role, is_active)
+          VALUES (${newId}, ${clerkUserId}, ${userEmail || ''}, null, false)
+          ON CONFLICT (clerk_user_id) DO UPDATE SET email = EXCLUDED.email
+        `
+      } catch (e) {
+        console.warn('[Dashboard] Auto-create user row failed:', e.message)
+      }
+    }
+
+    if (!internalUser) {
+      logDashboardAuth(clerkUserId, userEmail, null, null, null, 403)
+      return NextResponse.json(
+        { error: 'User not provisioned', code: 'USER_NOT_PROVISIONED' },
+        { status: 403 }
+      )
+    }
+
+    if (!internalUser.is_active) {
+      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403)
+      return NextResponse.json(
+        { error: 'User inactive', code: 'USER_INACTIVE' },
+        { status: 403 }
+      )
+    }
+
+    const role = (internalUser.role || '').toLowerCase().trim()
+    if (role && !ALLOWED_DASHBOARD_ROLES.includes(role)) {
+      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403)
+      return NextResponse.json(
+        { error: 'Role not permitted', code: 'ROLE_NOT_PERMITTED' },
+        { status: 403 }
+      )
+    }
+
+    // Count estate assignments for this user
+    let assignedEstateCount = 0
+    try {
+      const countResult = await sql`SELECT COUNT(*)::int AS c FROM user_estate_assignments WHERE user_id = ${internalUser.id}`
+      assignedEstateCount = countResult.rows[0]?.c ?? 0
+    } catch {
+      // Table might not exist yet
+    }
+
+    const admin = role === 'admin'
+
+    // Signed in and provisioned but no estates assigned → 200 with empty data and message (not 403)
+    if (!admin && assignedEstateCount === 0) {
+      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200)
+      return NextResponse.json({
+        stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
+        inspections: [],
+        message: 'No estates assigned yet.',
+      })
+    }
 
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
@@ -40,8 +129,8 @@ export async function GET(request) {
     const clauses = [`status = 'submitted'`]
     const params = []
 
-    if (!admin && userEmail) {
-      params.push(userEmail)
+    if (!admin && internalUser.email) {
+      params.push(internalUser.email)
       clauses.push(`inspector_id = $${params.length}`)
     }
 
@@ -118,6 +207,7 @@ export async function GET(request) {
       adHocCompleted: parseInt(statsResult.rows[0]?.ad_hoc_completed || 0),
     }
 
+    logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200)
     return NextResponse.json({
       stats,
       inspections: inspectionsResult.rows,

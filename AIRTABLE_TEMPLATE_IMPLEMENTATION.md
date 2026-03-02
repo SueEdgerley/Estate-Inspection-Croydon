@@ -124,6 +124,8 @@ All templates, sections, questions, and people are now read from Airtable:
 | **Email Route Team Id** | Single line text | Team identifier for grouping outbound emails |
 | **Issue Type** | Single line text | Stored on answer/task for reporting |
 | **Programme Tag** | Single line text | Stored on answer/task for reporting |
+| **Resident Wording** | Long text | Optional; used for Neighbourhood Voice / resident-facing inspections instead of Question Text |
+| **Helper Text** | Long text | Short examples or guidance, e.g. “If you see overflowing bins, select No and take a photo.” |
 
 ### People Table
 | Field | Type | Description |

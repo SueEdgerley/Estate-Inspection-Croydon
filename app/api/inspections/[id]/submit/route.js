@@ -44,8 +44,40 @@ export async function POST(request, { params }) {
     
     const answers = {}
     answersResult.rows.forEach(row => {
-      answers[row.question_id] = row.answer_value || row.answer_text || row.answer_boolean || row.answer_number
+      answers[row.question_id] = row.answer_value || row.answer_text || (row.answer_boolean != null ? (row.answer_boolean ? 'Yes' : 'No') : row.answer_number)
     })
+
+    // If draft, create actions (and optionally tasks/emails) from answers so PDF and emails have data
+    if (inspection.status === 'draft') {
+      const version = inspection.template_version
+      const sections = (version && version.sections) || []
+      for (const sec of sections) {
+        for (const q of sec.questions || []) {
+          const val = answers[q.id]
+          const normalized = val != null ? String(val).toLowerCase().trim() : ''
+          const isNo = normalized === 'no'
+          const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
+          const comment = (answerRow && answerRow.notes) || ''
+          const category = q.action_category || q.category || 'Follow-up'
+          const residentMessage = comment || q.question_text || 'Issue raised from inspection'
+          if (isNo && q.create_action_on_no !== false) {
+            const actionId = `action_${id}_${q.id}_${Date.now()}`
+            await sql`
+              INSERT INTO actions (
+                id, inspection_id, section_id, section_name, question_id,
+                category, priority, title, description, location, status,
+                comment, auto_created, photo_urls
+              )
+              VALUES (
+                ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
+                ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
+                ${comment || null}, true, '[]'::jsonb
+              )
+            `
+          }
+        }
+      }
+    }
 
     // Get all actions (for PDF poster and emails)
     const allActionsResult = await sql`

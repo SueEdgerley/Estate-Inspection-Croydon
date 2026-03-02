@@ -9,6 +9,7 @@ import {
   SignedOut,
   UserButton,
 } from '@clerk/nextjs'
+import { colours } from '@/lib/nv-theme'
 
 export default function AppLayout({ children }) {
   const pathname = usePathname()
@@ -38,27 +39,34 @@ export default function AppLayout({ children }) {
       backgroundColor: '#f9fafb'
     }}>
       <header style={{
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #e5e7eb',
-        padding: '0 2rem',
+        backgroundColor: colours.neutral.card,
+        borderBottom: `1px solid ${colours.neutral.border}`,
+        padding: '0 1.25rem 0 1rem',
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)'
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          height: '64px'
+          minHeight: '64px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }} aria-label="Croydon Council – Home">
+              <img
+                src="/croydon-housing-logo.png"
+                alt="Croydon Council"
+                style={{ height: 40, width: 'auto', maxWidth: 220, objectFit: 'contain' }}
+              />
+            </Link>
             <h1 style={{
               margin: 0,
               fontSize: '1.25rem',
               fontWeight: 'bold',
-              color: '#111827',
-              marginRight: '2rem'
+              color: colours.neutral.text,
+              marginRight: '1rem'
             }}>
               Estate Inspection
             </h1>
@@ -69,10 +77,10 @@ export default function AppLayout({ children }) {
                   href={item.href}
                   style={{
                     padding: '0.75rem 1rem',
-                    color: isActive(item.href) ? '#3b82f6' : '#6b7280',
+                    color: isActive(item.href) ? colours.primary : colours.neutral.muted,
                     textDecoration: 'none',
                     fontWeight: isActive(item.href) ? '600' : '500',
-                    borderBottom: isActive(item.href) ? '2px solid #3b82f6' : '2px solid transparent',
+                    borderBottom: isActive(item.href) ? `2px solid ${colours.primary}` : '2px solid transparent',
                     marginBottom: '-1px',
                     transition: 'all 0.2s',
                     fontSize: '0.9375rem'
@@ -84,7 +92,7 @@ export default function AppLayout({ children }) {
             </nav>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>Croydon Council</span>
+            <span style={{ fontSize: '0.875rem', color: colours.neutral.muted }}>Croydon Council</span>
             <SignedOut>
               <SignInButton mode="modal">
                 <button type="button" style={{ padding: '0.5rem 1rem', marginRight: '0.5rem', cursor: 'pointer', fontWeight: 500 }}>Sign in</button>

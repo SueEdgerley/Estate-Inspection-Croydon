@@ -107,7 +107,7 @@ export async function POST(request) {
     })
   }
 
-  const { template_id, title, location, description, estate_id: bodyEstateId, block_id: bodyBlockId, answers = {}, answer_extras = {} } = body
+  const { template_id, title, location, description, estate_id: bodyEstateId, block_id: bodyBlockId, answers = {}, answer_extras = {}, draft: createDraft } = body
 
   if (!template_id) {
     return NextResponse.json(
@@ -137,6 +137,68 @@ export async function POST(request) {
     }
 
     const inspectionId = crypto.randomUUID()
+    const estateId = bodyEstateId && String(bodyEstateId).trim() ? String(bodyEstateId).trim() : null
+    const blockId = bodyBlockId && String(bodyBlockId).trim() ? String(bodyBlockId).trim() : null
+
+    // Draft-only: create inspection with status 'draft' for wizard flow (e.g. Neighbourhood Voice)
+    if (createDraft === true) {
+      await ensureDatabase()
+      const displayTitle = (typeof title === 'string' && title.trim())
+        ? title.trim()
+        : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
+      const draftSnapshot = JSON.stringify({
+        id: template.id,
+        name: template.name,
+        sections: (template.sections || []).map((sec) => ({
+          id: sec.id,
+          title: sec.title ?? sec.name,
+          help_text: sec.help_text,
+          questions: (sec.questions || []).map((q) => ({
+            id: q.id,
+            question_text: q.question_text ?? q.label,
+            resident_wording: q.resident_wording,
+            helper_text: q.helper_text,
+            question_type: q.question_type,
+            options: q.options,
+            action_category: q.action_category,
+            create_action_on_no: q.create_action_on_no,
+            triggers_task: q.triggers_task,
+            triggers_email: q.triggers_email,
+            email_route_team_id: q.email_route_team_id,
+            issue_type: q.issue_type,
+            programme_tag: q.programme_tag,
+            category: q.category,
+          })),
+        })),
+      })
+      await sql`
+        INSERT INTO inspections (
+          id, legacy_inspection_id, type, title, description, location_label,
+          template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
+          inspector_id, inspector_name, estate_id, block_id
+        )
+        VALUES (
+          ${inspectionId},
+          NULL,
+          'inspection',
+          ${displayTitle},
+          ${description && String(description).trim() ? String(description).trim() : null},
+          ${location && String(location).trim() ? String(location).trim() : null},
+          ${template_id},
+          ${template.name || null},
+          ${draftSnapshot}::jsonb,
+          'draft',
+          NULL,
+          ${new Date()},
+          ${new Date()},
+          ${inspectorEmail || null},
+          ${inspectorName || null},
+          ${estateId},
+          ${blockId}
+        )
+      `
+      return NextResponse.json({ inspectionId }, { status: 201 })
+    }
 
     const templateVersionSnapshot = JSON.stringify({
       id: template.id,
@@ -160,9 +222,6 @@ export async function POST(request) {
         })),
       })),
     })
-
-    const estateId = bodyEstateId && String(bodyEstateId).trim() ? String(bodyEstateId).trim() : null
-    const blockId = bodyBlockId && String(bodyBlockId).trim() ? String(bodyBlockId).trim() : null
 
     await ensureDatabase()
 

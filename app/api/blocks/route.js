@@ -22,18 +22,7 @@ export async function GET() {
   }
 
   try {
-    const records = await getBlocks()
-    const blocks = records.map((r) => ({
-      id: r.id,
-      name:
-        r['Name'] ??
-        r['Block Name'] ??
-        r['Block'] ??
-        r['Title'] ??
-        r.name ??
-        r.label ??
-        r.id,
-    }))
+    const blocks = await getBlocks()
 
     return NextResponse.json(
       { blocks },

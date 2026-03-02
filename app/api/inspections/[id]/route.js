@@ -20,8 +20,8 @@ export async function GET(request, { params }) {
     const result = await sql`
       SELECT 
         id, type, location_label, inspector_name, inspector_id,
-        template_id, template_name, due_date, submitted_at, grading, pdf_url,
-        status, is_scheduled, title, description, created_at, updated_at
+        template_id, template_name, template_version, due_date, submitted_at, grading, pdf_url,
+        status, is_scheduled, title, description, estate_id, block_id, created_at, updated_at
       FROM inspections
       WHERE id = ${id}
     `

@@ -14,6 +14,8 @@ export default function DashboardHome() {
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [authCode, setAuthCode] = useState(null)
+  const [emptyStateMessage, setEmptyStateMessage] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -32,6 +34,8 @@ export default function DashboardHome() {
   async function loadDashboardData() {
     setLoading(true)
     setError(null)
+    setAuthCode(null)
+    setEmptyStateMessage(null)
 
     try {
       const params = new URLSearchParams()
@@ -51,8 +55,19 @@ export default function DashboardHome() {
 
       const data = await res.json()
 
+      if (res.status === 403 && data?.code) {
+        setAuthCode(data.code)
+        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+        setInspections([])
+        return
+      }
+
       if (!res.ok) {
         throw new Error(data?.details || data?.error || `Request failed: ${res.status}`)
+      }
+
+      if (data?.message) {
+        setEmptyStateMessage(data.message)
       }
 
       setStats({
@@ -168,6 +183,38 @@ export default function DashboardHome() {
         </div>
       )}
 
+      {!loading && authCode && (
+        <div style={{
+          maxWidth: '32rem',
+          margin: '0 auto 2rem',
+          padding: '1.5rem',
+          backgroundColor: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        }}>
+          <p style={{ margin: 0, fontSize: '1.0625rem', color: '#374151', lineHeight: 1.6 }}>
+            {authCode === 'USER_NOT_PROVISIONED' && 'Your account isn\'t set up yet. Ask an admin to assign your role/estates.'}
+            {authCode === 'USER_INACTIVE' && 'Your account is inactive. Contact an admin if you need access.'}
+            {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard.'}
+          </p>
+        </div>
+      )}
+
+      {!loading && emptyStateMessage && !authCode && (
+        <div style={{
+          marginBottom: '1.5rem',
+          padding: '1rem 1.25rem',
+          backgroundColor: '#FEF3C7',
+          border: '1px solid #F59E0B',
+          borderRadius: '0.5rem',
+          color: '#92400E',
+          fontSize: '0.9375rem',
+        }}>
+          {emptyStateMessage}
+        </div>
+      )}
+
       {error && !loading && (
         <div style={{
           padding: '1rem 1.25rem',
@@ -182,6 +229,8 @@ export default function DashboardHome() {
         </div>
       )}
 
+      {!authCode && (
+      <>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -507,6 +556,8 @@ export default function DashboardHome() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
       </SignedIn>
     </>

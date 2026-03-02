@@ -1,9 +1,12 @@
 'use client'
 
+import { colours, yesColour, noColour, naColour } from '@/lib/nv-theme'
+
 /**
  * Reusable 3-button toggle for Yes / No / NA.
  * value: "Yes" | "No" | "NA" | "" (empty when none selected)
  * onChange: (val: "Yes" | "No" | "NA") => void
+ * Uses theme: green (Yes), red (No), grey (NA); unselected = neutral outline.
  */
 const OPTIONS = ['Yes', 'No', 'NA']
 
@@ -19,9 +22,10 @@ export default function YesNoNaButtons({ value, onChange, disabled = false }) {
         const isNo = opt === 'No'
         const isNA = opt === 'NA'
         const bg = isSelected
-          ? (isYes ? '#10b981' : isNo ? '#ef4444' : '#6b7280')
-          : '#f3f4f6'
-        const color = isSelected ? '#fff' : '#374151'
+          ? (isYes ? yesColour : isNo ? noColour : naColour)
+          : colours.neutral.card
+        const color = isSelected ? '#fff' : colours.neutral.text
+        const border = isSelected ? 'transparent' : colours.neutral.border
         return (
           <button
             key={opt}
@@ -30,10 +34,11 @@ export default function YesNoNaButtons({ value, onChange, disabled = false }) {
             onClick={() => onChange(opt)}
             style={{
               padding: '0.5rem 1rem',
+              minHeight: 44,
               backgroundColor: bg,
               color,
-              border: `1px solid ${isSelected ? 'transparent' : '#d1d5db'}`,
-              borderRadius: '0.375rem',
+              border: `2px solid ${border}`,
+              borderRadius: '0.5rem',
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontWeight: isSelected ? 600 : 500,
               fontSize: '0.9375rem',
