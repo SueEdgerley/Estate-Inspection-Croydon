@@ -9,10 +9,17 @@ export const dynamic = 'force-dynamic'
  */
 export default async function NewInspectionPage() {
   let blocks = []
-  try {
-    blocks = await getBlocks()
-  } catch (e) {
-    console.warn('[New inspection] getBlocks failed:', e?.message)
+  const hasAirtable =
+    process.env.AIRTABLE_BASE_ID?.trim() &&
+    (process.env.AIRTABLE_API_TOKEN?.trim() ||
+      process.env.AIRTABLE_API_KEY?.trim() ||
+      process.env.AIRTABLE_TOKEN?.trim())
+  if (hasAirtable) {
+    try {
+      blocks = await getBlocks()
+    } catch (e) {
+      console.warn('[New inspection] getBlocks failed:', e?.message)
+    }
   }
   return <NewInspectionForm initialBlocks={blocks} />
 }
