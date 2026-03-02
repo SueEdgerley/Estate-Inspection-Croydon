@@ -8,7 +8,7 @@ export default function TemplatesTestPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/templates')
+    fetch('/api/templates', { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
         setJson(data)
