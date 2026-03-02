@@ -280,9 +280,11 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
 export default function NewInspectionPage() {
   const router = useRouter()
   const [apiPayload, setApiPayload] = useState({ templates: [] })
+  const [blocks, setBlocks] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
+  const [blockRecordId, setBlockRecordId] = useState('')
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [answers, setAnswers] = useState({})
@@ -293,25 +295,43 @@ export default function NewInspectionPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/templates', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error(res.status === 503 ? 'Airtable not configured' : 'Failed to load templates')
-        return res.json()
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setApiPayload(data)
-          const list = data.templates || []
-          if (list.length > 0 && !templateId) setTemplateId(list[0].id)
+
+    async function load() {
+      try {
+        const [templatesRes, blocksRes] = await Promise.all([
+          fetch('/api/templates', { credentials: 'include' }),
+          fetch('/api/blocks', { credentials: 'include' }),
+        ])
+
+        if (!templatesRes.ok) {
+          throw new Error(
+            templatesRes.status === 503 ? 'Airtable not configured' : 'Failed to load templates'
+          )
         }
-      })
-      .catch((err) => {
+
+        const templatesData = await templatesRes.json()
+        const blocksData = blocksRes.ok ? await blocksRes.json().catch(() => ({})) : {}
+
+        if (!cancelled) {
+          setApiPayload(templatesData)
+          const list = templatesData.templates || []
+          if (list.length > 0 && !templateId) setTemplateId(list[0].id)
+
+          if (Array.isArray(blocksData.blocks)) {
+            setBlocks(blocksData.blocks)
+          }
+        }
+      } catch (err) {
         if (!cancelled) setLoadError(err.message)
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const templates = apiPayload.templates || []
@@ -386,6 +406,7 @@ export default function NewInspectionPage() {
         credentials: 'include',
         body: JSON.stringify({
           template_id: templateId,
+          block_record_id: blockRecordId || undefined,
           location: location.trim() || undefined,
           description: description.trim() || undefined,
           answers,
@@ -528,21 +549,60 @@ export default function NewInspectionPage() {
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
-            htmlFor="location"
-            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
+            htmlFor="block"
+            style={{
+              display: 'block',
+              marginBottom: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#374151',
+            }}
           >
-            Block / Estate or Location (optional)
+            Block (optional)
+          </label>
+          <select
+            id="block"
+            value={blockRecordId}
+            onChange={(e) => setBlockRecordId(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              backgroundColor: 'white',
+              marginBottom: '0.75rem',
+            }}
+          >
+            <option value="">Select a block (optional)</option>
+            {blocks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <label
+            htmlFor="location"
+            style={{
+              display: 'block',
+              marginBottom: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#374151',
+            }}
+          >
+            Location note (optional)
           </label>
           <input
             type="text"
             id="location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Block A, Estate name, or Flat 12"
+            placeholder="e.g. Stairwell, entrance, or flat number"
             style={{
               width: '100%',
               padding: '0.75rem',
-              border: '1px solid #d1d5db',
+              border: '1px solid '#d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
             }}
