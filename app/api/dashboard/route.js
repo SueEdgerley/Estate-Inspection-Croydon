@@ -39,37 +39,27 @@ export async function GET(request) {
     const scheduled = searchParams.get('scheduled')
     const grading = searchParams.get('grading')
 
-    // Build WHERE conditions
-    const whereConditions = [sql`status = 'submitted'`]
+    const conditions = [sql`status = 'submitted'`]
 
-    // Non-admins only see their own inspections (by email)
-    if (!admin && userEmail) {
-      whereConditions.push(sql`inspector_id = ${userEmail}`)
-    }
-
-    if (dateFrom) whereConditions.push(sql`submitted_at >= ${dateFrom}`)
-    if (dateTo) whereConditions.push(sql`submitted_at <= ${dateTo + ' 23:59:59'}`)
-    if (type && type !== 'all') whereConditions.push(sql`type = ${type}`)
-    if (template && template !== 'all') whereConditions.push(sql`template_id = ${template}`)
-    if (admin && inspector && inspector !== 'all') whereConditions.push(sql`inspector_id = ${inspector}`)
+    if (!admin && userEmail) conditions.push(sql`inspector_id = ${userEmail}`)
+    if (dateFrom) conditions.push(sql`submitted_at >= ${dateFrom}`)
+    if (dateTo) conditions.push(sql`submitted_at <= ${dateTo + ' 23:59:59'}`)
+    if (type && type !== 'all') conditions.push(sql`type = ${type}`)
+    if (template && template !== 'all') conditions.push(sql`template_id = ${template}`)
+    if (admin && inspector && inspector !== 'all') conditions.push(sql`inspector_id = ${inspector}`)
     if (scheduled && scheduled !== 'all') {
-      if (scheduled === 'scheduled') {
-        whereConditions.push(sql`is_scheduled = true`)
-      } else {
-        whereConditions.push(sql`(is_scheduled = false OR is_scheduled IS NULL)`)
-      }
+      conditions.push(
+        scheduled === 'scheduled'
+          ? sql`is_scheduled = true`
+          : sql`(is_scheduled = false OR is_scheduled IS NULL)`
+      )
     }
-    if (grading && grading !== 'all') whereConditions.push(sql`grading = ${grading}`)
+    if (grading && grading !== 'all') conditions.push(sql`grading = ${grading}`)
 
-    // Combine conditions safely without sql.join
-    let whereClause = sql``
-    if (whereConditions.length) {
-      let combined = whereConditions[0]
-      for (let i = 1; i < whereConditions.length; i++) {
-        combined = sql`${combined} AND ${whereConditions[i]}`
-      }
-      whereClause = sql`WHERE ${combined}`
-    }
+    // Create WHERE clause without nesting placeholders weirdly
+    const whereClause = conditions.length
+      ? sql`WHERE ${conditions.reduce((acc, c, idx) => (idx === 0 ? c : sql`${acc} AND ${c}`), sql``)}`
+      : sql``
 
     // Get stats
     const statsResult = await sql`
