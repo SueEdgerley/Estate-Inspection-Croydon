@@ -602,7 +602,7 @@ export default function NewInspectionPage() {
             style={{
               width: '100%',
               padding: '0.75rem',
-              border: '1px solid '#d1d5db',
+              border: '1px solid #d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
             }}
