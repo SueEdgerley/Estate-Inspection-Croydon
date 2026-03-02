@@ -59,12 +59,27 @@ export async function GET(request) {
       )
     }
 
+    // Detect missing table so we return a clear 500 "DB not migrated" (not "unauthorised")
+    function isUsersTableMissing(err) {
+      if (!err) return false
+      const code = err.code
+      const msg = (err.message || '').toLowerCase()
+      return code === '42P01' || msg.includes('does not exist') || msg.includes('relation "users"')
+    }
+
     // Match on users.clerk_user_id === Clerk user.id (exact string match, not email or internal UUID)
     let userResult
     try {
       userResult = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
     } catch (e) {
       console.error('[Dashboard] users table lookup failed:', e.message)
+      if (isUsersTableMissing(e)) {
+        logDashboardAuth(clerkUserId, userEmail, null, null, null, 500, 'DB not migrated')
+        return NextResponse.json(
+          { error: 'DB not migrated', code: 'DB_NOT_MIGRATED', message: 'Database migrations have not been run. Run: prisma migrate deploy' },
+          { status: 500 }
+        )
+      }
       logDashboardAuth(clerkUserId, userEmail, null, null, null, 500, 'Users table lookup failed')
       return NextResponse.json(
         { error: 'Failed to resolve user', details: e.message },
@@ -92,6 +107,13 @@ export async function GET(request) {
         console.log('[Dashboard] debug internalUser after auto-create:', internalUser ? { ...internalUser } : null)
       } catch (e) {
         console.warn('[Dashboard] Auto-create user row failed:', e.message)
+        if (isUsersTableMissing(e)) {
+          logDashboardAuth(clerkUserId, userEmail, null, null, null, 500, 'DB not migrated')
+          return NextResponse.json(
+            { error: 'DB not migrated', code: 'DB_NOT_MIGRATED', message: 'Database migrations have not been run. Run: prisma migrate deploy' },
+            { status: 500 }
+          )
+        }
       }
     }
 
