@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 
 // Node Postgres client requires Node runtime
@@ -19,10 +19,10 @@ export async function GET(request) {
     }
 
     await ensureDatabase()
-    
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
