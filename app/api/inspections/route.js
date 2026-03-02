@@ -140,7 +140,6 @@ export async function POST(request) {
     if (body.scheduled_due_date) inspectionFields['Scheduled Due Date'] = body.scheduled_due_date
     if (location && String(location).trim()) inspectionFields.Location = String(location).trim()
     if (description && String(description).trim()) inspectionFields.Description = String(description).trim()
-    if (body.estate_record_id) inspectionFields.Estate = [body.estate_record_id]
     if (body.block_record_id) inspectionFields.Block = [body.block_record_id]
 
     console.log('Creating inspection fields:', JSON.stringify(inspectionFields, null, 2))
