@@ -56,9 +56,11 @@ export async function GET(request) {
     }
     if (grading && grading !== 'all') conditions.push(sql`grading = ${grading}`)
 
-    const whereClause = conditions.length
-      ? sql`WHERE ${sql.join(asArray(conditions), sql` AND `)}`
-      : sql``
+    let where = null
+    for (const cond of conditions) {
+      where = where ? sql`${where} AND ${cond}` : cond
+    }
+    const whereClause = where ? sql`WHERE ${where}` : sql``
 
     // Get stats
     const statsResult = await sql`

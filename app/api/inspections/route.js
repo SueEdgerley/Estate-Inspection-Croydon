@@ -185,8 +185,63 @@ export async function POST(request) {
 
     const questionsById = new Map()
     template.sections.forEach((sec) => {
-      (sec.questions || []).forEach((q) => questionsById.set(q.id, { ...q, sectionId: sec.id }))
+      ;(sec.questions || []).forEach((q) => questionsById.set(q.id, { ...q, sectionId: sec.id }))
     })
+
+    // First, persist answers into Postgres inspection_answers (system of record)
+    if (getPgUrl()) {
+      try {
+        await ensureDatabase()
+        for (const [questionId, answer] of Object.entries(answers)) {
+          if (answer === undefined || answer === null) continue
+          const question = questionsById.get(questionId)
+          if (!question) continue
+          const extras = answer_extras[questionId] || {}
+          const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+
+          const questionType = question.question_type || 'text'
+          const rawValue = typeof answer === 'string' ? answer : String(answer)
+          const lower = String(answer).toLowerCase()
+          const answerBoolean =
+            questionType === 'yes_no'
+              ? (lower === 'yes' ? true : lower === 'no' ? false : null)
+              : null
+          const asNumber = Number(answer)
+          const answerNumber =
+            questionType === 'number' && Number.isFinite(asNumber) ? asNumber : null
+
+          const answerId = `answer_${inspectionId}_${questionId}`
+
+          await sql`
+            INSERT INTO inspection_answers (
+              id, inspection_id, section_id, question_id, question_type,
+              answer_value, answer_text, answer_number, answer_boolean, notes
+            )
+            VALUES (
+              ${answerId},
+              ${inspectionId},
+              ${question.sectionId},
+              ${questionId},
+              ${questionType},
+              ${rawValue},
+              ${rawValue},
+              ${answerNumber},
+              ${answerBoolean},
+              ${comment || null}
+            )
+            ON CONFLICT (inspection_id, question_id) DO UPDATE SET
+              answer_value = EXCLUDED.answer_value,
+              answer_text = EXCLUDED.answer_text,
+              answer_number = EXCLUDED.answer_number,
+              answer_boolean = EXCLUDED.answer_boolean,
+              notes = EXCLUDED.notes,
+              updated_at = CURRENT_TIMESTAMP
+          `
+        }
+      } catch (answersErr) {
+        console.warn('[Inspections] Could not persist inspection answers to Postgres:', answersErr.message)
+      }
+    }
 
     const responseField = process.env.AIRTABLE_RESPONSE_FIELD || 'Response'
     const photoField = process.env.AIRTABLE_PHOTO_FIELD || 'Photo'
