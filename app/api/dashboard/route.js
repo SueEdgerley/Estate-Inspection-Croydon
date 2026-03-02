@@ -37,64 +37,82 @@ export async function GET(request) {
     const scheduled = searchParams.get('scheduled')
     const grading = searchParams.get('grading')
 
-    // Start with a real WHERE clause (not an array)
-    let whereClause = sql`WHERE status = 'submitted'`
+    // Build WHERE clause as plain SQL text + params
+    const clauses = [`status = 'submitted'`]
+    const params = []
 
     // Non-admins only see their own inspections (by email)
     if (!admin && userEmail) {
-      whereClause = sql`${whereClause} AND inspector_id = ${userEmail}`
+      params.push(userEmail)
+      clauses.push(`inspector_id = $${params.length}`)
     }
 
     if (dateFrom) {
-      whereClause = sql`${whereClause} AND submitted_at >= ${dateFrom}`
+      params.push(dateFrom)
+      clauses.push(`submitted_at >= $${params.length}`)
     }
 
     if (dateTo) {
-      whereClause = sql`${whereClause} AND submitted_at <= ${dateTo + ' 23:59:59'}`
+      params.push(dateTo + ' 23:59:59')
+      clauses.push(`submitted_at <= $${params.length}`)
     }
 
     if (type && type !== 'all') {
-      whereClause = sql`${whereClause} AND type = ${type}`
+      params.push(type)
+      clauses.push(`type = $${params.length}`)
     }
 
     if (template && template !== 'all') {
-      whereClause = sql`${whereClause} AND template_id = ${template}`
+      params.push(template)
+      clauses.push(`template_id = $${params.length}`)
     }
 
     if (admin && inspector && inspector !== 'all') {
-      whereClause = sql`${whereClause} AND inspector_id = ${inspector}`
+      params.push(inspector)
+      clauses.push(`inspector_id = $${params.length}`)
     }
 
     if (scheduled && scheduled !== 'all') {
       if (scheduled === 'scheduled') {
-        whereClause = sql`${whereClause} AND is_scheduled = true`
+        clauses.push(`is_scheduled = true`)
       } else {
-        whereClause = sql`${whereClause} AND (is_scheduled = false OR is_scheduled IS NULL)`
+        clauses.push(`(is_scheduled = false OR is_scheduled IS NULL)`)
       }
     }
 
     if (grading && grading !== 'all') {
-      whereClause = sql`${whereClause} AND grading = ${grading}`
+      params.push(grading)
+      clauses.push(`grading = $${params.length}`)
     }
 
-    const statsResult = await sql`
+    const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ``
+
+    // Stats
+    const statsResult = await sql.query(
+      `
       SELECT 
         COUNT(*) FILTER (WHERE status = 'submitted') as total_completed,
         COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) as scheduled_completed,
         COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) as ad_hoc_completed
       FROM inspections
-      ${whereClause}
-    `
+      ${whereSql}
+      `,
+      params
+    )
 
-    const inspectionsResult = await sql`
+    // Recent inspections
+    const inspectionsResult = await sql.query(
+      `
       SELECT 
         id, type, location_label, inspector_name, inspector_id,
         template_id, template_name, due_date, submitted_at, grading, pdf_url
       FROM inspections
-      ${whereClause}
+      ${whereSql}
       ORDER BY submitted_at DESC
       LIMIT 100
-    `
+      `,
+      params
+    )
 
     const stats = {
       totalCompleted: parseInt(statsResult.rows[0]?.total_completed || 0),
