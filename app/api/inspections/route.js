@@ -386,9 +386,9 @@ export async function POST(request) {
             ${template_id},
             ${template.name || null},
             'submitted',
-            new Date(),
-            new Date(),
-            new Date(),
+            ${new Date()},
+            ${new Date()},
+            ${new Date()},
             ${inspectorEmail || null},
             ${inspectorName || null}
           )

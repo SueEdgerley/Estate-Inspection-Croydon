@@ -8,8 +8,6 @@ import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
-const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
-
 export async function GET(request) {
   try {
     const { userId } = auth()
@@ -39,30 +37,46 @@ export async function GET(request) {
     const scheduled = searchParams.get('scheduled')
     const grading = searchParams.get('grading')
 
-    const conditions = [sql`status = 'submitted'`]
+    // Start with a real WHERE clause (not an array)
+    let whereClause = sql`WHERE status = 'submitted'`
 
-    if (!admin && userEmail) conditions.push(sql`inspector_id = ${userEmail}`)
-    if (dateFrom) conditions.push(sql`submitted_at >= ${dateFrom}`)
-    if (dateTo) conditions.push(sql`submitted_at <= ${dateTo + ' 23:59:59'}`)
-    if (type && type !== 'all') conditions.push(sql`type = ${type}`)
-    if (template && template !== 'all') conditions.push(sql`template_id = ${template}`)
-    if (admin && inspector && inspector !== 'all') conditions.push(sql`inspector_id = ${inspector}`)
+    // Non-admins only see their own inspections (by email)
+    if (!admin && userEmail) {
+      whereClause = sql`${whereClause} AND inspector_id = ${userEmail}`
+    }
+
+    if (dateFrom) {
+      whereClause = sql`${whereClause} AND submitted_at >= ${dateFrom}`
+    }
+
+    if (dateTo) {
+      whereClause = sql`${whereClause} AND submitted_at <= ${dateTo + ' 23:59:59'}`
+    }
+
+    if (type && type !== 'all') {
+      whereClause = sql`${whereClause} AND type = ${type}`
+    }
+
+    if (template && template !== 'all') {
+      whereClause = sql`${whereClause} AND template_id = ${template}`
+    }
+
+    if (admin && inspector && inspector !== 'all') {
+      whereClause = sql`${whereClause} AND inspector_id = ${inspector}`
+    }
+
     if (scheduled && scheduled !== 'all') {
-      conditions.push(
-        scheduled === 'scheduled'
-          ? sql`is_scheduled = true`
-          : sql`(is_scheduled = false OR is_scheduled IS NULL)`
-      )
+      if (scheduled === 'scheduled') {
+        whereClause = sql`${whereClause} AND is_scheduled = true`
+      } else {
+        whereClause = sql`${whereClause} AND (is_scheduled = false OR is_scheduled IS NULL)`
+      }
     }
-    if (grading && grading !== 'all') conditions.push(sql`grading = ${grading}`)
 
-    let where = null
-    for (const cond of conditions) {
-      where = where ? sql`${where} AND ${cond}` : cond
+    if (grading && grading !== 'all') {
+      whereClause = sql`${whereClause} AND grading = ${grading}`
     }
-    const whereClause = where ? sql`WHERE ${where}` : sql``
 
-    // Get stats
     const statsResult = await sql`
       SELECT 
         COUNT(*) FILTER (WHERE status = 'submitted') as total_completed,
@@ -72,7 +86,6 @@ export async function GET(request) {
       ${whereClause}
     `
 
-    // Get inspections (recent submitted by default)
     const inspectionsResult = await sql`
       SELECT 
         id, type, location_label, inspector_name, inspector_id,
