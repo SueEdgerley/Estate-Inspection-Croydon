@@ -27,33 +27,42 @@ export default function DashboardHome() {
     loadDashboardData()
   }, [filters])
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const params = new URLSearchParams()
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-      if (filters.dateTo) params.append('dateTo', filters.dateTo)
-      if (filters.type !== 'all') params.append('type', filters.type)
-      if (filters.template !== 'all') params.append('template', filters.template)
-      if (filters.inspector !== 'all') params.append('inspector', filters.inspector)
-      if (filters.scheduled !== 'all') params.append('scheduled', filters.scheduled)
-      if (filters.grading !== 'all') params.append('grading', filters.grading)
+  async function loadDashboardData() {
+    setLoading(true)
+    setError(null)
 
-      const response = await fetch(`/api/dashboard?${params.toString()}`, { credentials: 'include' })
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data.stats)
-        setInspections(data.inspections || [])
-      } else {
-        const body = await response.json().catch(() => ({}))
-        const msg = body.error || (response.status === 503 ? 'Database not configured. Set POSTGRES_URL in environment variables.' : 'Failed to load dashboard.')
-        setError(msg)
-        setInspections([])
+    try {
+      const params = new URLSearchParams()
+
+      if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
+      if (filters.dateTo) params.set('dateTo', filters.dateTo)
+      if (filters.type && filters.type !== 'all') params.set('type', filters.type)
+      if (filters.template && filters.template !== 'all') params.set('template', filters.template)
+      if (filters.inspector && filters.inspector !== 'all') params.set('inspector', filters.inspector)
+      if (filters.scheduled && filters.scheduled !== 'all') params.set('scheduled', filters.scheduled)
+      if (filters.grading && filters.grading !== 'all') params.set('grading', filters.grading)
+
+      const res = await fetch(`/api/dashboard?${params.toString()}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data?.details || data?.error || `Request failed: ${res.status}`)
       }
-    } catch (err) {
-      console.error('Error loading dashboard data:', err)
-      setError('Could not reach the server. Run the app and ensure POSTGRES_URL is set for full data.')
+
+      setStats({
+        totalCompleted: data?.stats?.totalCompleted ?? 0,
+        scheduledCompleted: data?.stats?.scheduledCompleted ?? 0,
+        adHocCompleted: data?.stats?.adHocCompleted ?? 0
+      })
+
+      setInspections(Array.isArray(data?.inspections) ? data.inspections : [])
+    } catch (e) {
+      setError(e?.message || 'Failed to load dashboard data')
+      setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
       setInspections([])
     } finally {
       setLoading(false)
