@@ -37,11 +37,10 @@ export async function GET(request) {
     const scheduled = searchParams.get('scheduled')
     const grading = searchParams.get('grading')
 
-    // Build WHERE clause as plain SQL text + params
+    // Build WHERE clause as plain SQL + params (avoids sql`` fragment placeholder bugs)
     const clauses = [`status = 'submitted'`]
     const params = []
 
-    // Non-admins only see their own inspections (by email)
     if (!admin && userEmail) {
       params.push(userEmail)
       clauses.push(`inspector_id = $${params.length}`)
@@ -85,44 +84,44 @@ export async function GET(request) {
       clauses.push(`grading = $${params.length}`)
     }
 
-    const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ``
+    const whereSql = `WHERE ${clauses.join(' AND ')}`
 
-    // Stats
+    // Stats query
     const statsResult = await sql.query(
       `
-      SELECT 
-        COUNT(*) FILTER (WHERE status = 'submitted') as total_completed,
-        COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) as scheduled_completed,
-        COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) as ad_hoc_completed
-      FROM inspections
-      ${whereSql}
-      `,
+  SELECT 
+    COUNT(*) FILTER (WHERE status = 'submitted') as total_completed,
+    COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) as scheduled_completed,
+    COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) as ad_hoc_completed
+  FROM inspections
+  ${whereSql}
+  `,
       params
     )
 
-    // Recent inspections
+    // Inspections query
     const inspectionsResult = await sql.query(
       `
-      SELECT 
-        id, type, location_label, inspector_name, inspector_id,
-        template_id, template_name, due_date, submitted_at, grading, pdf_url
-      FROM inspections
-      ${whereSql}
-      ORDER BY submitted_at DESC
-      LIMIT 100
-      `,
+  SELECT 
+    id, type, location_label, inspector_name, inspector_id,
+    template_id, template_name, due_date, submitted_at, grading, pdf_url
+  FROM inspections
+  ${whereSql}
+  ORDER BY submitted_at DESC
+  LIMIT 100
+  `,
       params
     )
 
     const stats = {
       totalCompleted: parseInt(statsResult.rows[0]?.total_completed || 0),
       scheduledCompleted: parseInt(statsResult.rows[0]?.scheduled_completed || 0),
-      adHocCompleted: parseInt(statsResult.rows[0]?.ad_hoc_completed || 0)
+      adHocCompleted: parseInt(statsResult.rows[0]?.ad_hoc_completed || 0),
     }
 
     return NextResponse.json({
       stats,
-      inspections: inspectionsResult.rows
+      inspections: inspectionsResult.rows,
     })
   } catch (error) {
     console.error('Error fetching dashboard data:', error)
