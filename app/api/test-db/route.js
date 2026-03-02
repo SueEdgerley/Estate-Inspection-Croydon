@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    // Check if POSTGRES_URL is set
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json({
-        error: 'POSTGRES_URL not set',
-        message: 'Please set POSTGRES_URL in your Vercel environment variables'
+        error: 'Database not configured',
+        message: 'Set POSTGRES_URL, POSTGRES_PRISMA_URL, or DATABASE_URL in Vercel environment variables'
       }, { status: 503 })
     }
 
@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       message: 'Database connection successful!',
-      connectionString: process.env.POSTGRES_URL ? 'Set (hidden for security)' : 'Not set',
+      connectionString: pgUrl ? 'Set (hidden for security)' : 'Not set',
       tableExists: true,
       rowCount: result.rows.length,
       sampleData: result.rows,
@@ -36,9 +36,9 @@ export async function GET() {
       success: false,
       error: error.message,
       details: error.toString(),
-      connectionString: process.env.POSTGRES_URL ? 'Set (hidden for security)' : 'Not set',
+      connectionString: getPgUrl() ? 'Set (hidden for security)' : 'Not set',
       troubleshooting: [
-        'Check that POSTGRES_URL is set in Vercel environment variables',
+        'Set POSTGRES_URL, POSTGRES_PRISMA_URL, or DATABASE_URL in Vercel environment variables',
         'Verify the connection string is correct (no extra spaces)',
         'Make sure your Neon database is active (not paused)',
         'Check Neon dashboard for connection issues'
