@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getTemplatesNested, createAirtableRecord, updateAirtableRecord, getPeopleByEmail, TABLES } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { getOrCreateAirtableUser } from '@/lib/get-or-create-airtable-user'
@@ -19,9 +19,10 @@ export async function GET() {
   }
   try {
     await ensureDatabase()
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
@@ -218,7 +219,7 @@ export async function POST(request) {
     }
 
     // Store photos in inspection_photos for PDF/noticeboard pipeline
-    if (process.env.POSTGRES_URL) {
+    if (getPgUrl()) {
       try {
         await ensureDatabase()
         for (const [questionId, answer] of Object.entries(answers)) {
@@ -283,7 +284,7 @@ export async function POST(request) {
         }
 
         // Also create Postgres action for poster PDF (with photo_urls)
-        if (process.env.POSTGRES_URL) {
+        if (getPgUrl()) {
           try {
             await ensureDatabase()
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
