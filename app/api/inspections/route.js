@@ -309,7 +309,7 @@ export async function POST(request) {
 
     // Also write to Postgres so the dashboard and app can see the inspection (linked to current user by email)
     let pdfUrl = null
-    if (process.env.POSTGRES_URL) {
+    if (getPgUrl()) {
       try {
         await ensureDatabase()
         const displayTitle = (typeof title === 'string' && title.trim())
