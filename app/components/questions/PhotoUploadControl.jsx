@@ -117,7 +117,7 @@ export default function PhotoUploadControl({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
       <input
         ref={inputRef}
-        id={id}
+        {...(id ? { id } : {})}
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
         capture="environment"
