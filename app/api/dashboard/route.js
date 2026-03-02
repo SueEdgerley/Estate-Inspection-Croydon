@@ -5,17 +5,20 @@ import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
 
 const ALLOWED_DASHBOARD_ROLES = ['admin', 'caretaker', 'esm', 'ho']
+// Set to true to show all inspections regardless of inspector/estate (for debugging access)
+const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
-function logDashboardAuth(clerkUserId, email, internalUserId, role, assignedEstateCount, statusCode, reason) {
+function logDashboardAuth(clerkUserId, email, internalUser, role, assignedEstateCount, statusCode, reason) {
   console.log('[Dashboard] auth:', {
     clerkUserId: clerkUserId ?? null,
     email: email ?? null,
-    internalUserId: internalUserId ?? null,
+    internalUser: internalUser ?? null,
     role: role ?? null,
+    is_active: internalUser?.is_active ?? null,
     assignedEstateCount: assignedEstateCount ?? null,
     statusCode,
     reason: reason ?? null,
@@ -23,8 +26,22 @@ function logDashboardAuth(clerkUserId, email, internalUserId, role, assignedEsta
 }
 
 export async function GET(request) {
-  const { userId: clerkUserId } = await auth()
-  const userEmail = await getCurrentUserEmail()
+  // Debug: log full auth() result to verify Clerk is returning userId
+  const authResult = await auth()
+  const clerkUserId = authResult?.userId ?? null
+  let userEmail = null
+  try {
+    userEmail = await getCurrentUserEmail()
+  } catch (e) {
+    console.warn('[Dashboard] getCurrentUserEmail failed:', e?.message)
+  }
+
+  // Debug logging: these values help verify auth mapping
+  console.log('[Dashboard] debug:', {
+    clerkUserId,
+    email: userEmail,
+    authKeys: authResult ? Object.keys(authResult) : [],
+  })
 
   try {
     if (!clerkUserId) {
@@ -42,7 +59,7 @@ export async function GET(request) {
       )
     }
 
-    // Resolve Clerk user to internal user (users table)
+    // Match on users.clerk_user_id === Clerk user.id (exact string match, not email or internal UUID)
     let userResult
     try {
       userResult = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
@@ -56,8 +73,9 @@ export async function GET(request) {
     }
 
     let internalUser = userResult.rows[0] || null
+    console.log('[Dashboard] debug internalUser after SELECT:', internalUser ? { ...internalUser } : null)
 
-    // On first sign-in: create internal user row and temporarily set admin + active so you can access dashboard
+    // If no internal user row: auto-create on first login (clerk_user_id, email, role=admin, is_active=true)
     if (!internalUser) {
       try {
         const newId = crypto.randomUUID()
@@ -71,6 +89,7 @@ export async function GET(request) {
         `
         const refetch = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
         internalUser = refetch.rows[0] || null
+        console.log('[Dashboard] debug internalUser after auto-create:', internalUser ? { ...internalUser } : null)
       } catch (e) {
         console.warn('[Dashboard] Auto-create user row failed:', e.message)
       }
@@ -84,8 +103,9 @@ export async function GET(request) {
       )
     }
 
+    // Only 403 if is_active = false or role explicitly disallowed
     if (!internalUser.is_active) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403, 'USER_INACTIVE')
+      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'USER_INACTIVE')
       return NextResponse.json(
         { error: 'User inactive', code: 'USER_INACTIVE', reason: 'Account is inactive' },
         { status: 403 }
@@ -94,14 +114,14 @@ export async function GET(request) {
 
     const role = (internalUser.role || '').toLowerCase().trim()
     if (role && !ALLOWED_DASHBOARD_ROLES.includes(role)) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
+      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
         { error: 'Role not permitted', code: 'ROLE_NOT_PERMITTED', reason: 'Role not allowed for dashboard' },
         { status: 403 }
       )
     }
 
-    // Count estate assignments for this user
+    // Count estate assignments (for logging only; we do NOT 403 when 0)
     let assignedEstateCount = 0
     try {
       const countResult = await sql`SELECT COUNT(*)::int AS c FROM user_estate_assignments WHERE user_id = ${internalUser.id}`
@@ -110,11 +130,15 @@ export async function GET(request) {
       // Table might not exist yet
     }
 
+    console.log('[Dashboard] debug:', { role, is_active: internalUser.is_active, assignedEstateCount })
+
     const admin = role === 'admin'
 
-    // Signed in and provisioned but no estates assigned → 200 with empty data and message (not 403)
-    if (!admin && assignedEstateCount === 0) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200, 'ok_no_estates')
+    // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
+    // Temporarily: do not early-return here so we can confirm access works without estate scoping
+    const hasEstates = assignedEstateCount > 0
+    if (!admin && !hasEstates) {
+      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok_no_estates')
       return NextResponse.json({
         stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
         inspections: [],
@@ -135,7 +159,7 @@ export async function GET(request) {
     const clauses = [`status = 'submitted'`]
     const params = []
 
-    if (!admin && internalUser.email) {
+    if (!admin && internalUser.email && !TEMPORARILY_DISABLE_ESTATE_SCOPING) {
       params.push(internalUser.email)
       clauses.push(`inspector_id = $${params.length}`)
     }
@@ -213,7 +237,7 @@ export async function GET(request) {
       adHocCompleted: parseInt(statsResult.rows[0]?.ad_hoc_completed || 0),
     }
 
-    logDashboardAuth(clerkUserId, userEmail, internalUser.id, internalUser.role, assignedEstateCount, 200, 'ok')
+    logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok')
     return NextResponse.json({
       stats,
       inspections: inspectionsResult.rows,

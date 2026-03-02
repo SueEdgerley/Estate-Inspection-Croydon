@@ -3,22 +3,61 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import {
-  colours,
-  yesColour,
-  yesBg,
-  noColour,
-  noBg,
-  naColour,
-  naBg,
-  issuePanelBg,
-  issuePanelBorder,
-  progressBg,
-  progressComplete,
-  minTapHeight,
-} from '@/lib/nv-theme'
+import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 
+// NV design system (wizard only): calm, modern, resident-friendly
 const OPTIONS = ['Yes', 'No', 'NA']
+const MAX_PHOTOS_PER_QUESTION = 3
+
+const nv = {
+  font: 'var(--font-geist-sans), Inter, system-ui, sans-serif',
+  baseSize: 16,
+  lineHeight: 1.5,
+  sectionTitleSize: '20px',
+  questionSize: '17px',
+  helperSize: '14px',
+  helperColor: '#6B7280',
+  metaSize: '13px',
+  pagePadMobile: 16,
+  pagePadDesktop: 24,
+  cardPad: 16,
+  spaceCards: 16,
+  spaceQuestionAnswers: 12,
+  spaceSections: 24,
+  bg: '#F9FAFB',
+  cardBg: '#FFFFFF',
+  cardRadius: 12,
+  cardShadow: '0 1px 3px rgba(0,0,0,0.08)',
+  cardBorder: '1px solid #E5E7EB',
+  btnMinHeight: 44,
+  btnRadius: 10,
+  btnFontWeight: 600,
+  btnPx: 16,
+  yesColor: '#16A34A',
+  noColor: '#DC2626',
+  naColor: '#6B7280',
+  btnUnselectedBorder: '1px solid #D1D5DB',
+  transition: '150ms ease',
+  progressHeight: 6,
+  progressTrack: '#E5E7EB',
+  progressFill: '#1E3A8A',
+  issueBg: '#FEE2E2',
+  issueBorder: '4px solid #DC2626',
+  issuePad: '12px 16px',
+  issueRadius: 8,
+  sectionAccent: '4px solid #1E3A8A',
+  primary: '#1E3A8A',
+  stickyBarBg: '#FFFFFF',
+  stickyBarBorder: '1px solid #E5E7EB',
+  stickyPad: '12px 16px',
+  unansweredAmber: '#FEF3C7',
+  text: '#111827',
+  muted: '#6B7280',
+  errorLight: '#FEE2E2',
+  error: '#DC2626',
+  success: '#16A34A',
+  primaryLight: '#EFF6FF',
+}
 
 function normalizeVal(v) {
   if (v == null) return ''
@@ -27,6 +66,18 @@ function normalizeVal(v) {
   if (s === 'no') return 'No'
   if (s === 'na') return 'NA'
   return ''
+}
+
+function getSectionIcon(title) {
+  if (!title) return '📋'
+  const t = String(title).toLowerCase()
+  if (t.includes('clean')) return '🧹'
+  if (t.includes('repair') || t.includes('mainten')) return '🔧'
+  if (t.includes('fire') || t.includes('safety')) return '🔥'
+  if (t.includes('light')) return '💡'
+  if (t.includes('bin') || t.includes('waste')) return '🗑️'
+  if (t.includes('ground') || t.includes('external')) return '🏘️'
+  return '📋'
 }
 
 export default function InspectionWizardPage() {
@@ -45,6 +96,7 @@ export default function InspectionWizardPage() {
   const [error, setError] = useState(null)
   const [showJumpMenu, setShowJumpMenu] = useState(false)
   const [reviewOnlyIssues, setReviewOnlyIssues] = useState(false)
+  const [reviewConfirmed, setReviewConfirmed] = useState(false)
 
   useEffect(() => {
     const p = typeof params.id === 'string' ? params.id : params.id?.[0]
@@ -140,14 +192,43 @@ export default function InspectionWizardPage() {
     }
   }, [id])
 
-  const currentStepInfo = step >= 1 && step <= flatSteps.length ? flatSteps[step - 1] : null
-  const isIntro = step === 0 && sections.length > 0
-  const isReview = step === flatSteps.length + 1
+  const saveCurrentSection = useCallback(async () => {
+    if (step < 1 || step > sections.length || !id) return
+    const sec = sections[step - 1]
+    if (!sec?.questions?.length) return
+    setSaving(true)
+    try {
+      const ans = {}
+      sec.questions.forEach((q) => {
+        const v = answers[q.id]
+        if (v !== undefined && v !== null) ans[q.id] = v
+        const comment = extras[q.id]?.comment
+        if (comment != null) ans[`${q.id}_comment`] = comment
+      })
+      const res = await fetch(`/api/inspections/${id}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ section_id: sec.id, answers: ans }),
+      })
+      if (!res.ok) setError('Save failed')
+    } catch {
+      setError('Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }, [id, step, sections, answers, extras])
+
   const totalQuestions = flatSteps.length
   const answeredCount = flatSteps.filter((s) => {
     const v = answers[s.question?.id]
     return v !== undefined && v !== null && String(v).trim() !== ''
   }).length
+  const isIntro = step === 0 && sections.length > 0
+  const isReview = step === sections.length + 1
+  const currentSectionIndex = step >= 1 && step <= sections.length ? step - 1 : -1
+  const currentSection = currentSectionIndex >= 0 ? sections[currentSectionIndex] : null
+  const progressPct = totalQuestions ? Math.round((answeredCount / totalQuestions) * 100) : 0
 
   const handleAnswer = (questionId, value, sectionId, comment) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
@@ -159,6 +240,9 @@ export default function InspectionWizardPage() {
   const handleExtras = (questionId, sectionId, updates) => {
     setExtras((prev) => {
       const next = { ...prev, [questionId]: { ...(prev[questionId] || {}), ...updates } }
+      if (updates.photo_urls && Array.isArray(updates.photo_urls) && updates.photo_urls.length > MAX_PHOTOS_PER_QUESTION) {
+        next[questionId].photo_urls = updates.photo_urls.slice(0, MAX_PHOTOS_PER_QUESTION)
+      }
       const comment = updates.comment !== undefined ? updates.comment : next[questionId]?.comment
       saveAnswer(sectionId, questionId, answers[questionId], comment)
       return next
@@ -167,47 +251,58 @@ export default function InspectionWizardPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: colours.neutral.muted }}>
+      <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, textAlign: 'center', color: nv.muted, fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         Loading inspection…
       </div>
     )
   }
   if (error && !inspection) {
     return (
-      <div style={{ padding: '2rem' }}>
-        <Link href="/inspections" style={{ color: colours.primary, textDecoration: 'none', fontSize: '0.9375rem' }}>← Back to Inspections</Link>
-        <div style={{ marginTop: '1rem', padding: '1rem', background: colours.errorLight, color: colours.error, borderRadius: 8 }}>{error}</div>
+      <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, fontFamily: nv.font, fontSize: nv.baseSize }}>
+        <Link href="/inspections" style={{ color: nv.primary, textDecoration: 'none', fontSize: nv.metaSize }}>← Back to Inspections</Link>
+        <div style={{ marginTop: 16, padding: 16, background: nv.errorLight, color: nv.error, borderRadius: nv.issueRadius }}>{error}</div>
       </div>
     )
   }
 
-  // Intro step (NV-style)
+  // Intro: Croydon logo, 24px title, short description, primary "Start Inspection"
   if (isIntro) {
     return (
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: '1.5rem 0' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img src="/croydon-housing-logo.png" alt="Croydon Council" style={{ height: 48, width: 'auto', marginBottom: '1.5rem' }} />
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: colours.neutral.text, margin: '0 0 0.5rem' }}>Neighbourhood Voice Inspection</h1>
-          <p style={{ fontSize: '1rem', color: colours.neutral.muted }}>Your feedback helps improve our estates.</p>
-        </div>
-        <div style={{ backgroundColor: colours.neutral.card, padding: '1.5rem', borderRadius: 8, border: `1px solid ${colours.neutral.border}`, marginBottom: '1.5rem' }}>
-          <p style={{ margin: 0, fontSize: '0.9375rem', lineHeight: 1.6, color: colours.neutral.text }}>
-            <strong>Time:</strong> About 10–15 minutes.
-            <br />
-            <strong>Safety:</strong> Only report what you can see safely. Do not put yourself at risk.
-            <br />
-            <strong>How we use this:</strong> Reports are used to prioritise repairs and cleaning. Your answers and photos help officers act quickly.
-          </p>
-        </div>
-        <div style={{ position: 'sticky', bottom: 0, paddingTop: '1rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', backgroundColor: colours.neutral.bg }}>
-          <Link href="/inspections" style={{ padding: '0.75rem 1.25rem', border: `1px solid ${colours.neutral.border}`, borderRadius: 8, color: colours.neutral.text, textDecoration: 'none', fontWeight: 500 }}>Cancel</Link>
-          <button type="button" onClick={() => setStep(1)} style={{ padding: '0.75rem 1.5rem', backgroundColor: colours.primary, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Start</button>
+      <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
+        <div style={{ maxWidth: 560, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <img src="/croydon-housing-logo.png" alt="Croydon Council" style={{ height: 48, width: 'auto', marginBottom: 16 }} />
+            <h1 style={{ fontSize: '24px', fontWeight: 600, color: nv.text, margin: '0 0 8px' }}>Neighbourhood Voice Inspection</h1>
+            <p style={{ fontSize: nv.baseSize, color: nv.muted }}>Your feedback helps improve our estates.</p>
+          </div>
+          <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder, marginBottom: 16 }}>
+            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>What this inspection is for</h2>
+            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
+              We want to hear from you about the condition of your estate. Your answers help us prioritise repairs, cleaning and safety.
+            </p>
+            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>Approximate time</h2>
+            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
+              About 10–15 minutes. You can save and come back later.
+            </p>
+            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>Safety</h2>
+            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
+              Only report what you can see safely. Do not put yourself at risk. If something is dangerous, report it through the usual channels.
+            </p>
+            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>How we use your report</h2>
+            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
+              Your answers and photos are used to create tasks for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
+            </p>
+          </div>
+          <div style={{ position: 'sticky', bottom: 0, paddingTop: 16, display: 'flex', gap: 12, justifyContent: 'flex-end', backgroundColor: nv.bg }}>
+            <Link href="/inspections" style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, color: nv.text, textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', backgroundColor: nv.cardBg }}>Cancel</Link>
+            <button type="button" onClick={() => setStep(1)} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', transition: nv.transition }}>Start Inspection</button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Review step
+  // Review step: Issues first, then Unanswered, then Completed (collapsed), confirm before submit
   if (isReview) {
     const issues = flatSteps.filter((s) => {
       const v = normalizeVal(answers[s.question?.id])
@@ -218,182 +313,256 @@ export default function InspectionWizardPage() {
       const v = answers[s.question?.id]
       return v === undefined || v === null || String(v).trim() === ''
     })
+    const completedSections = sections.map((sec, idx) => ({
+      section: sec,
+      index: idx,
+      questions: (sec.questions || []).filter((q) => {
+        const v = answers[q.id]
+        return v !== undefined && v !== null && String(v).trim() !== ''
+      }),
+    })).filter((c) => c.questions.length > 0)
 
     return (
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '1.5rem 0' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: colours.neutral.text, marginBottom: '1rem' }}>Review and submit</h1>
-        {issues.length > 0 && (
-          <section style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: colours.neutral.text, marginBottom: '0.5rem' }}>Issues raised ({issues.length})</h2>
-            <div style={{ backgroundColor: issuePanelBg, borderLeft: `4px solid ${issuePanelBorder}`, padding: '1rem', borderRadius: 8 }}>
-              {issues.map((s) => (
-                <div key={s.question?.id} style={{ marginBottom: '0.5rem', fontSize: '0.9375rem' }}>
-                  <strong>{s.question?.resident_wording || s.question?.question_text}</strong>
-                  {extras[s.question?.id]?.comment && <div style={{ color: colours.neutral.muted, marginTop: 2 }}>{extras[s.question?.id].comment}</div>}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        {unanswered.length > 0 && (
-          <section style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: colours.warning, marginBottom: '0.5rem' }}>Unanswered ({unanswered.length})</h2>
-            <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.9375rem', color: colours.neutral.muted }}>
-              {unanswered.slice(0, 10).map((s) => (
-                <li key={s.question?.id}>{s.question?.resident_wording || s.question?.question_text}</li>
-              ))}
-              {unanswered.length > 10 && <li>… and {unanswered.length - 10} more</li>}
-            </ul>
-          </section>
-        )}
-        <div style={{ position: 'sticky', bottom: 0, paddingTop: '1rem', display: 'flex', gap: '0.75rem', justifyContent: 'space-between', backgroundColor: colours.neutral.bg }}>
-          <button type="button" onClick={() => setStep(flatSteps.length)} style={{ padding: '0.75rem 1.25rem', border: `1px solid ${colours.neutral.border}`, borderRadius: 8, background: colours.neutral.card, fontWeight: 500, cursor: 'pointer' }}>Back</button>
-          <button
-            type="button"
-            onClick={async () => {
-              setSaving(true)
-              try {
-                const res = await fetch(`/api/inspections/${id}/submit`, { method: 'POST', credentials: 'include' })
-                if (res.ok) {
-                  const data = await res.json().catch(() => ({}))
-                  router.push(`/inspections/${data.inspectionId || id}`)
-                } else {
-                  const data = await res.json().catch(() => ({}))
-                  setError(data?.error || 'Submit failed')
+      <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '7rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <h1 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 16 }}>Review and submit</h1>
+
+          {issues.length > 0 && (
+            <section style={{ marginBottom: nv.spaceSections }}>
+              <h2 style={{ fontSize: nv.questionSize, fontWeight: 600, color: nv.text, marginBottom: 8 }}>Issues raised ({issues.length})</h2>
+              <div style={{ backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, padding: nv.issuePad, borderRadius: nv.issueRadius, boxShadow: nv.cardShadow }}>
+                {issues.map((s) => (
+                  <div key={s.question?.id} style={{ marginBottom: 12, fontSize: nv.baseSize }}>
+                    <span style={{ display: 'inline-block', marginBottom: 4, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
+                    <p style={{ margin: '4px 0 0', fontWeight: 500 }}>{s.question?.resident_wording || s.question?.question_text}</p>
+                    {extras[s.question?.id]?.comment && <div style={{ color: nv.muted, marginTop: 4, fontSize: nv.helperSize }}>{extras[s.question?.id].comment}</div>}
+                    {extras[s.question?.id]?.severity && <div style={{ color: nv.muted, marginTop: 2, fontSize: nv.metaSize }}>Severity: {extras[s.question?.id].severity}</div>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {unanswered.length > 0 && (
+            <section style={{ marginBottom: nv.spaceSections }}>
+              <h2 style={{ fontSize: nv.questionSize, fontWeight: 600, color: nv.text, marginBottom: 8 }}>Unanswered ({unanswered.length})</h2>
+              <div style={{ backgroundColor: nv.unansweredAmber, padding: nv.cardPad, borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder }}>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.helperSize, color: nv.muted }}>
+                  {unanswered.slice(0, 10).map((s) => (
+                    <li key={s.question?.id}>{s.question?.resident_wording || s.question?.question_text}</li>
+                  ))}
+                  {unanswered.length > 10 && <li>… and {unanswered.length - 10} more</li>}
+                </ul>
+              </div>
+            </section>
+          )}
+
+          {completedSections.length > 0 && (
+            <section style={{ marginBottom: nv.spaceSections }}>
+              <h2 style={{ fontSize: nv.questionSize, fontWeight: 600, color: nv.muted, marginBottom: 8 }}>Completed sections</h2>
+              <div style={{ backgroundColor: nv.cardBg, padding: '12px 16px', borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder }}>
+                {completedSections.map((c) => (
+                  <details key={c.section.id} style={{ marginBottom: 4 }}>
+                    <summary style={{ fontSize: nv.baseSize, cursor: 'pointer', color: nv.text }}>{getSectionIcon(c.section.title)} {c.section.title} ({c.questions.length} answered)</summary>
+                    <ul style={{ margin: '8px 0 0 1rem', paddingLeft: '1rem', fontSize: nv.helperSize, color: nv.muted }}>
+                      {c.questions.map((q) => (
+                        <li key={q.id}>{q.resident_wording || q.question_text}: {normalizeVal(answers[q.id]) || answers[q.id]}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: nv.baseSize, cursor: 'pointer' }}>
+              <input type="checkbox" id="review-confirm" checked={reviewConfirmed} onChange={(e) => setReviewConfirmed(e.target.checked)} style={{ minWidth: 20, minHeight: 20 }} />
+              <span>I have reviewed my answers and want to submit this inspection.</span>
+            </label>
+          </div>
+
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 12, justifyContent: 'space-between', maxWidth: 640, margin: '0 auto' }}>
+            <button type="button" onClick={() => setStep(sections.length)} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Back</button>
+            <button
+              type="button"
+              disabled={saving || !reviewConfirmed}
+              onClick={async () => {
+                if (!reviewConfirmed) return
+                setSaving(true)
+                try {
+                  const res = await fetch(`/api/inspections/${id}/submit`, { method: 'POST', credentials: 'include' })
+                  if (res.ok) {
+                    const data = await res.json().catch(() => ({}))
+                    router.push(`/inspections/${data.inspectionId || id}`)
+                  } else {
+                    const data = await res.json().catch(() => ({}))
+                    setError(data?.error || 'Submit failed')
+                  }
+                } catch (err) {
+                  setError(err?.message || 'Submit failed')
+                } finally {
+                  setSaving(false)
                 }
-              } catch (err) {
-                setError(err?.message || 'Submit failed')
-              } finally {
-                setSaving(false)
-              }
-            }}
-            disabled={saving}
-            style={{ padding: '0.75rem 1.5rem', backgroundColor: colours.success, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer' }}
-          >
-            {saving ? 'Submitting…' : 'Submit inspection'}
-          </button>
+              }}
+              style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: reviewConfirmed && !saving ? nv.success : '#9CA3AF', color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: reviewConfirmed && !saving ? 'pointer' : 'not-allowed', fontSize: nv.baseSize, transition: nv.transition }}
+            >
+              {saving ? 'Submitting…' : 'Submit inspection'}
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Question step
-  const s = currentStepInfo
-  if (!s || s.type !== 'question') {
+  // Section step: one section at a time, all questions in section as cards
+  if (!currentSection || currentSectionIndex < 0) {
     return (
-      <div style={{ padding: '2rem' }}>
-        <Link href="/inspections" style={{ color: colours.primary, textDecoration: 'none' }}>← Back to Inspections</Link>
+      <div className="nv-wizard-page" style={{ backgroundColor: nv.bg, fontFamily: nv.font }}>
+        <Link href="/inspections" style={{ color: nv.primary, textDecoration: 'none', fontSize: nv.baseSize }}>← Back to Inspections</Link>
       </div>
     )
   }
 
-  const sec = s.section
-  const q = s.question
-  const sectionNum = s.sectionIndex + 1
+  const sec = currentSection
+  const sectionNum = currentSectionIndex + 1
   const totalSections = sections.length
-  const value = normalizeVal(answers[q.id])
-  const ext = extras[q.id] || {}
-  const isNo = value === 'No'
-  const raiseIssue = ext.raise_issue || isNo
+  const sectionQuestions = sec.questions || []
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: '1.5rem 0', paddingBottom: 100 }}>
-      {/* Progress */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', color: colours.neutral.muted', marginBottom: 4 }}>
-          <span>Section {sectionNum} of {totalSections}</span>
-          <span>{answeredCount} of {totalQuestions} answered</span>
-        </div>
-        <div style={{ height: 8, backgroundColor: colours.neutral.border, borderRadius: 999, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${totalQuestions ? (answeredCount / totalQuestions) * 100 : 0}%`, backgroundColor: answeredCount === totalQuestions ? progressComplete : progressBg, transition: 'width 0.2s' }} />
-        </div>
-      </div>
-
-      {/* Section header */}
-      <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: colours.primary, borderLeft: `4px solid ${colours.primary}`, paddingLeft: '0.75rem', marginBottom: '0.5rem' }}>
-        {sec.title}
-      </h2>
-      {sec.help_text && <p style={{ fontSize: '0.875rem', color: colours.neutral.muted, marginBottom: '1rem' }}>{sec.help_text}</p>}
-
-      {/* Question */}
-      <div style={{ backgroundColor: colours.neutral.card, padding: '1.5rem', borderRadius: 8, border: `1px solid ${colours.neutral.border}`, marginBottom: '1rem' }}>
-        <p style={{ fontSize: '1.0625rem', fontWeight: 500, color: colours.neutral.text, marginBottom: '0.5rem' }}>{q.resident_wording || q.question_text}</p>
-        {q.helper_text && <p style={{ fontSize: '0.875rem', color: colours.neutral.muted, marginBottom: '1rem' }}>{q.helper_text}</p>}
-
-        {/* Big Y/N/NA buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {OPTIONS.map((opt) => {
-            const isSelected = value === opt
-            const isYes = opt === 'Yes'
-            const isNo = opt === 'No'
-            const isNA = opt === 'NA'
-            const bg = isSelected ? (isYes ? yesColour : isNo ? noColour : naColour) : colours.neutral.card
-            const border = isSelected ? 'transparent' : colours.neutral.border
-            const color = isSelected ? '#fff' : colours.neutral.text
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => handleAnswer(q.id, opt, sec.id)}
-                style={{
-                  minHeight: minTapHeight,
-                  padding: '0.75rem 1rem',
-                  fontSize: '1.125rem',
-                  fontWeight: 600,
-                  backgroundColor: bg,
-                  color,
-                  border: `2px solid ${border}`,
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                }}
-              >
-                {opt}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Raise issue anyway (when Y) */}
-        {value === 'Yes' && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
-            <input type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
-            Raise an issue anyway (e.g. still a concern)
-          </label>
-        )}
-
-        {/* Issue panel */}
-        {raiseIssue && (
-          <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: issuePanelBg, borderLeft: `4px solid ${issuePanelBorder}`, borderRadius: 8 }}>
-            <p style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.9375rem' }}>Add details</p>
-            <textarea
-              placeholder="e.g. Please ensure the area is kept clear."
-              value={ext.comment || ''}
-              onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
-              rows={2}
-              style={{ width: '100%', padding: '0.5rem', border: `1px solid ${colours.neutral.border}`, borderRadius: 6, fontSize: '0.9375rem', marginBottom: '0.5rem' }}
-            />
-            <div style={{ fontSize: '0.8125rem', color: colours.neutral.muted }}>Photo upload can be added here.</div>
-            <select
-              value={ext.severity || ''}
-              onChange={(e) => handleExtras(q.id, sec.id, { severity: e.target.value })}
-              style={{ marginTop: '0.5rem', padding: '0.5rem', border: `1px solid ${colours.neutral.border}`, borderRadius: 6, fontSize: '0.875rem' }}
-            >
-              <option value="">Severity (optional)</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
+    <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '5.5rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+        {/* Progress: Section X of Y + percentage; bar 6px, track #E5E7EB, fill #1E3A8A */}
+        <div style={{ marginBottom: nv.spaceSections }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: nv.metaSize, color: nv.muted, marginBottom: 4 }}>
+            <span>Section {sectionNum} of {totalSections}</span>
+            <span>{progressPct}% complete</span>
           </div>
-        )}
-      </div>
+          <div style={{ height: nv.progressHeight, backgroundColor: nv.progressTrack, borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: nv.progressFill, borderRadius: 999, transition: nv.transition }} />
+          </div>
+        </div>
 
-      {saving && <p style={{ fontSize: '0.8125rem', color: colours.neutral.muted }}>Saving…</p>}
+        {/* Section header: 20px semibold, 4px left accent, optional icon */}
+        <div style={{ marginBottom: nv.spaceSections }}>
+          <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, borderLeft: nv.sectionAccent, paddingLeft: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{getSectionIcon(sec.title)}</span>
+            {sec.title}
+          </h2>
+          {(sec.help_text || sec.what_to_look_for) && (
+            <p style={{ fontSize: nv.helperSize, color: nv.muted, margin: 0, padding: '12px 16px', backgroundColor: nv.primaryLight, borderRadius: 8 }}>
+              <strong>What to look for:</strong> {sec.what_to_look_for || sec.help_text}
+            </p>
+          )}
+        </div>
 
-      {/* Sticky Next / Back */}
-      <div style={{ position: 'sticky', bottom: 0, left: 0, right: 0, padding: '1rem 0', backgroundColor: colours.neutral.bg, borderTop: `1px solid ${colours.neutral.border}`, display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
-        <button type="button" onClick={() => setStep((prev) => Math.max(0, prev - 1))} style={{ padding: '0.75rem 1.25rem', minHeight: minTapHeight, border: `1px solid ${colours.neutral.border}`, borderRadius: 8, background: colours.neutral.card, fontWeight: 500, cursor: 'pointer' }}>Back</button>
-        <button type="button" onClick={() => setStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: '0.75rem 1.5rem', minHeight: minTapHeight, backgroundColor: colours.primary, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>{step === flatSteps.length ? 'Review' : 'Next'}</button>
+        {/* Questions: white cards, 16px padding, 16px between cards; question 16-18px medium, helper 14px muted; space question–answers 12px */}
+        {sectionQuestions.map((q) => {
+          const value = normalizeVal(answers[q.id])
+          const ext = extras[q.id] || {}
+          const isNo = value === 'No'
+          const raiseIssue = ext.raise_issue || isNo
+          const commentId = `comment-${q.id}`
+          const severityId = `severity-${q.id}`
+
+          return (
+            <div key={q.id} style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder, marginBottom: nv.spaceCards }}>
+              <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
+              {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: nv.spaceQuestionAnswers }}>{q.helper_text}</p>}
+
+              {/* Y/N/NA: min 44px, radius 10px, font 600, px 16; Yes #16A34A, No #DC2626, NA #6B7280; unselected white + 1px #D1D5DB; transition 150ms */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {OPTIONS.map((opt) => {
+                  const isSelected = value === opt
+                  const isYes = opt === 'Yes'
+                  const isNoOpt = opt === 'No'
+                  const isNA = opt === 'NA'
+                  const fillColor = isYes ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
+                  const bg = isSelected ? fillColor : nv.cardBg
+                  const border = isSelected ? `2px solid ${fillColor}` : nv.btnUnselectedBorder
+                  const color = isSelected ? '#fff' : nv.text
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      id={`answer-${q.id}-${opt}`}
+                      onClick={() => handleAnswer(q.id, opt, sec.id)}
+                      style={{
+                        minHeight: nv.btnMinHeight,
+                        padding: `12px ${nv.btnPx}px`,
+                        fontSize: nv.baseSize,
+                        fontWeight: nv.btnFontWeight,
+                        backgroundColor: bg,
+                        color,
+                        border,
+                        borderRadius: nv.btnRadius,
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        transition: nv.transition,
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {value === 'Yes' && (
+                <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
+                  <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
+                  Raise an issue anyway (e.g. still a concern)
+                </label>
+              )}
+
+              {raiseIssue && (
+                <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
+                  <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
+                  <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details (required for issues)</p>
+                  <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
+                  <textarea
+                    id={commentId}
+                    name={commentId}
+                    placeholder="e.g. Please ensure the area is kept clear."
+                    value={ext.comment || ''}
+                    onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+                    rows={2}
+                    style={{ width: '100%', padding: 8, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font }}
+                  />
+                  <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to 3)</p>
+                  <PhotoUploadControl
+                    id={`photo-${q.id}`}
+                    value={(ext.photo_urls || []).slice(0, MAX_PHOTOS_PER_QUESTION)}
+                    onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, MAX_PHOTOS_PER_QUESTION) })}
+                    label="Add photo"
+                    multiple={true}
+                  />
+                  <label htmlFor={severityId} style={{ display: 'block', fontSize: nv.helperSize, marginTop: 12, marginBottom: 4, color: nv.text }}>Severity (optional)</label>
+                  <select
+                    id={severityId}
+                    name={severityId}
+                    value={ext.severity || ''}
+                    onChange={(e) => handleExtras(q.id, sec.id, { severity: e.target.value })}
+                    style={{ width: '100%', padding: 8, border: nv.cardBorder, borderRadius: 8, fontSize: nv.helperSize, minHeight: nv.btnMinHeight, fontFamily: nv.font }}
+                  >
+                    <option value="">Optional</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted }}>Saving…</p>}
+
+        {/* Sticky bar: white bg, top border 1px #E5E7EB, padding 12px 16px; primary blue #1E3A8A, secondary outline */}
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', justifyContent: 'space-between', gap: 8, maxWidth: 560, margin: '0 auto' }}>
+          <button type="button" onClick={() => setStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize, transition: nv.transition }}>Back</button>
+          <button type="button" onClick={saveCurrentSection} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save'}</button>
+          <button type="button" onClick={() => setStep((prev) => (prev >= sections.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize, transition: nv.transition }}>{step === sections.length ? 'Review' : 'Next'}</button>
+        </div>
       </div>
     </div>
   )
