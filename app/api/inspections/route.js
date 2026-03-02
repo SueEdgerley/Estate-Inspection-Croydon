@@ -31,27 +31,39 @@ export async function GET() {
     let result
     if (admin) {
       result = await sql`
-        SELECT id, type, location_label, inspector_name, inspector_id, template_id, template_name,
-               due_date, submitted_at, grading, pdf_url, status, is_scheduled, title, description, created_at, updated_at
-        FROM inspections
-        ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
+               e.name AS estate_name, b.name AS block_name,
+               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
+        FROM inspections i
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
         LIMIT 200
       `
     } else if (userEmail) {
       result = await sql`
-        SELECT id, type, location_label, inspector_name, inspector_id, template_id, template_name,
-               due_date, submitted_at, grading, pdf_url, status, is_scheduled, title, description, created_at, updated_at
-        FROM inspections
-        WHERE inspector_id = ${userEmail}
-        ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
+               e.name AS estate_name, b.name AS block_name,
+               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
+        FROM inspections i
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        WHERE i.inspector_id = ${userEmail}
+        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
         LIMIT 200
       `
     } else {
       result = await sql`
-        SELECT id, type, location_label, inspector_name, inspector_id, template_id, template_name,
-               due_date, submitted_at, grading, pdf_url, status, is_scheduled, title, description, created_at, updated_at
-        FROM inspections
-        ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
+               e.name AS estate_name, b.name AS block_name,
+               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
+        FROM inspections i
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
         LIMIT 50
       `
     }

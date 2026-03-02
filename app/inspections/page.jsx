@@ -2,69 +2,42 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getAllIssues, ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS } from '@/lib/issues'
 
-export default function InspectionsPage() {
-  const [issues, setIssues] = useState([])
+export default function InspectionsListPage() {
+  const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterType, setFilterType] = useState('all')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    const loadIssues = async () => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
       try {
-        const data = await getAllIssues()
-        setIssues(data)
-      } catch (error) {
-        console.error('Error loading issues:', error)
+        const res = await fetch('/api/inspections', { credentials: 'include', cache: 'no-store' })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data?.error || `Request failed: ${res.status}`)
+        }
+        const data = await res.json()
+        setInspections(Array.isArray(data) ? data : [])
+      } catch (e) {
+        setError(e?.message || 'Failed to load inspections')
+        setInspections([])
       } finally {
         setLoading(false)
       }
     }
-
-    loadIssues()
-
-    const interval = setInterval(async () => {
-      const data = await getAllIssues()
-      setIssues(data)
-    }, 30000)
-
-    return () => clearInterval(interval)
+    load()
   }, [])
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    if (!dateString) return '–'
+    const d = new Date(dateString)
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'open':
-        return { bg: '#fee2e2', text: '#dc2626' }
-      case 'in_progress':
-        return { bg: '#fef3c7', text: '#d97706' }
-      case 'resolved':
-        return { bg: '#d1fae5', text: '#059669' }
-      default:
-        return { bg: '#f3f4f6', text: '#6b7280' }
-    }
-  }
-
-  const filteredIssues = issues.filter(issue => {
-    const matchesSearch = issue.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (issue.description && issue.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (issue.location && issue.location.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesType = filterType === 'all' || issue.type === filterType
-    const matchesStatus = filterStatus === 'all' || issue.status === filterStatus
-    return matchesSearch && matchesType && matchesStatus
-  })
+  const pdfUrl = (row) =>
+    row.poster_pdf_url || row.full_pdf_url || row.pdf_url || null
 
   return (
     <div>
@@ -72,206 +45,163 @@ export default function InspectionsPage() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '2rem'
+        marginBottom: '1.5rem',
       }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-            Inspections
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 'bold', color: '#111827' }}>
+            Manage Inspections
           </h1>
-          <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-            View and manage estate inspections
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9375rem', color: '#6b7280' }}>
+            Inspection records from Postgres
           </p>
         </div>
         <Link
           href="/inspections/new"
           style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#3b82f6',
-            color: 'white',
+            padding: '0.75rem 1.25rem',
+            backgroundColor: '#0f766e',
+            color: '#fff',
             textDecoration: 'none',
             borderRadius: '0.5rem',
-            fontWeight: '500',
-            display: 'inline-block',
+            fontWeight: 600,
+            fontSize: '0.9375rem',
           }}
         >
-          + New Inspection
+          New Inspection
         </Link>
       </div>
 
-      <div style={{
-        backgroundColor: 'white',
-        padding: '1.5rem',
-        borderRadius: '0.5rem',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        marginBottom: '1.5rem'
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
-          <input
-            type="text"
-            placeholder="Search by title, description, or location..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem'
-            }}
-          />
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            style={{
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              backgroundColor: 'white'
-            }}
-          >
-            <option value="all">All Types</option>
-            <option value="repairs">Repairs</option>
-            <option value="grounds_maintenance">Grounds Maintenance</option>
-            <option value="cleaning">Cleaning</option>
-          </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={{
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              backgroundColor: 'white'
-            }}
-          >
-            <option value="all">All Statuses</option>
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="resolved">Resolved</option>
-          </select>
+      {error && (
+        <div style={{
+          padding: '1rem 1.25rem',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '0.5rem',
+          marginBottom: '1rem',
+          color: '#991b1b',
+          fontSize: '0.9375rem',
+        }}>
+          {error}
         </div>
-      </div>
+      )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
-          Loading inspections...
+        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+          Loading inspections…
         </div>
-      ) : filteredIssues.length === 0 ? (
+      ) : inspections.length === 0 ? (
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: '#fff',
           padding: '3rem',
           borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          textAlign: 'center',
+          border: '1px solid #e5e7eb',
         }}>
-          <p style={{ fontSize: '1.125rem', color: '#6b7280', marginBottom: '1rem' }}>
-            {searchTerm || filterType !== 'all' || filterStatus !== 'all'
-              ? 'No inspections match your filters'
-              : 'No inspections yet'}
+          <p style={{ margin: 0, color: '#6b7280', fontSize: '1rem' }}>
+            No inspections yet.
           </p>
-          {!searchTerm && filterType === 'all' && filterStatus === 'all' && (
-            <Link
-              href="/inspections/new"
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: '0.5rem',
-                fontWeight: '500',
-                display: 'inline-block',
-              }}
-            >
-              Start Your First Inspection
-            </Link>
-          )}
+          <Link
+            href="/inspections/new"
+            style={{
+              display: 'inline-block',
+              marginTop: '1rem',
+              padding: '0.75rem 1.25rem',
+              backgroundColor: '#0f766e',
+              color: '#fff',
+              textDecoration: 'none',
+              borderRadius: '0.5rem',
+              fontWeight: 600,
+            }}
+          >
+            New Inspection
+          </Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {filteredIssues.map((issue) => {
-            const statusColors = getStatusColor(issue.status)
-            return (
-              <div
-                key={issue.id}
-                style={{
-                  backgroundColor: 'white',
-                  padding: '1.5rem',
-                  borderRadius: '0.5rem',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  border: '1px solid #e5e7eb'
-                }}
-              >
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '1rem'
-                }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      display: 'flex',
-                      gap: '1rem',
-                      alignItems: 'center',
-                      marginBottom: '0.5rem'
-                    }}>
+        <div style={{
+          backgroundColor: '#fff',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          border: '1px solid #e5e7eb',
+          overflow: 'hidden',
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Inspection ID</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Estate</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Block</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Template Name</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Inspector</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Date</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Status</th>
+                  <th style={{ textAlign: 'center', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Issues</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inspections.map((row) => (
+                  <tr
+                    key={row.id}
+                    style={{ borderBottom: '1px solid #f3f4f6' }}
+                  >
+                    <td style={{ padding: '0.75rem 1rem', color: '#111827', fontFamily: 'var(--font-geist-mono), monospace', fontSize: '0.8125rem' }}>
+                      {row.id?.slice(0, 8) || '–'}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.estate_name ?? '–'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.block_name ?? '–'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.template_name ?? '–'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.submitted_at || row.created_at)}</td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
                       <span style={{
-                        fontSize: '0.875rem',
-                        color: '#6b7280',
-                        fontWeight: '500',
-                      }}>
-                        {ISSUE_TYPE_LABELS[issue.type] || issue.type}
-                      </span>
-                      <span style={{
-                        padding: '0.25rem 0.75rem',
+                        padding: '0.2rem 0.5rem',
                         borderRadius: '9999px',
                         fontSize: '0.75rem',
-                        fontWeight: '600',
-                        backgroundColor: statusColors.bg,
-                        color: statusColors.text,
+                        fontWeight: 500,
+                        backgroundColor: row.status === 'submitted' ? '#d1fae5' : '#f3f4f6',
+                        color: row.status === 'submitted' ? '#065f46' : '#6b7280',
                       }}>
-                        {ISSUE_STATUS_LABELS[issue.status] || issue.status}
+                        {row.status ?? 'draft'}
                       </span>
-                    </div>
-                    <h3 style={{
-                      margin: '0 0 0.5rem 0',
-                      fontSize: '1.125rem',
-                      fontWeight: '600',
-                      color: '#111827',
-                    }}>
-                      {issue.title}
-                    </h3>
-                    {issue.description && (
-                      <p style={{
-                        margin: '0 0 0.75rem 0',
-                        fontSize: '0.875rem',
-                        color: '#6b7280',
-                        lineHeight: '1.5',
-                      }}>
-                        {issue.description}
-                      </p>
-                    )}
-                    {issue.location && (
-                      <p style={{
-                        margin: '0 0 0.75rem 0',
-                        fontSize: '0.875rem',
-                        color: '#6b7280',
-                      }}>
-                        <strong>Location:</strong> {issue.location}
-                      </p>
-                    )}
-                    <p style={{
-                      margin: 0,
-                      fontSize: '0.75rem',
-                      color: '#9ca3af',
-                    }}>
-                      Created: {formatDate(issue.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#374151' }}>
+                      {row.issues_count != null ? row.issues_count : '–'}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <Link
+                          href={`/inspections/${row.id}`}
+                          style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
+                        >
+                          View
+                        </Link>
+                        {pdfUrl(row) ? (
+                          <a
+                            href={pdfUrl(row)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
+                          >
+                            Download PDF
+                          </a>
+                        ) : (
+                          <span style={{ color: '#9ca3af', fontSize: '0.8125rem' }}>Download PDF</span>
+                        )}
+                        <Link
+                          href={`/actions?inspection_id=${encodeURIComponent(row.id)}`}
+                          style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
+                        >
+                          View Tasks
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
