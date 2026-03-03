@@ -22,7 +22,11 @@ If the dashboard returns **“Unauthorised”** even when you’re signed in wit
 
 Run migrations as a **separate deployment step** (see below).
 
-## 3. Run migrations as a separate step
+## 3. Run migrations as a separate step (single action)
+
+**Next action:** Run `npx prisma migrate deploy` (not during build). If it’s **blocked** (e.g. P3005: DB already has tables but migration history not applied), **baseline** then deploy: run `npm run db:baseline` (runs `prisma migrate resolve --applied <migration_folder>` for each migration in `prisma/migrations`, then `npx prisma migrate deploy`). Then run `npm run db:verify` and redeploy/re-test.
+
+---
 
 Migrations create/update tables (including **`users`** and **`user_estate_assignments`**) in the database that `DATABASE_URL` points to. Run them **manually** (or in CI) against the correct DB for each environment:
 
@@ -69,6 +73,8 @@ Point **`DATABASE_URL`** to a database that is either:
 For Neon: create a new branch/database for Preview or Production if needed, set `DATABASE_URL` to that connection string, then run `prisma migrate deploy` once.
 
 ### Option B – Baseline the existing DB
+
+**Quick path:** Run `npm run db:baseline` — it runs `prisma migrate resolve --applied <folder>` for each migration in `prisma/migrations`, then `npx prisma migrate deploy`. Then run `npm run db:verify` and retry login/dashboard.
 
 If you must keep using the current database (it already has the tables you need):
 
