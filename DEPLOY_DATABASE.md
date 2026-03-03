@@ -41,7 +41,17 @@ DATABASE_URL="postgresql://..." npm run db:migrate
 - For **Preview**: run once against the Preview DB URL (e.g. Neon Preview branch).
 - For **Production**: run once against the Production DB URL (e.g. Neon main branch).
 
-After running migrations, confirm the **`users`** table exists (see section 5) and retry login/dashboard.
+### Verify tables (especially `users`) in schema public
+
+After running migrations, verify tables exist:
+
+```bash
+npm run db:verify
+```
+
+This lists tables in schema `public` and confirms **`users`** exists. If `users` is missing, fix P3005 or point `DATABASE_URL` at the correct DB and run `npm run db:migrate` again.
+
+Then **redeploy** (or restart the app) and **re-test login/dashboard**.
 
 ## 4. Resolving P3005 (migration history not applied)
 
