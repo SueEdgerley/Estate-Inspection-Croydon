@@ -70,7 +70,7 @@ export async function GET(request) {
     // Match on users.clerk_user_id === Clerk user.id (exact string match, not email or internal UUID)
     let userResult
     try {
-      userResult = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
+      userResult = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
     } catch (e) {
       console.error('[Dashboard] users table lookup failed:', e.message)
       if (isUsersTableMissing(e)) {
@@ -90,7 +90,7 @@ export async function GET(request) {
     let internalUser = userResult.rows[0] || null
     console.log('[Dashboard] debug internalUser after SELECT:', internalUser ? { ...internalUser } : null)
 
-    // If no internal user row: create one. First user gets role = "owner", all others role = "user".
+    // If no internal user row: upsert. First user gets role = "owner", all others role = "user".
     if (!internalUser) {
       try {
         const countResult = await sql`SELECT COUNT(*)::int AS c FROM users`
@@ -98,14 +98,14 @@ export async function GET(request) {
         const newRole = userCount === 0 ? 'owner' : 'user'
         const newId = crypto.randomUUID()
         await sql`
-          INSERT INTO users (id, clerk_user_id, email, role, is_active)
-          VALUES (${newId}, ${clerkUserId}, ${userEmail || ''}, ${newRole}, true)
+          INSERT INTO users (id, clerk_user_id, email, role)
+          VALUES (${newId}, ${clerkUserId}, ${userEmail || null}, ${newRole})
           ON CONFLICT (clerk_user_id) DO UPDATE SET
             email = EXCLUDED.email,
             role = COALESCE(users.role, EXCLUDED.role),
-            is_active = COALESCE(users.is_active, true)
+            updated_at = NOW()
         `
-        const refetch = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
+        const refetch = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
         internalUser = refetch.rows[0] || null
         console.log('[Dashboard] debug internalUser after auto-create:', internalUser ? { ...internalUser } : null)
       } catch (e) {
@@ -128,8 +128,8 @@ export async function GET(request) {
       )
     }
 
-    // Only 403 if is_active = false or role explicitly disallowed
-    if (!internalUser.is_active) {
+    // Only 403 if is_active explicitly false (legacy column) or role explicitly disallowed
+    if (internalUser.is_active === false) {
       logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'USER_INACTIVE')
       return NextResponse.json(
         { error: 'User inactive', code: 'USER_INACTIVE', reason: 'Account is inactive' },

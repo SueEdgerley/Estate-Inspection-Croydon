@@ -24,7 +24,7 @@ Run migrations as a **separate deployment step** (see below).
 
 ## 3. Run migrations as a separate step (single action)
 
-**Next action:** Run `npx prisma migrate deploy` (not during build). If it’s **blocked** (e.g. P3005: DB already has tables but migration history not applied), **baseline** then deploy: run `npm run db:baseline` (runs `prisma migrate resolve --applied <migration_folder>` for each migration in `prisma/migrations`, then `npx prisma migrate deploy`). Then run `npm run db:verify` and redeploy/re-test.
+**Next action:** Run `npx prisma migrate deploy` (not during build). Locally you can use `npx prisma migrate dev --name add_users` to create and apply migrations; on Vercel/production use `npx prisma migrate deploy`. If it’s **blocked** (e.g. P3005: DB already has tables but migration history not applied), **baseline** then deploy: run `npm run db:baseline` (runs `prisma migrate resolve --applied <migration_folder>` for each migration in `prisma/migrations`, then `npx prisma migrate deploy`). Then run `npm run db:verify` and redeploy/re-test.
 
 ---
 
