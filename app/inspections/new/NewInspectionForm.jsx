@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
@@ -43,7 +43,7 @@ function getQuestionType(question) {
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
-function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo }) {
+function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo, isNvTemplate = false, expandedByQuestionId = {} }) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
   const opts = question.options || []
@@ -56,6 +56,21 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
   const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
+  const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
+  const showCommentPhotoBlock = (showComment || showActionBlock) || isExpanded
+  const expandedSectionRef = useRef(null)
+  const didScrollRef = useRef(false)
+
+  useEffect(() => {
+    if (!isNvTemplate || !showCommentPhotoBlock) {
+      didScrollRef.current = false
+      return
+    }
+    if (expandedSectionRef.current && !didScrollRef.current) {
+      didScrollRef.current = true
+      expandedSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [isNvTemplate, showCommentPhotoBlock])
 
   const extras = answerExtras || { comment: '', photo_urls: [] }
 
@@ -130,8 +145,8 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           value={yesNoNaValue}
           onChange={(val) => handleChange(val)}
         />
-        {(showComment || showActionBlock) && (
-          <div style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
+        {showCommentPhotoBlock && (
+          <div ref={isNvTemplate ? expandedSectionRef : undefined} style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
             {showActionBlock && (
               <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e' }}>
                 Action will be created automatically
@@ -168,9 +183,10 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
                 Action category: {question.action_category}
               </p>
             )}
+            {isNvTemplate ? photoBlock : null}
           </div>
         )}
-        {photoBlock}
+        {!isNvTemplate && photoBlock}
         {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -305,6 +321,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
   const [startingWizard, setStartingWizard] = useState(false)
+  const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
 
   const isNVTemplate = (t) => {
     if (!t) return false
@@ -384,6 +401,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const handleAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
+    if (isNVTemplate(selectedTemplate) && value === 'No') {
+      setExpandedByQuestionId((prev) => ({ ...prev, [questionId]: true }))
+    }
     setValidationErrors((prev) => ({
       ...prev,
       [questionId]: undefined,
@@ -717,6 +737,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       answerExtras={answerExtras[q.id]}
                       onAnswerExtras={(questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))}
                       createActionOnNo={q.create_action_on_no}
+                      isNvTemplate={isNVTemplate(selectedTemplate)}
+                      expandedByQuestionId={expandedByQuestionId}
                     />
                   )
                 })}
