@@ -22,7 +22,7 @@ const nv = {
   pagePadMobile: 16,
   pagePadDesktop: 24,
   cardPad: 16,
-  spaceCards: 16,
+  spaceCards: 24,
   spaceQuestionAnswers: 12,
   spaceSections: 24,
   bg: '#F9FAFB',
@@ -30,8 +30,8 @@ const nv = {
   cardRadius: 12,
   cardShadow: '0 1px 3px rgba(0,0,0,0.08)',
   cardBorder: '1px solid #E5E7EB',
-  btnMinHeight: 44,
-  btnMinHeightMobile: 52,
+  btnMinHeight: 48,
+  btnMinHeightMobile: 56,
   btnRadius: 10,
   btnFontWeight: 600,
   btnPx: 16,
@@ -500,11 +500,11 @@ export default function InspectionWizardPage() {
             </details>
           )}
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
             <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
             {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
               {OPTIONS.map((opt) => {
                 const isSelected = value === opt
                 const isYes = opt === 'Yes'
@@ -653,12 +653,12 @@ export default function InspectionWizardPage() {
           const severityId = `severity-${q.id}`
 
           return (
-            <div key={q.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm mb-4">
+            <div key={q.id} style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
               <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
               {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: nv.spaceQuestionAnswers }}>{q.helper_text}</p>}
 
-              {/* Y/N/NA: min 44px, radius 10px, font 600, px 16; Yes #16A34A, No #DC2626, NA #6B7280; unselected white + 1px #D1D5DB; transition 150ms */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Y/N/NA: full width, min 48px height, radius 10px, font 600; Yes #16A34A, No #DC2626, NA #6B7280 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
                 {OPTIONS.map((opt) => {
                   const isSelected = value === opt
                   const isYes = opt === 'Yes'
@@ -677,6 +677,7 @@ export default function InspectionWizardPage() {
                       style={{
                         minHeight: nv.btnMinHeight,
                         padding: `12px ${nv.btnPx}px`,
+                        width: '100%',
                         fontSize: nv.baseSize,
                         fontWeight: nv.btnFontWeight,
                         backgroundColor: bg,
