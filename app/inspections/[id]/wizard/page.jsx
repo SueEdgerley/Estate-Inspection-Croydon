@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
@@ -9,6 +9,7 @@ import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 const OPTIONS = ['Yes', 'No', 'NA']
 const MAX_PHOTOS_PER_QUESTION = 3
 
+const MOBILE_BREAKPOINT = 768
 const nv = {
   font: 'var(--font-geist-sans), Inter, system-ui, sans-serif',
   baseSize: 16,
@@ -30,6 +31,7 @@ const nv = {
   cardShadow: '0 1px 3px rgba(0,0,0,0.08)',
   cardBorder: '1px solid #E5E7EB',
   btnMinHeight: 44,
+  btnMinHeightMobile: 52,
   btnRadius: 10,
   btnFontWeight: 600,
   btnPx: 16,
@@ -97,11 +99,24 @@ export default function InspectionWizardPage() {
   const [showJumpMenu, setShowJumpMenu] = useState(false)
   const [reviewOnlyIssues, setReviewOnlyIssues] = useState(false)
   const [reviewConfirmed, setReviewConfirmed] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [questionStep, setQuestionStep] = useState(0)
+  const commentFocusRef = useRef(null)
+  const focusedNoForQuestionId = useRef(null)
 
   useEffect(() => {
     const p = typeof params.id === 'string' ? params.id : params.id?.[0]
     if (p) setId(p)
   }, [params])
+
+  useEffect(() => {
+    const mq = typeof window !== 'undefined' && window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    if (!mq) return
+    const onChange = () => setIsMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   useEffect(() => {
     if (!id) return
@@ -219,16 +234,47 @@ export default function InspectionWizardPage() {
     }
   }, [id, step, sections, answers, extras])
 
+  const saveSection = useCallback(async (sec) => {
+    if (!id || !sec?.questions?.length) return
+    setSaving(true)
+    try {
+      const ans = {}
+      sec.questions.forEach((q) => {
+        const v = answers[q.id]
+        if (v !== undefined && v !== null) ans[q.id] = v
+        const comment = extras[q.id]?.comment
+        if (comment != null) ans[`${q.id}_comment`] = comment
+      })
+      const res = await fetch(`/api/inspections/${id}/answers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ section_id: sec.id, answers: ans }),
+      })
+      if (!res.ok) setError('Save failed')
+    } catch {
+      setError('Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }, [id, answers, extras])
+
   const totalQuestions = flatSteps.length
   const answeredCount = flatSteps.filter((s) => {
     const v = answers[s.question?.id]
     return v !== undefined && v !== null && String(v).trim() !== ''
   }).length
-  const isIntro = step === 0 && sections.length > 0
-  const isReview = step === sections.length + 1
+  const isIntro = (isMobile && questionStep === 0) || (!isMobile && step === 0)
+  const isReview = (isMobile && questionStep === flatSteps.length + 1) || (!isMobile && step === sections.length + 1)
   const currentSectionIndex = step >= 1 && step <= sections.length ? step - 1 : -1
   const currentSection = currentSectionIndex >= 0 ? sections[currentSectionIndex] : null
   const progressPct = totalQuestions ? Math.round((answeredCount / totalQuestions) * 100) : 0
+  const currentFlatStep = isMobile && questionStep >= 1 && questionStep <= flatSteps.length ? flatSteps[questionStep - 1] : null
+  const currentQuestion = currentFlatStep?.question
+  const currentSectionForQuestion = currentFlatStep?.section
+  const sectionNumForQuestion = currentFlatStep ? currentFlatStep.sectionIndex + 1 : 0
+  const questionNumInSection = currentFlatStep ? currentFlatStep.questionIndex + 1 : 0
+  const totalInSection = currentSectionForQuestion?.questions?.length ?? 0
 
   const handleAnswer = (questionId, value, sectionId, comment) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
@@ -275,7 +321,7 @@ export default function InspectionWizardPage() {
             <h1 style={{ fontSize: '24px', fontWeight: 600, color: nv.text, margin: '0 0 8px' }}>Neighbourhood Voice Inspection</h1>
             <p style={{ fontSize: nv.baseSize, color: nv.muted }}>Your feedback helps improve our estates.</p>
           </div>
-          <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder, marginBottom: 16 }}>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm mb-4">
             <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>What this inspection is for</h2>
             <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
               We want to hear from you about the condition of your estate. Your answers help us prioritise repairs, cleaning and safety.
@@ -295,7 +341,7 @@ export default function InspectionWizardPage() {
           </div>
           <div style={{ position: 'sticky', bottom: 0, paddingTop: 16, display: 'flex', gap: 12, justifyContent: 'flex-end', backgroundColor: nv.bg }}>
             <Link href="/inspections" style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, color: nv.text, textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', backgroundColor: nv.cardBg }}>Cancel</Link>
-            <button type="button" onClick={() => setStep(1)} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', transition: nv.transition }}>Start Inspection</button>
+            <button type="button" onClick={() => { setStep(1); setQuestionStep(1) }} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', transition: nv.transition }}>Start Inspection</button>
           </div>
         </div>
       </div>
@@ -346,7 +392,7 @@ export default function InspectionWizardPage() {
           {unanswered.length > 0 && (
             <section style={{ marginBottom: nv.spaceSections }}>
               <h2 style={{ fontSize: nv.questionSize, fontWeight: 600, color: nv.text, marginBottom: 8 }}>Unanswered ({unanswered.length})</h2>
-              <div style={{ backgroundColor: nv.unansweredAmber, padding: nv.cardPad, borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder }}>
+              <div className="rounded-xl border border-slate-200 bg-amber-50 p-4 shadow-sm border-amber-200">
                 <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.helperSize, color: nv.muted }}>
                   {unanswered.slice(0, 10).map((s) => (
                     <li key={s.question?.id}>{s.question?.resident_wording || s.question?.question_text}</li>
@@ -360,7 +406,7 @@ export default function InspectionWizardPage() {
           {completedSections.length > 0 && (
             <section style={{ marginBottom: nv.spaceSections }}>
               <h2 style={{ fontSize: nv.questionSize, fontWeight: 600, color: nv.muted, marginBottom: 8 }}>Completed sections</h2>
-              <div style={{ backgroundColor: nv.cardBg, padding: '12px 16px', borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder }}>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 {completedSections.map((c) => (
                   <details key={c.section.id} style={{ marginBottom: 4 }}>
                     <summary style={{ fontSize: nv.baseSize, cursor: 'pointer', color: nv.text }}>{getSectionIcon(c.section.title)} {c.section.title} ({c.questions.length} answered)</summary>
@@ -383,7 +429,7 @@ export default function InspectionWizardPage() {
           </div>
 
           <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 12, justifyContent: 'space-between', maxWidth: 640, margin: '0 auto' }}>
-            <button type="button" onClick={() => setStep(sections.length)} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Back</button>
+            <button type="button" onClick={() => { if (isMobile) setQuestionStep(flatSteps.length); else setStep(sections.length) }} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Back</button>
             <button
               type="button"
               disabled={saving || !reviewConfirmed}
@@ -415,7 +461,148 @@ export default function InspectionWizardPage() {
     )
   }
 
-  // Section step: one section at a time, all questions in section as cards
+  // Mobile: one question at a time with progress line, big tap buttons, sticky bar, collapsible guidance
+  if (isMobile && currentFlatStep && currentQuestion && currentSectionForQuestion) {
+    const sec = currentSectionForQuestion
+    const q = currentQuestion
+    const value = normalizeVal(answers[q.id])
+    const ext = extras[q.id] || {}
+    const isNo = value === 'No'
+    const raiseIssue = ext.raise_issue || isNo
+    const commentId = `comment-${q.id}`
+    const severityId = `severity-${q.id}`
+
+    if (isNo && focusedNoForQuestionId.current !== q.id && commentFocusRef.current) {
+      focusedNoForQuestionId.current = q.id
+      setTimeout(() => commentFocusRef.current?.focus(), 100)
+    } else if (!isNo) focusedNoForQuestionId.current = null
+
+    return (
+      <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
+        <div style={{ maxWidth: 560, margin: '0 auto' }}>
+          <p style={{ fontSize: nv.metaSize, color: nv.muted, marginBottom: 12 }}>
+            Section {sectionNumForQuestion} of {sections.length} · Question {questionNumInSection} of {totalInSection}
+          </p>
+
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{getSectionIcon(sec.title)}</span>
+            {sec.title}
+          </h2>
+
+          {(sec.help_text || sec.what_to_look_for) && (
+            <details style={{ marginBottom: 16 }}>
+              <summary style={{ fontSize: 13, color: nv.muted, cursor: 'pointer', padding: '8px 0' }}>
+                What to look for
+              </summary>
+              <p style={{ margin: 0, fontSize: 13, color: nv.muted, padding: '8px 12px', backgroundColor: nv.primaryLight, borderRadius: 8 }}>
+                {sec.what_to_look_for || sec.help_text}
+              </p>
+            </details>
+          )}
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
+            {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {OPTIONS.map((opt) => {
+                const isSelected = value === opt
+                const isYes = opt === 'Yes'
+                const isNoOpt = opt === 'No'
+                const isNA = opt === 'NA'
+                const fillColor = isYes ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
+                const bg = isSelected ? fillColor : nv.cardBg
+                const border = isSelected ? `2px solid ${fillColor}` : nv.btnUnselectedBorder
+                const color = isSelected ? '#fff' : nv.text
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    id={`answer-${q.id}-${opt}`}
+                    onClick={() => handleAnswer(q.id, opt, sec.id)}
+                    style={{
+                      minHeight: nv.btnMinHeightMobile,
+                      padding: '14px 16px',
+                      fontSize: 18,
+                      fontWeight: nv.btnFontWeight,
+                      backgroundColor: bg,
+                      color,
+                      border,
+                      borderRadius: nv.btnRadius,
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: nv.transition,
+                      width: '100%',
+                    }}
+                  >
+                    {opt}
+                  </button>
+                )
+              })}
+            </div>
+
+            {value === 'Yes' && (
+              <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
+                <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
+                Raise an issue anyway (e.g. still a concern)
+              </label>
+            )}
+
+            {raiseIssue && (
+              <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
+                <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
+                <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details (required for issues)</p>
+                <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
+                <textarea
+                  ref={commentFocusRef}
+                  id={commentId}
+                  name={commentId}
+                  placeholder="e.g. Please ensure the area is kept clear."
+                  value={ext.comment || ''}
+                  onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+                  rows={2}
+                  style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
+                />
+                <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to 3)</p>
+                <div style={{ width: '100%', minHeight: 52 }}>
+                  <PhotoUploadControl
+                    id={`photo-${q.id}`}
+                    value={(ext.photo_urls || []).slice(0, MAX_PHOTOS_PER_QUESTION)}
+                    onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, MAX_PHOTOS_PER_QUESTION) })}
+                    label="Add photo"
+                    multiple={true}
+                  />
+                </div>
+                <label htmlFor={severityId} style={{ display: 'block', fontSize: nv.helperSize, marginTop: 12, marginBottom: 4, color: nv.text }}>Severity (optional)</label>
+                <select
+                  id={severityId}
+                  name={severityId}
+                  value={ext.severity || ''}
+                  onChange={(e) => handleExtras(q.id, sec.id, { severity: e.target.value })}
+                  style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.helperSize, minHeight: nv.btnMinHeightMobile, fontFamily: nv.font }}
+                >
+                  <option value="">Optional</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>Saving…</p>}
+
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto' }}>
+            <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Previous</button>
+            <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save draft'}</button>
+            <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Section step: one section at a time, all questions in section as cards (desktop)
   if (!currentSection || currentSectionIndex < 0) {
     return (
       <div className="nv-wizard-page" style={{ backgroundColor: nv.bg, fontFamily: nv.font }}>
@@ -466,7 +653,7 @@ export default function InspectionWizardPage() {
           const severityId = `severity-${q.id}`
 
           return (
-            <div key={q.id} style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, boxShadow: nv.cardShadow, border: nv.cardBorder, marginBottom: nv.spaceCards }}>
+            <div key={q.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm mb-4">
               <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
               {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: nv.spaceQuestionAnswers }}>{q.helper_text}</p>}
 

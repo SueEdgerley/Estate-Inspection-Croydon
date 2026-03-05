@@ -277,6 +277,10 @@ export default function TemplatesPage() {
             Start new inspection
           </Link>
           {' '}to use a template.
+          {' '}
+          <Link href="/templates/preview" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+            Preview QuestionCard (caretaker / NV)
+          </Link>
         </p>
       )}
     </div>

@@ -197,7 +197,7 @@ export default function QuestionCard({
       )}
 
       {showPhoto && (
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 16, position: 'relative' }}>
           <label
             htmlFor={`${id}-photo`}
             style={{
