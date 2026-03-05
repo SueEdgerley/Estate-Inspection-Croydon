@@ -53,10 +53,10 @@ model Inspection {
 }
 
 model AppUser {
-  id            String   @id @db.VarChar(255)
+  id            String   @id @db.VarChar(255) // UUID as string for FK compatibility
   clerkUserId   String   @unique @map("clerk_user_id") @db.VarChar(255)
   email         String   @db.VarChar(255)
-  role          String?  @db.VarChar(50)
+  role          String?  @db.VarChar(50) // owner | admin | user (admins can change later)
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz

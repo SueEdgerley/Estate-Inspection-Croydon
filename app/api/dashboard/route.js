@@ -4,7 +4,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
 
-const ALLOWED_DASHBOARD_ROLES = ['admin', 'caretaker', 'esm', 'ho']
+const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin', 'user', 'caretaker', 'esm', 'ho']
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
@@ -90,16 +90,19 @@ export async function GET(request) {
     let internalUser = userResult.rows[0] || null
     console.log('[Dashboard] debug internalUser after SELECT:', internalUser ? { ...internalUser } : null)
 
-    // If no internal user row: auto-create on first login (clerk_user_id, email, role=admin, is_active=true)
+    // If no internal user row: create one. First user gets role = "owner", all others role = "user".
     if (!internalUser) {
       try {
+        const countResult = await sql`SELECT COUNT(*)::int AS c FROM users`
+        const userCount = countResult.rows[0]?.c ?? 0
+        const newRole = userCount === 0 ? 'owner' : 'user'
         const newId = crypto.randomUUID()
         await sql`
           INSERT INTO users (id, clerk_user_id, email, role, is_active)
-          VALUES (${newId}, ${clerkUserId}, ${userEmail || ''}, 'admin', true)
+          VALUES (${newId}, ${clerkUserId}, ${userEmail || ''}, ${newRole}, true)
           ON CONFLICT (clerk_user_id) DO UPDATE SET
             email = EXCLUDED.email,
-            role = COALESCE(users.role, 'admin'),
+            role = COALESCE(users.role, EXCLUDED.role),
             is_active = COALESCE(users.is_active, true)
         `
         const refetch = await sql`SELECT id, clerk_user_id, email, role, is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
@@ -154,7 +157,7 @@ export async function GET(request) {
 
     console.log('[Dashboard] debug:', { role, is_active: internalUser.is_active, assignedEstateCount })
 
-    const admin = role === 'admin'
+    const admin = role === 'admin' || role === 'owner'
 
     // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
     // Temporarily: do not early-return here so we can confirm access works without estate scoping
