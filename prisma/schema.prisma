@@ -52,14 +52,17 @@ model Inspection {
   @@map("inspections")
 }
 
+// Users table: Clerk authentication only. Do not use People for auth.
 model User {
   id           String   @id @default(cuid()) @db.VarChar(255)
-  clerkUserId  String   @unique @map("clerk_user_id") @db.VarChar(255)
+  clerkUserId  String   @unique @map("clerk_user_id") @db.VarChar(255) // required, unique
   email        String?  @db.VarChar(255)
-  role         String   @default("user") @db.VarChar(50) // owner | admin | user
+  role         String   @default("user") @db.VarChar(50) // access control: owner | admin | user
+  peopleId     String?  @unique @map("people_id") @db.VarChar(255) // optional link to Person (people.id)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
+  person           Person?                  @relation(fields: [peopleId], references: [id], onDelete: SetNull)
   estateAssignments AppUserEstateAssignment[]
 
   @@map("users")
@@ -169,9 +172,10 @@ model Person {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  actionsReceived          Action[]             @relation("RecipientActions")
-  inspectionRecipients     InspectionRecipient[]
-  userAssignments          UserAssignment[]
+  user                  User?   @relation // login account linked to this person (optional)
+  actionsReceived       Action[] @relation("RecipientActions")
+  inspectionRecipients   InspectionRecipient[]
+  userAssignments       UserAssignment[]
 
   @@map("people")
 }

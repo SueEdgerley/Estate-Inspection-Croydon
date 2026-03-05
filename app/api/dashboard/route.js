@@ -4,7 +4,8 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
 
-const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin', 'user', 'caretaker', 'esm', 'ho']
+// Dashboard access: use Users.role (owner | admin) for access control. Do not use People for auth.
+const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin']
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
