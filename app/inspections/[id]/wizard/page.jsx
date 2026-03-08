@@ -59,6 +59,9 @@ const nv = {
   error: '#DC2626',
   success: '#16A34A',
   primaryLight: '#EFF6FF',
+  infoLight: '#DBEAFE',
+  infoBorder: '#93C5FD',
+  successLight: '#DCFCE7',
 }
 
 function normalizeVal(v) {
@@ -469,6 +472,16 @@ export default function InspectionWizardPage() {
     const ext = extras[q.id] || {}
     const isNo = value === 'No'
     const raiseIssue = ext.raise_issue || isNo
+    const hasAnswer = value !== ''
+    const hasIssueComment = !!(ext.comment && String(ext.comment).trim())
+    const hasIssuePhoto = Array.isArray(ext.photo_urls) && ext.photo_urls.length > 0
+    const issueDetailsComplete = !raiseIssue || (hasIssueComment && hasIssuePhoto)
+    const questionComplete = hasAnswer && issueDetailsComplete
+    const nextHelp = !hasAnswer
+      ? 'Tap Yes, No or NA to complete this question.'
+      : !issueDetailsComplete
+        ? 'Add a short comment and at least one photo to continue.'
+        : 'Question complete. Tap Next.'
     const commentId = `comment-${q.id}`
     const severityId = `severity-${q.id}`
 
@@ -480,9 +493,23 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
-          <p style={{ fontSize: nv.metaSize, color: nv.muted, marginBottom: 12 }}>
+          <p style={{ fontSize: '14px', color: nv.muted, marginBottom: 8, fontWeight: 500 }}>
             Section {sectionNumForQuestion} of {sections.length} · Question {questionNumInSection} of {totalInSection}
           </p>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: nv.metaSize, color: nv.muted, marginBottom: 4 }}>
+              <span>Overall progress</span>
+              <span>{progressPct}% complete</span>
+            </div>
+            <div style={{ height: nv.progressHeight, backgroundColor: nv.progressTrack, borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: nv.progressFill, borderRadius: 999, transition: nv.transition }} />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 10, border: `1px solid ${nv.infoBorder}`, backgroundColor: nv.infoLight }}>
+            <p style={{ margin: 0, fontSize: nv.helperSize, color: '#1E3A8A', fontWeight: 600 }}>How to complete this question</p>
+            <p style={{ margin: '4px 0 0', fontSize: nv.helperSize, color: '#1E3A8A' }}>1) Tap Yes, No or NA · 2) If an issue is raised, add comment + photo · 3) Tap Next</p>
+          </div>
 
           <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{getSectionIcon(sec.title)}</span>
@@ -535,10 +562,26 @@ export default function InspectionWizardPage() {
                       width: '100%',
                     }}
                   >
-                    {opt}
+                    {isSelected ? `✓ ${opt}` : opt}
                   </button>
                 )
               })}
+            </div>
+
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                marginTop: 12,
+                padding: '10px 12px',
+                borderRadius: 8,
+                fontSize: nv.helperSize,
+                fontWeight: 600,
+                backgroundColor: questionComplete ? nv.successLight : '#FEF3C7',
+                color: questionComplete ? '#166534' : '#92400E',
+              }}
+            >
+              {nextHelp}
             </div>
 
             {value === 'Yes' && (
@@ -552,6 +595,11 @@ export default function InspectionWizardPage() {
               <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
                 <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
                 <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details (required for issues)</p>
+                <div style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 8, backgroundColor: '#fff' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: nv.metaSize, color: nv.muted, fontWeight: 600 }}>Checklist</p>
+                  <p style={{ margin: '0 0 2px', fontSize: nv.helperSize, color: hasIssueComment ? '#166534' : nv.text }}>{hasIssueComment ? '✓' : '○'} Comment added</p>
+                  <p style={{ margin: 0, fontSize: nv.helperSize, color: hasIssuePhoto ? '#166534' : nv.text }}>{hasIssuePhoto ? '✓' : '○'} Photo added</p>
+                </div>
                 <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
                 <textarea
                   ref={commentFocusRef}
@@ -595,7 +643,24 @@ export default function InspectionWizardPage() {
           <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto' }}>
             <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Previous</button>
             <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save draft'}</button>
-            <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
+            <button
+              type="button"
+              disabled={!questionComplete}
+              onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))}
+              style={{
+                padding: `12px ${nv.btnPx}px`,
+                minHeight: nv.btnMinHeightMobile,
+                backgroundColor: questionComplete ? nv.primary : '#9CA3AF',
+                color: '#fff',
+                border: 'none',
+                borderRadius: nv.btnRadius,
+                fontWeight: nv.btnFontWeight,
+                cursor: questionComplete ? 'pointer' : 'not-allowed',
+                fontSize: nv.baseSize,
+              }}
+            >
+              {questionStep === flatSteps.length ? 'Review' : 'Next'}
+            </button>
           </div>
         </div>
       </div>
