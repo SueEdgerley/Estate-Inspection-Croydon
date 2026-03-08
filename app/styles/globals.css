@@ -61,6 +61,24 @@ a {
   }
 }
 
+/* Shared answer buttons: larger taps + tiny-screen stacking */
+.nv-answer-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.nv-answer-option {
+  flex: 1 1 calc(33.333% - 0.5rem);
+  min-width: 92px;
+}
+
+@media (max-width: 420px) {
+  .nv-answer-option {
+    flex-basis: 100%;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;

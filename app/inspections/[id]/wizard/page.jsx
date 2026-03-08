@@ -21,20 +21,20 @@ const nv = {
   metaSize: '13px',
   pagePadMobile: 16,
   pagePadDesktop: 24,
-  cardPad: 16,
-  spaceCards: 24,
+  cardPad: 18,
+  spaceCards: 28,
   spaceQuestionAnswers: 12,
-  spaceSections: 24,
+  spaceSections: 32,
   bg: '#F9FAFB',
   cardBg: '#FFFFFF',
   cardRadius: 12,
-  cardShadow: '0 1px 3px rgba(0,0,0,0.08)',
+  cardShadow: '0 1px 2px rgba(0,0,0,0.05)',
   cardBorder: '1px solid #E5E7EB',
-  btnMinHeight: 48,
-  btnMinHeightMobile: 56,
+  btnMinHeight: 52,
+  btnMinHeightMobile: 60,
   btnRadius: 10,
   btnFontWeight: 600,
-  btnPx: 16,
+  btnPx: 18,
   yesColor: '#16A34A',
   noColor: '#DC2626',
   naColor: '#6B7280',
@@ -44,14 +44,14 @@ const nv = {
   progressTrack: '#E5E7EB',
   progressFill: '#1E3A8A',
   issueBg: '#FEE2E2',
-  issueBorder: '4px solid #DC2626',
+  issueBorder: '2px solid #DC2626',
   issuePad: '12px 16px',
   issueRadius: 8,
   sectionAccent: '4px solid #1E3A8A',
   primary: '#1E3A8A',
   stickyBarBg: '#FFFFFF',
   stickyBarBorder: '1px solid #E5E7EB',
-  stickyPad: '12px 16px',
+  stickyPad: '12px 16px calc(12px + env(safe-area-inset-bottom, 0px))',
   unansweredAmber: '#FEF3C7',
   text: '#111827',
   muted: '#6B7280',
@@ -59,6 +59,9 @@ const nv = {
   error: '#DC2626',
   success: '#16A34A',
   primaryLight: '#EFF6FF',
+  sectionBreak: '1px solid #E5E7EB',
+  stickyProgressBg: 'rgba(249, 250, 251, 0.97)',
+  stickyZ: 20,
 }
 
 function normalizeVal(v) {
@@ -68,18 +71,6 @@ function normalizeVal(v) {
   if (s === 'no') return 'No'
   if (s === 'na') return 'NA'
   return ''
-}
-
-function getSectionIcon(title) {
-  if (!title) return '📋'
-  const t = String(title).toLowerCase()
-  if (t.includes('clean')) return '🧹'
-  if (t.includes('repair') || t.includes('mainten')) return '🔧'
-  if (t.includes('fire') || t.includes('safety')) return '🔥'
-  if (t.includes('light')) return '💡'
-  if (t.includes('bin') || t.includes('waste')) return '🗑️'
-  if (t.includes('ground') || t.includes('external')) return '🏘️'
-  return '📋'
 }
 
 export default function InspectionWizardPage() {
@@ -275,6 +266,7 @@ export default function InspectionWizardPage() {
   const sectionNumForQuestion = currentFlatStep ? currentFlatStep.sectionIndex + 1 : 0
   const questionNumInSection = currentFlatStep ? currentFlatStep.questionIndex + 1 : 0
   const totalInSection = currentSectionForQuestion?.questions?.length ?? 0
+  const progressSummary = `${answeredCount} of ${totalQuestions} answered`
 
   const handleAnswer = (questionId, value, sectionId, comment) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
@@ -321,23 +313,31 @@ export default function InspectionWizardPage() {
             <h1 style={{ fontSize: '24px', fontWeight: 600, color: nv.text, margin: '0 0 8px' }}>Neighbourhood Voice Inspection</h1>
             <p style={{ fontSize: nv.baseSize, color: nv.muted }}>Your feedback helps improve our estates.</p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm mb-4">
-            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>What this inspection is for</h2>
-            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
-              We want to hear from you about the condition of your estate. Your answers help us prioritise repairs, cleaning and safety.
-            </p>
-            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>Approximate time</h2>
-            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
-              About 10–15 minutes. You can save and come back later.
-            </p>
-            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>Safety</h2>
-            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text, marginBottom: 16 }}>
-              Only report what you can see safely. Do not put yourself at risk. If something is dangerous, report it through the usual channels.
-            </p>
-            <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>How we use your report</h2>
-            <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
-              Your answers and photos are used to create tasks for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
-            </p>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm mb-4">
+            <div style={{ paddingBottom: 16 }}>
+              <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 10 }}>What this inspection is for</h2>
+              <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
+                We want to hear from you about the condition of your estate. Your answers help us prioritise repairs, cleaning and safety.
+              </p>
+            </div>
+            <div style={{ borderTop: nv.sectionBreak, paddingTop: 16, paddingBottom: 16 }}>
+              <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 10 }}>Approximate time</h2>
+              <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
+                About 10–15 minutes. You can save and come back later.
+              </p>
+            </div>
+            <div style={{ borderTop: nv.sectionBreak, paddingTop: 16, paddingBottom: 16 }}>
+              <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 10 }}>Safety</h2>
+              <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
+                Only report what you can see safely. Do not put yourself at risk. If something is dangerous, report it through the usual channels.
+              </p>
+            </div>
+            <div style={{ borderTop: nv.sectionBreak, paddingTop: 16 }}>
+              <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 10 }}>How we use your report</h2>
+              <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
+                Your answers and photos are used to create tasks for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
+              </p>
+            </div>
           </div>
           <div style={{ position: 'sticky', bottom: 0, paddingTop: 16, display: 'flex', gap: 12, justifyContent: 'flex-end', backgroundColor: nv.bg }}>
             <Link href="/inspections" style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, color: nv.text, textDecoration: 'none', fontWeight: 500, display: 'inline-flex', alignItems: 'center', backgroundColor: nv.cardBg }}>Cancel</Link>
@@ -372,6 +372,15 @@ export default function InspectionWizardPage() {
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '7rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
           <h1 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 16 }}>Review and submit</h1>
+          <div style={{ position: 'sticky', top: 0, zIndex: nv.stickyZ, backgroundColor: nv.stickyProgressBg, borderBottom: nv.sectionBreak, backdropFilter: 'blur(2px)', padding: '10px 0 12px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: nv.metaSize, color: nv.muted, marginBottom: 6 }}>
+              <span>{progressSummary}</span>
+              <span>{progressPct}% complete</span>
+            </div>
+            <div style={{ height: nv.progressHeight, backgroundColor: nv.progressTrack, borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: nv.progressFill, borderRadius: 999, transition: nv.transition }} />
+            </div>
+          </div>
 
           {issues.length > 0 && (
             <section style={{ marginBottom: nv.spaceSections }}>
@@ -409,7 +418,7 @@ export default function InspectionWizardPage() {
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 {completedSections.map((c) => (
                   <details key={c.section.id} style={{ marginBottom: 4 }}>
-                    <summary style={{ fontSize: nv.baseSize, cursor: 'pointer', color: nv.text }}>{getSectionIcon(c.section.title)} {c.section.title} ({c.questions.length} answered)</summary>
+                    <summary style={{ fontSize: nv.baseSize, cursor: 'pointer', color: nv.text }}>{c.section.title} ({c.questions.length} answered)</summary>
                     <ul style={{ margin: '8px 0 0 1rem', paddingLeft: '1rem', fontSize: nv.helperSize, color: nv.muted }}>
                       {c.questions.map((q) => (
                         <li key={q.id}>{q.resident_wording || q.question_text}: {normalizeVal(answers[q.id]) || answers[q.id]}</li>
@@ -428,8 +437,8 @@ export default function InspectionWizardPage() {
             </label>
           </div>
 
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 12, justifyContent: 'space-between', maxWidth: 640, margin: '0 auto' }}>
-            <button type="button" onClick={() => { if (isMobile) setQuestionStep(flatSteps.length); else setStep(sections.length) }} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Back</button>
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 12, justifyContent: 'space-between', maxWidth: 640, margin: '0 auto', flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => { if (isMobile) setQuestionStep(flatSteps.length); else setStep(sections.length) }} style={{ flex: '1 1 180px', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Back</button>
             <button
               type="button"
               disabled={saving || !reviewConfirmed}
@@ -451,7 +460,7 @@ export default function InspectionWizardPage() {
                   setSaving(false)
                 }
               }}
-              style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: reviewConfirmed && !saving ? nv.success : '#9CA3AF', color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: reviewConfirmed && !saving ? 'pointer' : 'not-allowed', fontSize: nv.baseSize, transition: nv.transition }}
+              style={{ flex: '1 1 220px', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: reviewConfirmed && !saving ? nv.success : '#9CA3AF', color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: reviewConfirmed && !saving ? 'pointer' : 'not-allowed', fontSize: nv.baseSize, transition: nv.transition }}
             >
               {saving ? 'Submitting…' : 'Submit inspection'}
             </button>
@@ -480,12 +489,21 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
-          <p style={{ fontSize: nv.metaSize, color: nv.muted, marginBottom: 12 }}>
-            Section {sectionNumForQuestion} of {sections.length} · Question {questionNumInSection} of {totalInSection}
-          </p>
+          <div style={{ position: 'sticky', top: 0, zIndex: nv.stickyZ, backgroundColor: nv.stickyProgressBg, borderBottom: nv.sectionBreak, backdropFilter: 'blur(2px)', padding: '10px 0 12px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: nv.metaSize, color: nv.muted, marginBottom: 4 }}>
+              <span>Section {sectionNumForQuestion} of {sections.length}</span>
+              <span>{progressPct}% complete</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: nv.metaSize, color: nv.muted, marginBottom: 8 }}>
+              <span>Question {questionNumInSection} of {totalInSection}</span>
+              <span>{progressSummary}</span>
+            </div>
+            <div style={{ height: nv.progressHeight, backgroundColor: nv.progressTrack, borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: nv.progressFill, borderRadius: 999, transition: nv.transition }} />
+            </div>
+          </div>
 
-          <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{getSectionIcon(sec.title)}</span>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8 }}>
             {sec.title}
           </h2>
 
@@ -592,10 +610,10 @@ export default function InspectionWizardPage() {
 
           {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>Saving…</p>}
 
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto' }}>
-            <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Previous</button>
-            <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save draft'}</button>
-            <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto', flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ flex: '1 1 30%', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Previous</button>
+            <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ flex: '1 1 30%', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save draft'}</button>
+            <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ flex: '1 1 30%', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
           </div>
         </div>
       </div>
@@ -620,11 +638,12 @@ export default function InspectionWizardPage() {
     <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '5.5rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
       <div style={{ maxWidth: 560, margin: '0 auto' }}>
         {/* Progress: Section X of Y + percentage; bar 6px, track #E5E7EB, fill #1E3A8A */}
-        <div style={{ marginBottom: nv.spaceSections }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: nv.stickyZ, backgroundColor: nv.stickyProgressBg, borderBottom: nv.sectionBreak, backdropFilter: 'blur(2px)', padding: '10px 0 12px', marginBottom: nv.spaceSections }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: nv.metaSize, color: nv.muted, marginBottom: 4 }}>
             <span>Section {sectionNum} of {totalSections}</span>
             <span>{progressPct}% complete</span>
           </div>
+          <div style={{ fontSize: nv.metaSize, color: nv.muted, marginBottom: 8 }}>{progressSummary}</div>
           <div style={{ height: nv.progressHeight, backgroundColor: nv.progressTrack, borderRadius: 999, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: nv.progressFill, borderRadius: 999, transition: nv.transition }} />
           </div>
@@ -632,8 +651,7 @@ export default function InspectionWizardPage() {
 
         {/* Section header: 20px semibold, 4px left accent, optional icon */}
         <div style={{ marginBottom: nv.spaceSections }}>
-          <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, borderLeft: nv.sectionAccent, paddingLeft: 12, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{getSectionIcon(sec.title)}</span>
+          <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, borderLeft: nv.sectionAccent, paddingLeft: 12, marginBottom: 8 }}>
             {sec.title}
           </h2>
           {(sec.help_text || sec.what_to_look_for) && (
@@ -746,10 +764,10 @@ export default function InspectionWizardPage() {
         {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted }}>Saving…</p>}
 
         {/* Sticky bar: white bg, top border 1px #E5E7EB, padding 12px 16px; primary blue #1E3A8A, secondary outline */}
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', justifyContent: 'space-between', gap: 8, maxWidth: 560, margin: '0 auto' }}>
-          <button type="button" onClick={() => setStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize, transition: nv.transition }}>Back</button>
-          <button type="button" onClick={saveCurrentSection} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save'}</button>
-          <button type="button" onClick={() => setStep((prev) => (prev >= sections.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize, transition: nv.transition }}>{step === sections.length ? 'Review' : 'Next'}</button>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', justifyContent: 'space-between', gap: 8, maxWidth: 560, margin: '0 auto', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => setStep((prev) => Math.max(0, prev - 1))} style={{ flex: '1 1 30%', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize, transition: nv.transition }}>Back</button>
+          <button type="button" onClick={saveCurrentSection} disabled={saving} style={{ flex: '1 1 30%', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save'}</button>
+          <button type="button" onClick={() => setStep((prev) => (prev >= sections.length + 1 ? prev : prev + 1))} style={{ flex: '1 1 30%', padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeight, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize, transition: nv.transition }}>{step === sections.length ? 'Review' : 'Next'}</button>
         </div>
       </div>
     </div>
