@@ -480,9 +480,28 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
-          <p style={{ fontSize: nv.metaSize, color: nv.muted, marginBottom: 12 }}>
-            Section {sectionNumForQuestion} of {sections.length} · Question {questionNumInSection} of {totalInSection}
-          </p>
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 3,
+              backgroundColor: nv.bg,
+              paddingTop: 4,
+              paddingBottom: 10,
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: nv.metaSize, color: nv.muted, marginBottom: 6 }}>
+              <span>Q {questionStep} of {flatSteps.length}</span>
+              <span>{progressPct}% complete</span>
+            </div>
+            <div style={{ height: nv.progressHeight, backgroundColor: nv.progressTrack, borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progressPct}%`, backgroundColor: nv.progressFill, borderRadius: 999, transition: nv.transition }} />
+            </div>
+            <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 6 }}>
+              Section {sectionNumForQuestion} of {sections.length} · Question {questionNumInSection} of {totalInSection}
+            </p>
+          </div>
 
           <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{getSectionIcon(sec.title)}</span>
@@ -564,6 +583,7 @@ export default function InspectionWizardPage() {
                   style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
                 />
                 <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to 3)</p>
+                <p style={{ fontSize: '12px', marginBottom: 8, color: nv.muted }}>Use camera for live issues, or upload from your phone.</p>
                 <div style={{ width: '100%', minHeight: 52 }}>
                   <PhotoUploadControl
                     id={`photo-${q.id}`}
@@ -592,10 +612,12 @@ export default function InspectionWizardPage() {
 
           {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>Saving…</p>}
 
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto' }}>
-            <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Previous</button>
-            <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save draft'}</button>
-            <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'grid', gap: 8, maxWidth: 560, margin: '0 auto' }}>
+            <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize, width: '100%' }}>{saving ? 'Saving…' : 'Save draft'}</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize, width: '100%' }}>Previous</button>
+              <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: nv.btnMinHeightMobile, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize, width: '100%' }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
+            </div>
           </div>
         </div>
       </div>

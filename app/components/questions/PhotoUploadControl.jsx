@@ -19,7 +19,8 @@ export default function PhotoUploadControl({
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState(null)
-  const inputRef = useRef(null)
+  const galleryInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const pendingReplaceRef = useRef(null)
 
   const handleSelect = (e) => {
@@ -107,53 +108,85 @@ export default function PhotoUploadControl({
 
   const handleReplace = (urlToReplace) => {
     pendingReplaceRef.current = urlToReplace
-    if (inputRef.current) {
-      inputRef.current.value = ''
-      inputRef.current.click()
+    if (galleryInputRef.current) {
+      galleryInputRef.current.value = ''
+      galleryInputRef.current.click()
     }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
       <input
-        ref={inputRef}
-        {...(id ? { id } : {})}
+        ref={cameraInputRef}
+        {...(id ? { id: `${id}-camera` } : {})}
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
         capture="environment"
         onChange={handleSelect}
         disabled={disabled || uploading}
+        multiple={false}
+        style={{ display: 'none' }}
+        aria-label={`${label} using camera`}
+      />
+      <input
+        ref={galleryInputRef}
+        {...(id ? { id } : {})}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
+        onChange={handleSelect}
+        disabled={disabled || uploading}
         multiple={multiple}
         style={{ display: 'none' }}
-        aria-label={label}
+        aria-label={`${label} from gallery`}
       />
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gap: '0.625rem', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => cameraInputRef.current?.click()}
           disabled={disabled || uploading}
           style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: uploading ? '#9ca3af' : '#3b82f6',
+            minHeight: 52,
+            padding: '0.75rem 1rem',
+            backgroundColor: uploading ? '#9ca3af' : '#1e3a8a',
             color: 'white',
             border: 'none',
-            borderRadius: '0.375rem',
-            fontSize: '0.875rem',
-            fontWeight: 500,
+            borderRadius: '0.625rem',
+            fontSize: '0.9375rem',
+            fontWeight: 600,
             cursor: disabled || uploading ? 'not-allowed' : 'pointer',
           }}
         >
-          {uploading ? `Uploading… ${progress}%` : label}
+          Use camera
+        </button>
+        <button
+          type="button"
+          onClick={() => galleryInputRef.current?.click()}
+          disabled={disabled || uploading}
+          style={{
+            minHeight: 52,
+            padding: '0.75rem 1rem',
+            backgroundColor: uploading ? '#9ca3af' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '0.625rem',
+            fontSize: '0.9375rem',
+            fontWeight: 600,
+            cursor: disabled || uploading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {uploading ? `Uploading… ${progress}%` : 'Upload photo'}
         </button>
       </div>
+      <p style={{ margin: 0, fontSize: '0.8125rem', color: '#6b7280' }}>
+        Add a clear photo so officers can find the issue quickly.
+      </p>
       {uploading && (
         <div
           style={{
-            height: 4,
+            height: 6,
             background: '#e5e7eb',
-            borderRadius: 2,
+            borderRadius: 999,
             overflow: 'hidden',
-            maxWidth: 200,
           }}
         >
           <div
@@ -169,9 +202,9 @@ export default function PhotoUploadControl({
       {photoUrls.length > 0 && (
         <div
           style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.5rem',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '0.625rem',
             marginTop: '0.25rem',
           }}
         >
@@ -180,11 +213,11 @@ export default function PhotoUploadControl({
               key={url}
               style={{
                 display: 'flex',
-                alignItems: 'flex-start',
-                gap: '0.25rem',
-                padding: '0.5rem',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.625rem',
                 background: '#f9fafb',
-                borderRadius: '0.375rem',
+                borderRadius: '0.625rem',
                 border: '1px solid #e5e7eb',
               }}
             >
@@ -192,10 +225,10 @@ export default function PhotoUploadControl({
                 src={url}
                 alt="Preview"
                 style={{
-                  width: 64,
-                  height: 64,
+                  width: 72,
+                  height: 72,
                   objectFit: 'cover',
-                  borderRadius: '0.25rem',
+                  borderRadius: '0.375rem',
                 }}
               />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -204,13 +237,15 @@ export default function PhotoUploadControl({
                   onClick={() => handleReplace(url)}
                   disabled={disabled || uploading}
                   style={{
-                    padding: '0.2rem 0.4rem',
-                    fontSize: '0.75rem',
+                    minHeight: 36,
+                    padding: '0.35rem 0.55rem',
+                    fontSize: '0.8125rem',
                     background: '#e5e7eb',
                     border: 'none',
-                    borderRadius: '0.2rem',
+                    borderRadius: '0.375rem',
                     cursor: disabled || uploading ? 'not-allowed' : 'pointer',
                     color: '#374151',
+                    fontWeight: 600,
                   }}
                 >
                   Replace
@@ -220,13 +255,15 @@ export default function PhotoUploadControl({
                   onClick={() => handleRemove(url)}
                   disabled={disabled || uploading}
                   style={{
-                    padding: '0.2rem 0.4rem',
-                    fontSize: '0.75rem',
+                    minHeight: 36,
+                    padding: '0.35rem 0.55rem',
+                    fontSize: '0.8125rem',
                     background: '#fee2e2',
                     color: '#dc2626',
                     border: 'none',
-                    borderRadius: '0.2rem',
+                    borderRadius: '0.375rem',
                     cursor: disabled || uploading ? 'not-allowed' : 'pointer',
+                    fontWeight: 600,
                   }}
                 >
                   Remove
