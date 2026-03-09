@@ -22,7 +22,37 @@ If the dashboard returns **“Unauthorised”** even when you’re signed in wit
 
 Run migrations as a **separate deployment step** (see below).
 
-## 3. Run migrations as a separate step (single action)
+## 3. Run migrations against production (step-by-step)
+
+1. **Set DATABASE_URL for production**  
+   Use the same Neon connection string as in Vercel → Settings → Environment Variables for **Production**.  
+   - Locally: set in your shell or in a `.env` file in the project root (e.g. `DATABASE_URL="postgresql://..."`).  
+   - Do not commit `.env`; it should be in `.gitignore`.
+
+2. **Run migrations**  
+   In the project root:
+   ```bash
+   npx prisma migrate deploy
+   ```
+   This applies all pending migrations in `prisma/migrations/` (e.g. `20250225000000_init`, `20250302130000_add_users`, etc.). You should see output like “X migrations applied” or “No pending migrations”.
+
+3. **Confirm migrations applied**  
+   The same command reports which migrations were applied. To double-check, run:
+   ```bash
+   npm run db:verify
+   ```
+   This lists tables in schema `public` and confirms `users` exists.
+
+4. **Verify key tables exist**  
+   `db:verify` checks for `users`. You should also see (depending on migrations): `inspections`, `inspection_answers`, `user_estate_assignments`, `templates`, etc. If any are missing, ensure the correct migrations ran (no P3005; see §5).
+
+5. **Restart the server**  
+   - **Vercel:** Trigger a new deployment (push a commit or “Redeploy” in the Vercel dashboard) so the app uses the updated schema.  
+   - **Local:** Restart with `npm run dev` or `npm start`.
+
+---
+
+## 4. Run migrations as a separate step (single action)
 
 **Next action:** Run `npx prisma migrate deploy` (not during build). Locally you can use `npx prisma migrate dev --name add_users` to create and apply migrations; on Vercel/production use `npx prisma migrate deploy`. If it’s **blocked** (e.g. P3005: DB already has tables but migration history not applied), **baseline** then deploy: run `npm run db:baseline` (runs `prisma migrate resolve --applied <migration_folder>` for each migration in `prisma/migrations`, then `npx prisma migrate deploy`). Then run `npm run db:verify` and redeploy/re-test.
 
@@ -57,7 +87,7 @@ This lists tables in schema `public` and confirms **`users`** exists. If `users`
 
 Then **redeploy** (or restart the app) and **re-test login/dashboard**.
 
-## 4. Resolving P3005 (migration history not applied)
+## 5. Resolving P3005 (migration history not applied)
 
 **P3005** means: this database already has tables, but Prisma’s migration history is not applied (e.g. the DB was created or altered outside Prisma, or you pointed at an existing DB). Prisma then tries to initialise migrations on a non-empty DB, which fails. That was previously triggered at build time — both the “run migrate in build” and “DB already has tables” situations are wrong.
 
@@ -105,7 +135,7 @@ If you must keep using the current database (it already has the tables you need)
 
 3. Confirm the **`users`** table exists and retry login/dashboard.
 
-## 5. Verify the `users` table exists
+## 6. Verify the `users` table exists
 
 After migrations have run (and P3005 is resolved if it applied):
 
@@ -116,7 +146,7 @@ After migrations have run (and P3005 is resolved if it applied):
   ```
   You should see columns such as `id`, `clerk_user_id`, `email`, `role`, `is_active`.
 
-## 6. If the table is missing: clear error instead of “Unauthorised”
+## 7. If the table is missing: clear error instead of “Unauthorised”
 
 If **`users`** (or another required table) is missing, the dashboard API returns:
 

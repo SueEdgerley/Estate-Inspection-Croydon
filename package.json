@@ -13,6 +13,7 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "db:migrate:prod": "node scripts/migrate-and-verify.js",
     "db:baseline": "node scripts/baseline-and-migrate.js",
     "db:verify": "node scripts/verify-tables.js",
     "db:push": "prisma db push",
