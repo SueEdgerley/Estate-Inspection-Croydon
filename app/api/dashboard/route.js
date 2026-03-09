@@ -4,14 +4,31 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
 
-// Dashboard access: use Users.role (owner | admin) for access control. Do not use People for auth.
-const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin']
+// Dashboard access: use Users.role for access control. Do not use People for auth.
+const ADMIN_ROLES = ['owner', 'admin']
+const ALLOWED_DASHBOARD_ROLES = [
+  'owner',
+  'admin',
+  'editor',
+  'user',
+  'caretaker',
+  'esm',
+  'housing officer',
+]
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
+
+function normalizeRole(role) {
+  return String(role || '')
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 function logDashboardAuth(clerkUserId, email, internalUser, role, assignedEstateCount, statusCode, reason) {
   console.log('[Dashboard] auth:', {
@@ -138,7 +155,7 @@ export async function GET(request) {
       )
     }
 
-    const role = (internalUser.role || '').toLowerCase().trim()
+    const role = normalizeRole(internalUser.role)
     if (role && !ALLOWED_DASHBOARD_ROLES.includes(role)) {
       logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
@@ -158,18 +175,13 @@ export async function GET(request) {
 
     console.log('[Dashboard] debug:', { role, is_active: internalUser.is_active, assignedEstateCount })
 
-    const admin = role === 'admin' || role === 'owner'
+    const admin = ADMIN_ROLES.includes(role)
 
-    // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
-    // Temporarily: do not early-return here so we can confirm access works without estate scoping
+    // User exists and is allowed: if no estates assigned, do not block dashboard load.
+    // We still log this so assignments can be fixed without locking users out.
     const hasEstates = assignedEstateCount > 0
     if (!admin && !hasEstates) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok_no_estates')
-      return NextResponse.json({
-        stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
-        inspections: [],
-        message: 'No estates assigned yet.',
-      })
+      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok_no_estates_continue')
     }
 
     const { searchParams } = new URL(request.url)
