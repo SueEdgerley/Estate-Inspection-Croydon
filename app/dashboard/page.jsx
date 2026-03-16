@@ -220,9 +220,16 @@ export default function DashboardHome() {
           <p style={{ margin: 0, fontSize: '1.0625rem', color: '#374151', lineHeight: 1.6 }}>
             {authCode === 'UNAUTHORIZED' && 'Please sign in again to view the dashboard.'}
             {authCode === 'NO_AIRTABLE_USER' && 'Your account is signed in but has no matching Airtable user record. Contact an admin.'}
+            {authCode === 'USER_NOT_PROVISIONED' && 'Your account is not set up yet. Ask an admin to assign access.'}
+            {authCode === 'USER_INACTIVE' && 'Your account is inactive. Contact an admin if you need access.'}
             {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard.'}
             {authCode === 'ADMIN_REQUIRED' && 'Admin access is required for this area.'}
           </p>
+          {(authCode === 'ROLE_NOT_PERMITTED' || authCode === 'USER_NOT_PROVISIONED' || authCode === 'NO_AIRTABLE_USER') && (
+            <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem' }}>
+              <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+            </p>
+          )}
         </div>
       )}
 
@@ -251,6 +258,9 @@ export default function DashboardHome() {
           fontSize: '0.9375rem'
         }}>
           {error}
+          <p style={{ margin: '0.75rem 0 0', fontSize: '0.875rem' }}>
+            <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+          </p>
         </div>
       )}
 
