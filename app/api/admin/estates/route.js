@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { getPgUrl } from '@/lib/db'
-import { isAdmin } from '@/lib/auth'
+import { getRouteAccess } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 async function requireAdmin() {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const admin = await isAdmin()
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { denialResponse } = await getRouteAccess({ requireAdmin: true })
+  if (denialResponse) return denialResponse
   if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
   return null
 }

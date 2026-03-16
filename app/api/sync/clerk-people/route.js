@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { clerkClient } from '@clerk/nextjs/server'
-import { isAdmin } from '@/lib/auth'
 import { getPeople, createAirtableRecord, TABLES } from '@/lib/airtable-client'
+import { getRouteAccess } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,10 +13,8 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST() {
   try {
-    const admin = await isAdmin()
-    if (!admin) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const { denialResponse } = await getRouteAccess({ requireAdmin: true })
+    if (denialResponse) return denialResponse
 
     const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
     if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {

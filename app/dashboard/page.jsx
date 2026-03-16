@@ -38,6 +38,7 @@ export default function DashboardHome() {
     setEmptyStateMessage(null)
 
     try {
+      console.log('[DashboardPage] loadDashboardData start')
       const params = new URLSearchParams()
 
       if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
@@ -54,6 +55,11 @@ export default function DashboardHome() {
       })
 
       const data = await res.json()
+      console.log('[DashboardPage] loadDashboardData response', {
+        status: res.status,
+        code: data?.code || null,
+        errorCode: data?.errorCode || null,
+      })
 
       if (res.status === 401) {
         setAuthCode('UNAUTHORIZED')
@@ -82,6 +88,10 @@ export default function DashboardHome() {
 
       if (data?.message) {
         setEmptyStateMessage(data.message)
+      }
+
+      if (data?.errorCode === 'NEON_QUERY_FAILED' || data?.errorCode === 'DASHBOARD_UNEXPECTED_ERROR') {
+        setError(data?.message || 'Dashboard data is temporarily unavailable.')
       }
 
       setStats({
@@ -209,9 +219,9 @@ export default function DashboardHome() {
         }}>
           <p style={{ margin: 0, fontSize: '1.0625rem', color: '#374151', lineHeight: 1.6 }}>
             {authCode === 'UNAUTHORIZED' && 'Please sign in again to view the dashboard.'}
-            {authCode === 'USER_NOT_PROVISIONED' && 'Your account isn\'t set up yet. Ask an admin to assign your role/estates.'}
-            {authCode === 'USER_INACTIVE' && 'Your account is inactive. Contact an admin if you need access.'}
+            {authCode === 'NO_AIRTABLE_USER' && 'Your account is signed in but has no matching Airtable user record. Contact an admin.'}
             {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard.'}
+            {authCode === 'ADMIN_REQUIRED' && 'Admin access is required for this area.'}
           </p>
         </div>
       )}
