@@ -103,8 +103,7 @@ export async function GET(request) {
           VALUES (${newId}, ${clerkUserId}, ${userEmail || null}, ${newRole})
           ON CONFLICT (clerk_user_id) DO UPDATE SET
             email = EXCLUDED.email,
-            role = COALESCE(users.role, EXCLUDED.role),
-            updated_at = NOW()
+            role = COALESCE(users.role, EXCLUDED.role)
         `
         const refetch = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
         internalUser = refetch.rows[0] || null
@@ -138,11 +137,16 @@ export async function GET(request) {
       )
     }
 
+    // Source of truth: app database users.role (owner | admin | user). Empty/missing role = not allowed.
     const role = (internalUser.role || '').toLowerCase().trim()
-    if (role && !ALLOWED_DASHBOARD_ROLES.includes(role)) {
+    if (!ALLOWED_DASHBOARD_ROLES.includes(role)) {
       logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
-        { error: 'Role not permitted', code: 'ROLE_NOT_PERMITTED', reason: 'Role not allowed for dashboard' },
+        {
+          error: 'Access denied',
+          code: 'ROLE_NOT_PERMITTED',
+          reason: role ? 'Your role does not have dashboard access.' : 'No role assigned. Ask an admin to assign your role.',
+        },
         { status: 403 }
       )
     }

@@ -1,3 +1,7 @@
+/**
+ * Minimal middleware: Clerk auth only. No DB/Prisma, no role checks.
+ * Dashboard access control is enforced in /api/dashboard and dashboard page (403 + message).
+ */
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
