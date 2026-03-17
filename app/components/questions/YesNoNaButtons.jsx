@@ -1,6 +1,6 @@
 'use client'
 
-import { colours, yesColour, noColour, naColour } from '@/lib/nv-theme'
+import { colours, yesColour, noColour, naColour, minTapHeight } from '@/lib/nv-theme'
 
 /**
  * Reusable 3-button toggle for Yes / No / NA.
@@ -15,7 +15,7 @@ export default function YesNoNaButtons({ id, value, onChange, disabled = false }
   const selected = OPTIONS.includes(normalized) ? normalized : ''
 
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+    <div className="nv-answer-buttons">
       {OPTIONS.map((opt, idx) => {
         const isSelected = selected === opt
         const isYes = opt === 'Yes'
@@ -33,20 +33,23 @@ export default function YesNoNaButtons({ id, value, onChange, disabled = false }
             id={idx === 0 && id ? id : undefined}
             disabled={disabled}
             onClick={() => onChange(opt)}
+            aria-pressed={isSelected}
             style={{
-              padding: '0.5rem 1rem',
-              minHeight: 44,
+              width: '100%',
+              minHeight: Math.max(56, minTapHeight),
+              padding: '0.875rem 1rem',
               backgroundColor: bg,
               color,
               border: `2px solid ${border}`,
-              borderRadius: '0.5rem',
+              borderRadius: '0.75rem',
               cursor: disabled ? 'not-allowed' : 'pointer',
-              fontWeight: isSelected ? 600 : 500,
-              fontSize: '0.9375rem',
+              fontWeight: isSelected ? 700 : 600,
+              fontSize: '1rem',
               opacity: disabled ? 0.7 : 1,
+              boxShadow: isSelected ? '0 0 0 2px rgba(30, 58, 138, 0.15)' : 'none',
             }}
           >
-            {opt}
+            {isSelected ? `✓ ${opt}` : opt}
           </button>
         )
       })}
