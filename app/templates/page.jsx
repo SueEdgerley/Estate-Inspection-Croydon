@@ -260,7 +260,7 @@ export default function TemplatesPage() {
                         href={`/inspections/new`}
                         style={{ color: '#3b82f6', fontSize: '0.875rem', textDecoration: 'none' }}
                       >
-                        Start new inspection with this template →
+                        Complete template inspection →
                       </Link>
                     </div>
                   </div>
@@ -274,9 +274,14 @@ export default function TemplatesPage() {
       {!loading && templates.length > 0 && (
         <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
           <Link href="/inspections/new" style={{ color: '#3b82f6', textDecoration: 'none' }}>
-            Start new inspection
+            Complete template inspection
           </Link>
-          {' '}to use a template.
+          {' '}for formal scored inspections.
+          {' '}
+          <Link href="/inspections/ad-hoc/new" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+            New ad hoc inspection
+          </Link>
+          {' '}for quick manual records.
           {' '}
           <Link href="/templates/preview" style={{ color: '#3b82f6', textDecoration: 'none' }}>
             Preview QuestionCard (caretaker / NV)

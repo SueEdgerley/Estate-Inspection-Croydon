@@ -515,7 +515,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     return (
       <div>
         <Link href="/inspections" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '0.875rem' }}>
-          ← Back to Inspections
+          ← Back to Manage Inspections
         </Link>
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '0.5rem' }}>
           {loadError}
@@ -537,13 +537,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             marginBottom: '1rem',
           }}
         >
-          ← Back to Inspections
+          ← Back to Manage Inspections
         </Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>
-          New Inspection
+          Complete Template Inspection
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Choose a template and complete the form
+          Formal scored workflow using Airtable templates
         </p>
       </div>
 

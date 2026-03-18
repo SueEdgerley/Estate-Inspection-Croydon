@@ -324,23 +324,42 @@ export default function DashboardHome() {
         alignItems: 'center',
         marginBottom: '1.5rem'
       }}>
-        <Link
-          href="/inspections/new"
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '0.5rem',
-            fontSize: '0.9375rem',
-            fontWeight: '500',
-            cursor: 'pointer',
-            textDecoration: 'none',
-            display: 'inline-block'
-          }}
-        >
-          Start New Inspection
-        </Link>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <Link
+            href="/inspections/ad-hoc/new"
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#0f766e',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontSize: '0.9375rem',
+              fontWeight: '600',
+              cursor: 'pointer',
+              textDecoration: 'none',
+              display: 'inline-block'
+            }}
+          >
+            New Ad Hoc Inspection
+          </Link>
+          <Link
+            href="/inspections/new"
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: 'white',
+              color: '#0f766e',
+              border: '1px solid #0f766e',
+              borderRadius: '0.5rem',
+              fontSize: '0.9375rem',
+              fontWeight: '600',
+              cursor: 'pointer',
+              textDecoration: 'none',
+              display: 'inline-block'
+            }}
+          >
+            Complete Template Inspection
+          </Link>
+        </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}

@@ -52,23 +52,40 @@ export default function InspectionsListPage() {
             Manage Inspections
           </h1>
           <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9375rem', color: '#6b7280' }}>
-            Inspection records from Postgres
+            Create and manage ad hoc inspection records, or launch a template inspection separately.
           </p>
         </div>
-        <Link
-          href="/inspections/new"
-          style={{
-            padding: '0.75rem 1.25rem',
-            backgroundColor: '#0f766e',
-            color: '#fff',
-            textDecoration: 'none',
-            borderRadius: '0.5rem',
-            fontWeight: 600,
-            fontSize: '0.9375rem',
-          }}
-        >
-          New Inspection
-        </Link>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <Link
+            href="/inspections/ad-hoc/new"
+            style={{
+              padding: '0.75rem 1.25rem',
+              backgroundColor: '#0f766e',
+              color: '#fff',
+              textDecoration: 'none',
+              borderRadius: '0.5rem',
+              fontWeight: 600,
+              fontSize: '0.9375rem',
+            }}
+          >
+            New Ad Hoc Inspection
+          </Link>
+          <Link
+            href="/inspections/new"
+            style={{
+              padding: '0.75rem 1.25rem',
+              backgroundColor: '#fff',
+              color: '#0f766e',
+              textDecoration: 'none',
+              border: '1px solid #0f766e',
+              borderRadius: '0.5rem',
+              fontWeight: 600,
+              fontSize: '0.9375rem',
+            }}
+          >
+            Complete Template Inspection
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -101,21 +118,37 @@ export default function InspectionsListPage() {
           <p style={{ margin: 0, color: '#6b7280', fontSize: '1rem' }}>
             No inspections yet.
           </p>
-          <Link
-            href="/inspections/new"
-            style={{
-              display: 'inline-block',
-              marginTop: '1rem',
-              padding: '0.75rem 1.25rem',
-              backgroundColor: '#0f766e',
-              color: '#fff',
-              textDecoration: 'none',
-              borderRadius: '0.5rem',
-              fontWeight: 600,
-            }}
-          >
-            New Inspection
-          </Link>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+            <Link
+              href="/inspections/ad-hoc/new"
+              style={{
+                display: 'inline-block',
+                padding: '0.75rem 1.25rem',
+                backgroundColor: '#0f766e',
+                color: '#fff',
+                textDecoration: 'none',
+                borderRadius: '0.5rem',
+                fontWeight: 600,
+              }}
+            >
+              New Ad Hoc Inspection
+            </Link>
+            <Link
+              href="/inspections/new"
+              style={{
+                display: 'inline-block',
+                padding: '0.75rem 1.25rem',
+                backgroundColor: '#fff',
+                color: '#0f766e',
+                border: '1px solid #0f766e',
+                textDecoration: 'none',
+                borderRadius: '0.5rem',
+                fontWeight: 600,
+              }}
+            >
+              Complete Template Inspection
+            </Link>
+          </div>
         </div>
       ) : (
         <div style={{
@@ -130,9 +163,11 @@ export default function InspectionsListPage() {
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Inspection ID</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Workflow</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Estate</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Block</th>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Template Name</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Inspection Type</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Reason / Title</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Inspector</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Date</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Status</th>
@@ -149,9 +184,13 @@ export default function InspectionsListPage() {
                     <td style={{ padding: '0.75rem 1rem', color: '#111827', fontFamily: 'var(--font-geist-mono), monospace', fontSize: '0.8125rem' }}>
                       {row.id?.slice(0, 8) || '–'}
                     </td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>
+                      {row.template_id ? 'Template inspection' : 'Ad hoc inspection'}
+                    </td>
                     <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.estate_name ?? '–'}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.block_name ?? '–'}</td>
-                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.template_name ?? '–'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.type ?? '–'}</td>
+                    <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.title ?? row.template_name ?? '–'}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
                     <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.submitted_at || row.created_at)}</td>
                     <td style={{ padding: '0.75rem 1rem' }}>
