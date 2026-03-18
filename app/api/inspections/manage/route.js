@@ -133,10 +133,7 @@ export async function POST(request) {
     let scheduleEndDate = null
 
     if (mode === 'ad_hoc') {
-      const inspectionType = asText(body.inspection_type)
-      if (!inspectionType) {
-        return NextResponse.json({ error: 'inspection_type is required for ad hoc inspections' }, { status: 400 })
-      }
+      const inspectionType = asText(body.inspection_type) || 'ad_hoc_inspection'
       if (!reason) {
         return NextResponse.json({ error: 'reason is required for ad hoc inspections' }, { status: 400 })
       }

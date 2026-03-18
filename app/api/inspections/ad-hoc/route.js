@@ -53,7 +53,7 @@ export async function POST(request) {
     const assignedPersonId = asText(body.assigned_person_id)
     const assignedPersonNameInput = asText(body.assigned_person_name)
     const assignedPersonEmailInput = asText(body.assigned_person_email)
-    const inspectionType = asText(body.inspection_type)
+    const inspectionType = asText(body.inspection_type) || 'ad_hoc_inspection'
     const reason = asText(body.reason)
     const notes = asText(body.notes)
     const status = asText(body.status).toLowerCase() || 'draft'
@@ -66,9 +66,6 @@ export async function POST(request) {
     }
     if (!assignedPersonId && !assignedPersonNameInput) {
       return NextResponse.json({ error: 'assigned_person_name is required' }, { status: 400 })
-    }
-    if (!inspectionType) {
-      return NextResponse.json({ error: 'inspection_type is required' }, { status: 400 })
     }
     if (!reason) {
       return NextResponse.json({ error: 'reason is required' }, { status: 400 })

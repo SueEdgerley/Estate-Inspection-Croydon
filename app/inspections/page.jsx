@@ -8,15 +8,6 @@ const TAB_SUMMARY = 'summary'
 const TAB_SCHEDULES = 'schedules'
 const TAB_INSPECTIONS = 'inspections'
 
-const AD_HOC_TYPES = [
-  { value: 'ad_hoc_walkabout', label: 'Ad hoc walkabout' },
-  { value: 'estate_walkabout', label: 'Estate walkabout' },
-  { value: 'block_walkabout', label: 'Block walkabout' },
-  { value: 'follow_up', label: 'Follow-up check' },
-  { value: 'health_safety', label: 'Health & safety' },
-  { value: 'other', label: 'Other' },
-]
-
 const FREQUENCIES = ['Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Biannual', 'Annual']
 
 function formatDate(value) {
@@ -89,7 +80,6 @@ export default function InspectionsListPage() {
     assignedPersonId: '',
     assignedPersonName: '',
     assignedPersonEmail: '',
-    inspectionType: AD_HOC_TYPES[0].value,
     reason: '',
     notes: '',
     status: 'draft',
@@ -207,12 +197,6 @@ export default function InspectionsListPage() {
   const createParam = (searchParams?.get('create') || '').toLowerCase()
 
   useEffect(() => {
-    if (form.mode === 'ad_hoc' && !canCreateAdHocInspection && canCreateScheduledInspection) {
-      setForm((prev) => ({ ...prev, mode: 'scheduled' }))
-    }
-  }, [form.mode, canCreateAdHocInspection, canCreateScheduledInspection])
-
-  useEffect(() => {
     if (!createParam) return
     if (createParam !== 'ad_hoc' && createParam !== 'scheduled') return
 
@@ -221,11 +205,7 @@ export default function InspectionsListPage() {
     setFormError(null)
 
     if (createParam === 'ad_hoc') {
-      if (canCreateAdHocInspection) {
-        setForm((prev) => ({ ...prev, mode: 'ad_hoc' }))
-      } else if (canCreateScheduledInspection) {
-        setForm((prev) => ({ ...prev, mode: 'scheduled' }))
-      }
+      setForm((prev) => ({ ...prev, mode: 'ad_hoc' }))
       return
     }
 
@@ -244,7 +224,7 @@ export default function InspectionsListPage() {
 
   function resetForm() {
     setForm({
-      mode: canCreateAdHocInspection ? 'ad_hoc' : 'scheduled',
+      mode: 'ad_hoc',
       inspectionDate: '',
       dueDate: '',
       estateId: '',
@@ -253,7 +233,6 @@ export default function InspectionsListPage() {
       assignedPersonId: '',
       assignedPersonName: '',
       assignedPersonEmail: '',
-      inspectionType: AD_HOC_TYPES[0].value,
       reason: '',
       notes: '',
       status: 'draft',
@@ -297,12 +276,12 @@ export default function InspectionsListPage() {
     }
 
     if (form.mode === 'ad_hoc') {
-      if (!form.inspectionDate || !form.inspectionType || !form.reason) {
-        setFormError('Date, inspection type, and reason are required for ad hoc inspections.')
+      if (!form.inspectionDate || !form.reason) {
+        setFormError('Date, reason, location, assigned person, and status are required for ad hoc inspections.')
         return
       }
       payload.inspection_date = form.inspectionDate
-      payload.inspection_type = form.inspectionType
+      payload.inspection_type = 'ad_hoc_inspection'
     } else {
       if (!form.templateId || !form.templateName || !form.frequency || !form.startDate || !form.dueDate) {
         setFormError('Template, frequency, start, and due date are required for scheduled inspections.')
@@ -428,13 +407,6 @@ export default function InspectionsListPage() {
           {filtersOpen ? 'Hide Filters' : 'Show Filters'}
         </button>
       </div>
-      {!canCreateAdHocInspection && (
-        <div style={{ marginBottom: '1rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
-          Ad hoc inspection creation is currently disabled for your account. A manager can enable it in
-          Airtable Users via <strong>Can Create Ad Hoc Inspection</strong>.
-        </div>
-      )}
-
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setActiveTab(TAB_SUMMARY)} style={{ padding: '0.65rem 0.95rem', borderRadius: '0.4rem', border: activeTab === TAB_SUMMARY ? '1px solid #111827' : '1px solid #e5e7eb', backgroundColor: activeTab === TAB_SUMMARY ? '#f3f4f6' : '#fff', cursor: 'pointer' }}>Summary</button>
         <button type="button" onClick={() => setActiveTab(TAB_SCHEDULES)} style={{ padding: '0.65rem 0.95rem', borderRadius: '0.4rem', border: activeTab === TAB_SCHEDULES ? '1px solid #111827' : '1px solid #e5e7eb', backgroundColor: activeTab === TAB_SCHEDULES ? '#f3f4f6' : '#fff', cursor: 'pointer' }}>Manage Schedules</button>
@@ -446,16 +418,15 @@ export default function InspectionsListPage() {
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             <button
               type="button"
-              disabled={!canCreateAdHocInspection}
               onClick={() => setField('mode', 'ad_hoc')}
               style={{
                 padding: '0.6rem 1rem',
                 borderRadius: '0.4rem',
                 border: form.mode === 'ad_hoc' ? '1px solid #0f766e' : '1px solid #d1d5db',
                 backgroundColor: form.mode === 'ad_hoc' ? '#ecfdf5' : '#fff',
-                color: canCreateAdHocInspection ? '#065f46' : '#9ca3af',
+                color: '#065f46',
                 fontWeight: 600,
-                cursor: canCreateAdHocInspection ? 'pointer' : 'not-allowed',
+                cursor: 'pointer',
               }}
             >
               Ad hoc inspection
@@ -478,9 +449,10 @@ export default function InspectionsListPage() {
             </button>
             <Link href="/inspections/new/template" style={{ marginLeft: 'auto', padding: '0.6rem 1rem', borderRadius: '0.4rem', border: '1px solid #0f766e', color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}>Complete Template Inspection</Link>
           </div>
-          {!canCreateAdHocInspection && (
+          {form.mode === 'ad_hoc' && !canCreateAdHocInspection && (
             <div style={{ marginBottom: '0.75rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
-              Ad hoc creation is disabled for your user. Scheduled inspection creation remains available.
+              Ad hoc creation is restricted for your account. A manager can enable
+              <strong> Can Create Ad Hoc Inspection</strong> in Airtable Users.
             </div>
           )}
 
@@ -495,14 +467,6 @@ export default function InspectionsListPage() {
                   <div>
                     <label htmlFor="inspection_date" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Date *</label>
                     <input id="inspection_date" type="date" value={form.inspectionDate} onChange={(e) => setField('inspectionDate', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
-                  </div>
-                  <div>
-                    <label htmlFor="inspection_type" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Inspection type *</label>
-                    <select id="inspection_type" value={form.inspectionType} onChange={(e) => setField('inspectionType', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }}>
-                      {AD_HOC_TYPES.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
                   </div>
                 </>
               ) : (
