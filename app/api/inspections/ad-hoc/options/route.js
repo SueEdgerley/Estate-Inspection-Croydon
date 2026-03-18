@@ -11,7 +11,7 @@ function isMissingRelationError(error) {
 }
 
 export async function GET() {
-  const { denialResponse } = await getRouteAccess({ requireDashboard: true })
+  const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
   if (denialResponse) return denialResponse
 
   try {
@@ -67,7 +67,14 @@ export async function GET() {
       console.warn('[Ad hoc options] people table not available')
     }
 
-    return NextResponse.json({ estates, blocks, people })
+    return NextResponse.json({
+      estates,
+      blocks,
+      people,
+      permissions: {
+        canCreateAdHocInspection: Boolean(access?.permissions?.canCreateAdHocInspection),
+      },
+    })
   } catch (error) {
     console.error('[Ad hoc options] failed:', error)
     return NextResponse.json(

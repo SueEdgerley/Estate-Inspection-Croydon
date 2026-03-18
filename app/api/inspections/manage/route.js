@@ -58,6 +58,24 @@ export async function POST(request) {
     if (!ALLOWED_MODES.has(mode)) {
       return NextResponse.json({ error: 'mode must be ad_hoc or scheduled' }, { status: 400 })
     }
+    if (mode === 'ad_hoc' && !access?.permissions?.canCreateAdHocInspection) {
+      return NextResponse.json(
+        {
+          error: 'You do not have permission to create ad hoc inspections',
+          code: 'AD_HOC_CREATE_NOT_ALLOWED',
+        },
+        { status: 403 }
+      )
+    }
+    if (mode === 'scheduled' && !access?.permissions?.canCreateScheduledInspection) {
+      return NextResponse.json(
+        {
+          error: 'You do not have permission to create scheduled inspections',
+          code: 'SCHEDULE_CREATE_NOT_ALLOWED',
+        },
+        { status: 403 }
+      )
+    }
 
     const status = asText(body.status).toLowerCase() || (mode === 'scheduled' ? 'scheduled' : 'draft')
     if (!ALLOWED_STATUSES.has(status)) {

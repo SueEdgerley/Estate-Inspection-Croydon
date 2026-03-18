@@ -25,6 +25,7 @@ export default function NewAdHocInspectionPage() {
   const [optionsError, setOptionsError] = useState(null)
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [canCreateAdHocInspection, setCanCreateAdHocInspection] = useState(false)
 
   const [estates, setEstates] = useState([])
   const [blocks, setBlocks] = useState([])
@@ -58,6 +59,7 @@ export default function NewAdHocInspectionPage() {
           setEstates(Array.isArray(data?.estates) ? data.estates : [])
           setBlocks(Array.isArray(data?.blocks) ? data.blocks : [])
           setPeople(Array.isArray(data?.people) ? data.people : [])
+          setCanCreateAdHocInspection(Boolean(data?.permissions?.canCreateAdHocInspection))
         }
       } catch (error) {
         if (!cancelled) setOptionsError(error?.message || 'Failed to load ad hoc form options')
@@ -79,6 +81,10 @@ export default function NewAdHocInspectionPage() {
   async function handleSubmit(event) {
     event.preventDefault()
     setSubmitError(null)
+    if (!canCreateAdHocInspection) {
+      setSubmitError('Ad hoc inspection creation is not enabled for your account.')
+      return
+    }
     if (!inspectionDate || !area || !assignedPersonName || !inspectionType || !reason || !status) {
       setSubmitError('Please complete all required fields.')
       return
@@ -134,7 +140,7 @@ export default function NewAdHocInspectionPage() {
       </div>
 
       <div style={{ marginBottom: '1rem' }}>
-        <Link href="/inspections/new" style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}>
+        <Link href="/inspections/new/template" style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}>
           Complete Template Inspection →
         </Link>
       </div>
@@ -152,6 +158,22 @@ export default function NewAdHocInspectionPage() {
           }}
         >
           {optionsError || submitError}
+        </div>
+      )}
+      {!loading && !canCreateAdHocInspection && (
+        <div
+          style={{
+            padding: '0.9rem 1rem',
+            backgroundColor: '#fff7ed',
+            border: '1px solid #fdba74',
+            borderRadius: '0.5rem',
+            color: '#9a3412',
+            marginBottom: '1rem',
+            fontSize: '0.92rem',
+          }}
+        >
+          You can view this page, but ad hoc creation is disabled for your account. Ask a manager to enable
+          <strong> Can Create Ad Hoc Inspection</strong> in Airtable Users.
         </div>
       )}
 
@@ -376,15 +398,15 @@ export default function NewAdHocInspectionPage() {
             </Link>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canCreateAdHocInspection}
               style={{
                 padding: '0.7rem 1.2rem',
                 border: 'none',
                 borderRadius: '0.5rem',
-                backgroundColor: isSubmitting ? '#9ca3af' : '#0f766e',
+                backgroundColor: isSubmitting || !canCreateAdHocInspection ? '#9ca3af' : '#0f766e',
                 color: '#fff',
                 fontWeight: 700,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                cursor: isSubmitting || !canCreateAdHocInspection ? 'not-allowed' : 'pointer',
               }}
             >
               {isSubmitting ? 'Saving…' : 'Create Ad Hoc Inspection'}

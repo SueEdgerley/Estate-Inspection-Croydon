@@ -343,7 +343,7 @@ export default function DashboardHome() {
             New Ad Hoc Inspection
           </Link>
           <Link
-            href="/inspections/new"
+            href="/inspections/new/template"
             style={{
               padding: '0.75rem 1.5rem',
               backgroundColor: 'white',

@@ -35,8 +35,8 @@ export default function YesNoNaDevCheckPage() {
 
   return (
     <div style={{ maxWidth: '600px', margin: '2rem auto', padding: '0 1rem' }}>
-      <Link href="/inspections/new" style={{ display: 'inline-block', marginBottom: '1rem', color: '#3b82f6', fontSize: '0.875rem' }}>
-        ← Back to New Inspection
+      <Link href="/inspections/new/template" style={{ display: 'inline-block', marginBottom: '1rem', color: '#3b82f6', fontSize: '0.875rem' }}>
+        ← Back to Template Inspection
       </Link>
       <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Yes/No/NA dev check</h1>
       <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '1.5rem' }}>

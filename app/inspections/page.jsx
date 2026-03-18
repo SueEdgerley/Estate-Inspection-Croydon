@@ -67,6 +67,10 @@ export default function InspectionsListPage() {
     people: [],
     templates: [],
     templateWarning: null,
+    permissions: {
+      canCreateAdHocInspection: false,
+      canCreateScheduledInspection: true,
+    },
   })
   const [filters, setFilters] = useState({
     query: '',
@@ -119,6 +123,11 @@ export default function InspectionsListPage() {
         people: Array.isArray(optionsData?.people) ? optionsData.people : [],
         templates: Array.isArray(optionsData?.templates) ? optionsData.templates : [],
         templateWarning: optionsData?.templateWarning || null,
+        permissions: {
+          canCreateAdHocInspection: Boolean(optionsData?.permissions?.canCreateAdHocInspection),
+          canCreateScheduledInspection:
+            optionsData?.permissions?.canCreateScheduledInspection !== false,
+        },
       })
     } catch (e) {
       setError(e?.message || 'Failed to load inspection management data')
@@ -190,13 +199,23 @@ export default function InspectionsListPage() {
     return options.blocks.filter((b) => !b.estate_id || b.estate_id === form.estateId)
   }, [options.blocks, form.estateId])
 
+  const canCreateAdHocInspection = Boolean(options.permissions?.canCreateAdHocInspection)
+  const canCreateScheduledInspection = Boolean(options.permissions?.canCreateScheduledInspection)
+  const canCreateAnyInspection = canCreateAdHocInspection || canCreateScheduledInspection
+
+  useEffect(() => {
+    if (form.mode === 'ad_hoc' && !canCreateAdHocInspection && canCreateScheduledInspection) {
+      setForm((prev) => ({ ...prev, mode: 'scheduled' }))
+    }
+  }, [form.mode, canCreateAdHocInspection, canCreateScheduledInspection])
+
   function setField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
   function resetForm() {
     setForm({
-      mode: 'ad_hoc',
+      mode: canCreateAdHocInspection ? 'ad_hoc' : 'scheduled',
       inspectionDate: '',
       dueDate: '',
       estateId: '',
@@ -222,6 +241,14 @@ export default function InspectionsListPage() {
     event.preventDefault()
     setSuccessMessage('')
     setFormError(null)
+    if (form.mode === 'ad_hoc' && !canCreateAdHocInspection) {
+      setFormError('Ad hoc inspection creation is not enabled for your account.')
+      return
+    }
+    if (form.mode === 'scheduled' && !canCreateScheduledInspection) {
+      setFormError('Scheduled inspection creation is not enabled for your account.')
+      return
+    }
     if (!form.area || !form.assignedPersonName) {
       setFormError('Area and assigned person are required.')
       return
@@ -346,12 +373,21 @@ export default function InspectionsListPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <button
           type="button"
+          disabled={!canCreateAnyInspection}
           onClick={() => {
             setShowCreate((prev) => !prev)
             setFormError(null)
             setSuccessMessage('')
           }}
-          style={{ padding: '0.75rem 1.1rem', backgroundColor: '#0f766e', color: '#fff', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}
+          style={{
+            padding: '0.75rem 1.1rem',
+            backgroundColor: canCreateAnyInspection ? '#0f766e' : '#9ca3af',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '0.5rem',
+            fontWeight: 600,
+            cursor: canCreateAnyInspection ? 'pointer' : 'not-allowed',
+          }}
         >
           {showCreate ? 'Close Create Inspection' : 'Create Inspection'}
         </button>
@@ -363,6 +399,12 @@ export default function InspectionsListPage() {
           {filtersOpen ? 'Hide Filters' : 'Show Filters'}
         </button>
       </div>
+      {!canCreateAdHocInspection && (
+        <div style={{ marginBottom: '1rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
+          Ad hoc inspection creation is currently disabled for your account. A manager can enable it in
+          Airtable Users via <strong>Can Create Ad Hoc Inspection</strong>.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setActiveTab(TAB_SUMMARY)} style={{ padding: '0.65rem 0.95rem', borderRadius: '0.4rem', border: activeTab === TAB_SUMMARY ? '1px solid #111827' : '1px solid #e5e7eb', backgroundColor: activeTab === TAB_SUMMARY ? '#f3f4f6' : '#fff', cursor: 'pointer' }}>Summary</button>
@@ -373,10 +415,45 @@ export default function InspectionsListPage() {
       {showCreate && (
         <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.25rem', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => setField('mode', 'ad_hoc')} style={{ padding: '0.6rem 1rem', borderRadius: '0.4rem', border: form.mode === 'ad_hoc' ? '1px solid #0f766e' : '1px solid #d1d5db', backgroundColor: form.mode === 'ad_hoc' ? '#ecfdf5' : '#fff', color: '#065f46', fontWeight: 600, cursor: 'pointer' }}>Ad hoc inspection</button>
-            <button type="button" onClick={() => setField('mode', 'scheduled')} style={{ padding: '0.6rem 1rem', borderRadius: '0.4rem', border: form.mode === 'scheduled' ? '1px solid #1d4ed8' : '1px solid #d1d5db', backgroundColor: form.mode === 'scheduled' ? '#eff6ff' : '#fff', color: '#1d4ed8', fontWeight: 600, cursor: 'pointer' }}>Scheduled inspection</button>
-            <Link href="/inspections/new" style={{ marginLeft: 'auto', padding: '0.6rem 1rem', borderRadius: '0.4rem', border: '1px solid #0f766e', color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}>Complete Template Inspection</Link>
+            <button
+              type="button"
+              disabled={!canCreateAdHocInspection}
+              onClick={() => setField('mode', 'ad_hoc')}
+              style={{
+                padding: '0.6rem 1rem',
+                borderRadius: '0.4rem',
+                border: form.mode === 'ad_hoc' ? '1px solid #0f766e' : '1px solid #d1d5db',
+                backgroundColor: form.mode === 'ad_hoc' ? '#ecfdf5' : '#fff',
+                color: canCreateAdHocInspection ? '#065f46' : '#9ca3af',
+                fontWeight: 600,
+                cursor: canCreateAdHocInspection ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Ad hoc inspection
+            </button>
+            <button
+              type="button"
+              disabled={!canCreateScheduledInspection}
+              onClick={() => setField('mode', 'scheduled')}
+              style={{
+                padding: '0.6rem 1rem',
+                borderRadius: '0.4rem',
+                border: form.mode === 'scheduled' ? '1px solid #1d4ed8' : '1px solid #d1d5db',
+                backgroundColor: form.mode === 'scheduled' ? '#eff6ff' : '#fff',
+                color: canCreateScheduledInspection ? '#1d4ed8' : '#9ca3af',
+                fontWeight: 600,
+                cursor: canCreateScheduledInspection ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Scheduled inspection
+            </button>
+            <Link href="/inspections/new/template" style={{ marginLeft: 'auto', padding: '0.6rem 1rem', borderRadius: '0.4rem', border: '1px solid #0f766e', color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}>Complete Template Inspection</Link>
           </div>
+          {!canCreateAdHocInspection && (
+            <div style={{ marginBottom: '0.75rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
+              Ad hoc creation is disabled for your user. Scheduled inspection creation remains available.
+            </div>
+          )}
 
           {options.templateWarning && form.mode === 'scheduled' && <div style={{ marginBottom: '0.75rem', color: '#92400e' }}>{options.templateWarning}</div>}
           {formError && <div style={{ marginBottom: '0.75rem', color: '#991b1b' }}>{formError}</div>}

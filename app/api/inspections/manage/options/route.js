@@ -24,7 +24,7 @@ function resolveTemplateName(template) {
 }
 
 export async function GET() {
-  const { denialResponse } = await getRouteAccess({ requireDashboard: true })
+  const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
   if (denialResponse) return denialResponse
 
   try {
@@ -93,7 +93,17 @@ export async function GET() {
       console.warn('[Manage inspection options] templates unavailable:', error?.message || String(error))
     }
 
-    return NextResponse.json({ estates, blocks, people, templates, templateWarning })
+    return NextResponse.json({
+      estates,
+      blocks,
+      people,
+      templates,
+      templateWarning,
+      permissions: {
+        canCreateAdHocInspection: Boolean(access?.permissions?.canCreateAdHocInspection),
+        canCreateScheduledInspection: Boolean(access?.permissions?.canCreateScheduledInspection),
+      },
+    })
   } catch (error) {
     console.error('[Manage inspection options] failed:', error)
     return NextResponse.json(
