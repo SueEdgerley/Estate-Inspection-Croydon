@@ -324,41 +324,12 @@ export default function DashboardHome() {
         alignItems: 'center',
         marginBottom: '1.5rem'
       }}>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <Link
-            href="/inspections?create=ad_hoc"
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#0f766e',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              fontSize: '0.9375rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              textDecoration: 'none',
-              display: 'inline-block'
-            }}
-          >
-            New Ad Hoc Inspection
+        <div style={{ color: '#4b5563', fontSize: '0.9375rem' }}>
+          Create inspections from{' '}
+          <Link href="/inspections" style={{ color: '#0f766e', fontWeight: 600, textDecoration: 'none' }}>
+            Manage Inspections
           </Link>
-          <Link
-            href="/inspections/new/template"
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: 'white',
-              color: '#0f766e',
-              border: '1px solid #0f766e',
-              borderRadius: '0.5rem',
-              fontSize: '0.9375rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              textDecoration: 'none',
-              display: 'inline-block'
-            }}
-          >
-            Complete Template Inspection
-          </Link>
+          .
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button
