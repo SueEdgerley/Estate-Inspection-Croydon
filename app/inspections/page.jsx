@@ -383,7 +383,11 @@ export default function InspectionsListPage() {
           type="button"
           disabled={!canCreateAnyInspection}
           onClick={() => {
-            setShowCreate((prev) => !prev)
+            setShowCreate((prev) => {
+              const next = !prev
+              if (next) resetForm() // Always start from ad hoc mode when opening Create.
+              return next
+            })
             setFormError(null)
             setSuccessMessage('')
           }}
@@ -415,6 +419,10 @@ export default function InspectionsListPage() {
 
       {showCreate && (
         <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.25rem', marginBottom: '1rem' }}>
+          <div style={{ marginBottom: '0.75rem', fontSize: '0.9rem', color: '#4b5563' }}>
+            Choose inspection type first: <strong>Ad hoc</strong> for manual one-off records, or
+            <strong> Scheduled</strong> for recurring/template-driven plans.
+          </div>
           <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             <button
               type="button"
@@ -447,7 +455,6 @@ export default function InspectionsListPage() {
             >
               Scheduled inspection
             </button>
-            <Link href="/inspections/new/template" style={{ marginLeft: 'auto', padding: '0.6rem 1rem', borderRadius: '0.4rem', border: '1px solid #0f766e', color: '#0f766e', textDecoration: 'none', fontWeight: 600 }}>Complete Template Inspection</Link>
           </div>
           {form.mode === 'ad_hoc' && !canCreateAdHocInspection && (
             <div style={{ marginBottom: '0.75rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
