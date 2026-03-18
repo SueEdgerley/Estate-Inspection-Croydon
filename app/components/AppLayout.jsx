@@ -3,16 +3,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  SignInButton,
-  SignUpButton,
   SignedIn,
-  SignedOut,
   UserButton,
+  useAuth,
+  useClerk,
 } from '@clerk/nextjs'
 import { colours } from '@/lib/nv-theme'
 
 export default function AppLayout({ children }) {
   const pathname = usePathname()
+  const { isLoaded, isSignedIn } = useAuth()
+  const { signOut } = useClerk()
 
   const navItems = [
     { href: '/', label: 'Home' },
@@ -93,15 +94,38 @@ export default function AppLayout({ children }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <span style={{ fontSize: '0.875rem', color: colours.neutral.muted }}>Croydon Council</span>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button type="button" style={{ padding: '0.5rem 1rem', marginRight: '0.5rem', cursor: 'pointer', fontWeight: 500 }}>Sign in</button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button type="button" style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 500 }}>Sign up</button>
-              </SignUpButton>
-            </SignedOut>
+            {!isLoaded || !isSignedIn ? (
+              <Link
+                href="/login"
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.45rem',
+                  border: '1px solid #d1d5db',
+                  color: '#111827',
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                  backgroundColor: '#fff',
+                }}
+              >
+                Sign in
+              </Link>
+            ) : null}
             <SignedIn>
+              <button
+                type="button"
+                onClick={() => signOut({ redirectUrl: '/login' })}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.45rem',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#fff',
+                  color: '#111827',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Sign out
+              </button>
               <UserButton afterSignOutUrl="/login" />
             </SignedIn>
           </div>
