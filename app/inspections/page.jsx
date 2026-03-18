@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 const TAB_SUMMARY = 'summary'
 const TAB_SCHEDULES = 'schedules'
@@ -52,6 +53,7 @@ function statusBadge(status) {
 }
 
 export default function InspectionsListPage() {
+  const searchParams = useSearchParams()
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -202,12 +204,39 @@ export default function InspectionsListPage() {
   const canCreateAdHocInspection = Boolean(options.permissions?.canCreateAdHocInspection)
   const canCreateScheduledInspection = Boolean(options.permissions?.canCreateScheduledInspection)
   const canCreateAnyInspection = canCreateAdHocInspection || canCreateScheduledInspection
+  const createParam = (searchParams?.get('create') || '').toLowerCase()
 
   useEffect(() => {
     if (form.mode === 'ad_hoc' && !canCreateAdHocInspection && canCreateScheduledInspection) {
       setForm((prev) => ({ ...prev, mode: 'scheduled' }))
     }
   }, [form.mode, canCreateAdHocInspection, canCreateScheduledInspection])
+
+  useEffect(() => {
+    if (!createParam) return
+    if (createParam !== 'ad_hoc' && createParam !== 'scheduled') return
+
+    setShowCreate(true)
+    setSuccessMessage('')
+    setFormError(null)
+
+    if (createParam === 'ad_hoc') {
+      if (canCreateAdHocInspection) {
+        setForm((prev) => ({ ...prev, mode: 'ad_hoc' }))
+      } else if (canCreateScheduledInspection) {
+        setForm((prev) => ({ ...prev, mode: 'scheduled' }))
+      }
+      return
+    }
+
+    if (createParam === 'scheduled' && canCreateScheduledInspection) {
+      setForm((prev) => ({ ...prev, mode: 'scheduled' }))
+    }
+  }, [
+    createParam,
+    canCreateAdHocInspection,
+    canCreateScheduledInspection,
+  ])
 
   function setField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }))

@@ -326,7 +326,7 @@ export default function DashboardHome() {
       }}>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <Link
-            href="/inspections/ad-hoc/new"
+            href="/inspections?create=ad_hoc"
             style={{
               padding: '0.75rem 1.5rem',
               backgroundColor: '#0f766e',

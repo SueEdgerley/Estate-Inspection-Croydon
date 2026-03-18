@@ -278,7 +278,7 @@ export default function TemplatesPage() {
           </Link>
           {' '}for formal scored inspections.
           {' '}
-          <Link href="/inspections/ad-hoc/new" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+          <Link href="/inspections?create=ad_hoc" style={{ color: '#3b82f6', textDecoration: 'none' }}>
             New ad hoc inspection
           </Link>
           {' '}for quick manual records.
