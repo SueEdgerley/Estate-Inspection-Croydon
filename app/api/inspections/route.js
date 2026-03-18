@@ -28,7 +28,7 @@ export async function GET() {
     let result
     if (admin) {
       result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name, i.template_version,
                i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
@@ -40,7 +40,7 @@ export async function GET() {
       `
     } else if (userEmail) {
       result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name, i.template_version,
                i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
