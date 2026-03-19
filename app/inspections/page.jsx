@@ -8,8 +8,6 @@ const TAB_SUMMARY = 'summary'
 const TAB_SCHEDULES = 'schedules'
 const TAB_INSPECTIONS = 'inspections'
 
-const FREQUENCIES = ['Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Biannual', 'Annual']
-
 function formatDate(value) {
   if (!value) return 'N/A'
   const d = new Date(value)
@@ -71,9 +69,7 @@ export default function InspectionsListPage() {
     status: 'all',
   })
   const [form, setForm] = useState({
-    mode: 'ad_hoc',
     inspectionDate: '',
-    dueDate: '',
     estateId: '',
     area: '',
     blockId: '',
@@ -83,11 +79,6 @@ export default function InspectionsListPage() {
     reason: '',
     notes: '',
     status: 'draft',
-    templateId: '',
-    templateName: '',
-    frequency: FREQUENCIES[0],
-    startDate: '',
-    endDate: '',
   })
 
   const load = useCallback(async () => {
@@ -192,30 +183,18 @@ export default function InspectionsListPage() {
   }, [options.blocks, form.estateId])
 
   const canCreateAdHocInspection = Boolean(options.permissions?.canCreateAdHocInspection)
-  const canCreateScheduledInspection = Boolean(options.permissions?.canCreateScheduledInspection)
-  const canCreateAnyInspection = canCreateAdHocInspection || canCreateScheduledInspection
   const createParam = (searchParams?.get('create') || '').toLowerCase()
 
   useEffect(() => {
     if (!createParam) return
-    if (createParam !== 'ad_hoc' && createParam !== 'scheduled') return
+    if (createParam !== 'ad_hoc') return
 
     setShowCreate(true)
     setSuccessMessage('')
     setFormError(null)
-
-    if (createParam === 'ad_hoc') {
-      setForm((prev) => ({ ...prev, mode: 'ad_hoc' }))
-      return
-    }
-
-    if (createParam === 'scheduled' && canCreateScheduledInspection) {
-      setForm((prev) => ({ ...prev, mode: 'scheduled' }))
-    }
+    setActiveTab(TAB_INSPECTIONS)
   }, [
     createParam,
-    canCreateAdHocInspection,
-    canCreateScheduledInspection,
   ])
 
   function setField(name, value) {
@@ -224,9 +203,7 @@ export default function InspectionsListPage() {
 
   function resetForm() {
     setForm({
-      mode: 'ad_hoc',
       inspectionDate: '',
-      dueDate: '',
       estateId: '',
       area: '',
       blockId: '',
@@ -236,11 +213,6 @@ export default function InspectionsListPage() {
       reason: '',
       notes: '',
       status: 'draft',
-      templateId: '',
-      templateName: '',
-      frequency: FREQUENCIES[0],
-      startDate: '',
-      endDate: '',
     })
     setFormError(null)
   }
@@ -249,12 +221,8 @@ export default function InspectionsListPage() {
     event.preventDefault()
     setSuccessMessage('')
     setFormError(null)
-    if (form.mode === 'ad_hoc' && !canCreateAdHocInspection) {
+    if (!canCreateAdHocInspection) {
       setFormError('Ad hoc inspection creation is not enabled for your account.')
-      return
-    }
-    if (form.mode === 'scheduled' && !canCreateScheduledInspection) {
-      setFormError('Scheduled inspection creation is not enabled for your account.')
       return
     }
     if (!form.area || !form.assignedPersonName) {
@@ -263,7 +231,7 @@ export default function InspectionsListPage() {
     }
 
     const payload = {
-      mode: form.mode,
+      mode: 'ad_hoc',
       area: form.area,
       estate_id: form.estateId || null,
       block_id: form.blockId || null,
@@ -273,26 +241,13 @@ export default function InspectionsListPage() {
       reason: form.reason,
       notes: form.notes,
       status: form.status,
+      inspection_date: form.inspectionDate,
+      inspection_type: 'ad_hoc_inspection',
     }
 
-    if (form.mode === 'ad_hoc') {
-      if (!form.inspectionDate || !form.reason) {
-        setFormError('Date, reason, location, assigned person, and status are required for ad hoc inspections.')
-        return
-      }
-      payload.inspection_date = form.inspectionDate
-      payload.inspection_type = 'ad_hoc_inspection'
-    } else {
-      if (!form.templateId || !form.templateName || !form.frequency || !form.startDate || !form.dueDate) {
-        setFormError('Template, frequency, start, and due date are required for scheduled inspections.')
-        return
-      }
-      payload.template_id = form.templateId
-      payload.template_name = form.templateName
-      payload.frequency = form.frequency
-      payload.start_date = form.startDate
-      payload.end_date = form.endDate || null
-      payload.due_date = form.dueDate
+    if (!form.inspectionDate || !form.reason) {
+      setFormError('Date, reason, location, assigned person, and status are required.')
+      return
     }
 
     setSubmitting(true)
@@ -381,24 +336,25 @@ export default function InspectionsListPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <button
           type="button"
-          disabled={!canCreateAnyInspection}
+          disabled={!canCreateAdHocInspection}
           onClick={() => {
             setShowCreate((prev) => {
               const next = !prev
-              if (next) resetForm() // Always start from ad hoc mode when opening Create.
+              if (next) resetForm()
               return next
             })
+            setActiveTab(TAB_INSPECTIONS)
             setFormError(null)
             setSuccessMessage('')
           }}
           style={{
             padding: '0.75rem 1.1rem',
-            backgroundColor: canCreateAnyInspection ? '#0f766e' : '#9ca3af',
+            backgroundColor: canCreateAdHocInspection ? '#0f766e' : '#9ca3af',
             color: '#fff',
             border: 'none',
             borderRadius: '0.5rem',
             fontWeight: 600,
-            cursor: canCreateAnyInspection ? 'pointer' : 'not-allowed',
+            cursor: canCreateAdHocInspection ? 'pointer' : 'not-allowed',
           }}
         >
           {showCreate ? 'Close Create Inspection' : 'Create Inspection'}
@@ -420,95 +376,23 @@ export default function InspectionsListPage() {
       {showCreate && (
         <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.25rem', marginBottom: '1rem' }}>
           <div style={{ marginBottom: '0.75rem', fontSize: '0.9rem', color: '#4b5563' }}>
-            Choose inspection type first: <strong>Ad hoc</strong> for manual one-off records, or
-            <strong> Scheduled</strong> for recurring/template-driven plans.
+            Add an extra/ad hoc inspection using this quick form. No template or frequency is required.
           </div>
-          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setField('mode', 'ad_hoc')}
-              style={{
-                padding: '0.6rem 1rem',
-                borderRadius: '0.4rem',
-                border: form.mode === 'ad_hoc' ? '1px solid #0f766e' : '1px solid #d1d5db',
-                backgroundColor: form.mode === 'ad_hoc' ? '#ecfdf5' : '#fff',
-                color: '#065f46',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Ad hoc inspection
-            </button>
-            <button
-              type="button"
-              disabled={!canCreateScheduledInspection}
-              onClick={() => setField('mode', 'scheduled')}
-              style={{
-                padding: '0.6rem 1rem',
-                borderRadius: '0.4rem',
-                border: form.mode === 'scheduled' ? '1px solid #1d4ed8' : '1px solid #d1d5db',
-                backgroundColor: form.mode === 'scheduled' ? '#eff6ff' : '#fff',
-                color: canCreateScheduledInspection ? '#1d4ed8' : '#9ca3af',
-                fontWeight: 600,
-                cursor: canCreateScheduledInspection ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Scheduled inspection
-            </button>
-          </div>
-          {form.mode === 'ad_hoc' && !canCreateAdHocInspection && (
+          {!canCreateAdHocInspection && (
             <div style={{ marginBottom: '0.75rem', color: '#7f1d1d', fontSize: '0.9rem' }}>
               Ad hoc creation is restricted for your account. A manager can enable
               <strong> Can Create Ad Hoc Inspection</strong> in Airtable Users.
             </div>
           )}
-
-          {options.templateWarning && form.mode === 'scheduled' && <div style={{ marginBottom: '0.75rem', color: '#92400e' }}>{options.templateWarning}</div>}
           {formError && <div style={{ marginBottom: '0.75rem', color: '#991b1b' }}>{formError}</div>}
           {successMessage && <div style={{ marginBottom: '0.75rem', color: '#065f46' }}>{successMessage}</div>}
 
           <form onSubmit={submitCreateInspection}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.9rem' }}>
-              {form.mode === 'ad_hoc' ? (
-                <>
-                  <div>
-                    <label htmlFor="inspection_date" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Date *</label>
-                    <input id="inspection_date" type="date" value={form.inspectionDate} onChange={(e) => setField('inspectionDate', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label htmlFor="template_id" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Template *</label>
-                    <select id="template_id" value={form.templateId} onChange={(e) => { const nextId = e.target.value; const selected = options.templates.find((t) => t.id === nextId); setField('templateId', nextId); setField('templateName', selected?.name || '') }} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }}>
-                      <option value="">Select template</option>
-                      {options.templates.map((template) => (
-                        <option key={template.id} value={template.id}>{template.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="frequency" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Frequency *</label>
-                    <select id="frequency" value={form.frequency} onChange={(e) => setField('frequency', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }}>
-                      {FREQUENCIES.map((frequency) => (
-                        <option key={frequency} value={frequency}>{frequency}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="start_date" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Start *</label>
-                    <input id="start_date" type="date" value={form.startDate} onChange={(e) => setField('startDate', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
-                  </div>
-                  <div>
-                    <label htmlFor="end_date" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>End</label>
-                    <input id="end_date" type="date" value={form.endDate} onChange={(e) => setField('endDate', e.target.value)} style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
-                  </div>
-                  <div>
-                    <label htmlFor="due_date" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Due *</label>
-                    <input id="due_date" type="date" value={form.dueDate} onChange={(e) => setField('dueDate', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
-                  </div>
-                </>
-              )}
+              <div>
+                <label htmlFor="inspection_date" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Inspection date *</label>
+                <input id="inspection_date" type="date" value={form.inspectionDate} onChange={(e) => setField('inspectionDate', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
+              </div>
 
               <div>
                 <label htmlFor="estate_id" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Estate</label>
@@ -548,7 +432,7 @@ export default function InspectionsListPage() {
               <div>
                 <label htmlFor="status" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Status *</label>
                 <select id="status" value={form.status} onChange={(e) => setField('status', e.target.value)} required style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }}>
-                  {(form.mode === 'scheduled' ? ['scheduled', 'draft', 'submitted'] : ['draft', 'submitted']).map((status) => (
+                  {['draft', 'submitted'].map((status) => (
                     <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
                   ))}
                 </select>
@@ -560,8 +444,8 @@ export default function InspectionsListPage() {
               <input id="area" value={form.area} onChange={(e) => setField('area', e.target.value)} required placeholder="e.g. Bernay Road - Entrance and stairwell" style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
             </div>
             <div style={{ marginTop: '0.9rem' }}>
-              <label htmlFor="reason" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Reason {form.mode === 'ad_hoc' ? '*' : '(optional)'}</label>
-              <input id="reason" value={form.reason} onChange={(e) => setField('reason', e.target.value)} required={form.mode === 'ad_hoc'} placeholder={form.mode === 'ad_hoc' ? 'Why this ad hoc inspection is being created' : 'Optional schedule reason'} style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
+              <label htmlFor="reason" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Reason *</label>
+              <input id="reason" value={form.reason} onChange={(e) => setField('reason', e.target.value)} required placeholder="Why this extra/ad hoc inspection is being created" style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.4rem' }} />
             </div>
             <div style={{ marginTop: '0.9rem' }}>
               <label htmlFor="notes" style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Notes</label>
