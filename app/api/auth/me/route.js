@@ -11,6 +11,7 @@ export async function GET() {
       admin: false,
       editor: false,
       dashboard: false,
+      inspections: false,
       templates: false,
       canCreateAdHocInspection: false,
       canCreateScheduledInspection: false,

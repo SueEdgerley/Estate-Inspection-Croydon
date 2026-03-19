@@ -12,7 +12,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
+  const { access, denialResponse } = await getRouteAccess({ requireInspections: true })
   if (denialResponse) return denialResponse
   try {
     await ensureDatabase()
@@ -65,7 +65,7 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
+  const { access, denialResponse } = await getRouteAccess({ requireInspections: true })
   if (denialResponse) return denialResponse
 
   const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN

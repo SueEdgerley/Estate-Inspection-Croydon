@@ -24,7 +24,7 @@ function resolveTemplateName(template) {
 }
 
 export async function GET() {
-  const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
+  const { access, denialResponse } = await getRouteAccess({ requireInspections: true })
   if (denialResponse) return denialResponse
 
   try {

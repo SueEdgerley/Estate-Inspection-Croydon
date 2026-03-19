@@ -32,6 +32,11 @@ export default function AppLayout({ children }) {
     { href: '/', label: 'Home' },
     { href: '/templates', label: 'Templates' },
   ]
+  const templatesPlusInspectionsNavItems = [
+    { href: '/', label: 'Home' },
+    { href: '/inspections', label: 'Manage Inspections' },
+    { href: '/templates', label: 'Templates' },
+  ]
 
   useEffect(() => {
     let cancelled = false
@@ -57,7 +62,12 @@ export default function AppLayout({ children }) {
     return access?.permissions?.dashboard === true || access?.permissions?.editor === true
   }, [isSignedIn, access])
 
-  const navItems = canUseFullApp ? fullNavItems : templatesOnlyNavItems
+  const canAccessInspections = Boolean(access?.permissions?.inspections)
+  const navItems = canUseFullApp
+    ? fullNavItems
+    : canAccessInspections
+      ? templatesPlusInspectionsNavItems
+      : templatesOnlyNavItems
 
   const isActive = (href) => {
     if (href === '/') return pathname === '/' || pathname === '/dashboard'

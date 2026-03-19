@@ -37,7 +37,7 @@ function buildDescription({ mode, reason, notes, frequency, startDate, endDate }
 }
 
 export async function POST(request) {
-  const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
+  const { access, denialResponse } = await getRouteAccess({ requireInspections: true })
   if (denialResponse) return denialResponse
 
   try {

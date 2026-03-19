@@ -27,7 +27,7 @@ function parseDateOnly(dateStr) {
 
 export async function POST(request) {
   const { access, denialResponse } = await getRouteAccess({
-    requireDashboard: true,
+    requireInspections: true,
     requireAdHocCreate: true,
   })
   if (denialResponse) return denialResponse

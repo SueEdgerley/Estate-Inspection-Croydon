@@ -278,11 +278,6 @@ export default function TemplatesPage() {
           </Link>
           {' '}for formal scored inspections.
           {' '}
-          <Link href="/inspections?create=ad_hoc" style={{ color: '#3b82f6', textDecoration: 'none' }}>
-            New ad hoc inspection
-          </Link>
-          {' '}for quick manual records.
-          {' '}
           <Link href="/templates/preview" style={{ color: '#3b82f6', textDecoration: 'none' }}>
             Preview QuestionCard (caretaker / NV)
           </Link>
