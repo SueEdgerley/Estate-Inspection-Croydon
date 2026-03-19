@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getTemplatesNested } from '@/lib/airtable-client'
+import { getRouteAccess } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const { denialResponse } = await getRouteAccess({ requireTemplates: true })
+  if (denialResponse) return denialResponse
+
   const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
   if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
     return NextResponse.json(

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -14,8 +15,9 @@ export default function AppLayout({ children }) {
   const pathname = usePathname()
   const { isLoaded, isSignedIn } = useAuth()
   const { signOut } = useClerk()
+  const [access, setAccess] = useState(null)
 
-  const navItems = [
+  const fullNavItems = [
     { href: '/', label: 'Home' },
     { href: '/inspections', label: 'Manage Inspections' },
     { href: '/actions', label: 'Manage Tasks' },
@@ -26,6 +28,36 @@ export default function AppLayout({ children }) {
     { href: '/downloads', label: 'Data Download' },
     { href: '/analytics', label: 'Analytics' },
   ]
+  const templatesOnlyNavItems = [
+    { href: '/', label: 'Home' },
+    { href: '/templates', label: 'Templates' },
+  ]
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isLoaded || !isSignedIn) {
+      setAccess(null)
+      return undefined
+    }
+    fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => {
+        if (!cancelled) setAccess(data)
+      })
+      .catch(() => {
+        if (!cancelled) setAccess(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isLoaded, isSignedIn])
+
+  const canUseFullApp = useMemo(() => {
+    if (!isSignedIn) return true
+    return access?.permissions?.dashboard === true || access?.permissions?.editor === true
+  }, [isSignedIn, access])
+
+  const navItems = canUseFullApp ? fullNavItems : templatesOnlyNavItems
 
   const isActive = (href) => {
     if (href === '/') return pathname === '/' || pathname === '/dashboard'

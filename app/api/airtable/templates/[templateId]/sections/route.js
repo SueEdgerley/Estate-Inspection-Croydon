@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getTemplateSections, normalizeSection } from '@/lib/airtable-client'
+import { getRouteAccess } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // GET - Fetch sections for a template
 export async function GET(request, { params }) {
+  const { denialResponse } = await getRouteAccess({ requireTemplates: true })
+  if (denialResponse) return denialResponse
+
   try {
     const { templateId } = await params
     

@@ -15,6 +15,13 @@ export default async function Home() {
       })
       redirect('/dashboard')
     }
+    if (access?.permissions?.templates && !access?.denialCode) {
+      console.log('[Home] redirecting signed-in templates user to /templates', {
+        clerkUserId: access.clerkUserId ?? null,
+        appRole: access.appRole ?? null,
+      })
+      redirect('/templates')
+    }
 
     console.log('[Home] no redirect for signed-in user', {
       clerkUserId: access?.clerkUserId ?? null,
