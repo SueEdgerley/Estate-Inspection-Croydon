@@ -1,6 +1,20 @@
-import { auth } from '@clerk/nextjs/server'
+import { resolveCurrentUserAccess } from '@/lib/permissions'
 
 export async function GET() {
-  const { userId } = await auth()
-  return Response.json({ userId: userId ?? null })
+  const access = await resolveCurrentUserAccess()
+  return Response.json({
+    userId: access?.clerkUserId ?? null,
+    isAuthenticated: Boolean(access?.isAuthenticated),
+    appRole: access?.appRole ?? null,
+    denialCode: access?.denialCode ?? null,
+    permissions: access?.permissions ?? {
+      admin: false,
+      editor: false,
+      dashboard: false,
+      inspections: false,
+      templates: false,
+      canCreateAdHocInspection: false,
+      canCreateScheduledInspection: false,
+    },
+  })
 }

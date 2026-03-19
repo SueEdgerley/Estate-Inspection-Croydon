@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
-import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
+import { getCurrentUserName } from '@/lib/auth'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
+import { getRouteAccess } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const { userId } = await auth()
-  console.log('auth userId', userId)
-  if (!userId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { access, denialResponse } = await getRouteAccess({ requireInspections: true })
+  if (denialResponse) return denialResponse
   try {
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -26,12 +23,12 @@ export async function GET() {
         { status: 503 }
       )
     }
-    const userEmail = await getCurrentUserEmail()
-    const admin = await isAdmin()
+    const userEmail = access.email
+    const admin = access.permissions.admin
     let result
     if (admin) {
       result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name, i.template_version,
                i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
@@ -43,7 +40,7 @@ export async function GET() {
       `
     } else if (userEmail) {
       result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name, i.template_version,
                i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
@@ -55,17 +52,7 @@ export async function GET() {
         LIMIT 200
       `
     } else {
-      result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
-               e.name AS estate_name, b.name AS block_name,
-               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
-        FROM inspections i
-        LEFT JOIN estates e ON e.id = i.estate_id
-        LEFT JOIN blocks b ON b.id = i.block_id
-        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
-        LIMIT 50
-      `
+      return NextResponse.json([])
     }
     return NextResponse.json(result.rows)
   } catch (error) {
@@ -78,11 +65,8 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  const { userId } = await auth()
-  console.log('auth userId', userId)
-  if (!userId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { access, denialResponse } = await getRouteAccess({ requireInspections: true })
+  if (denialResponse) return denialResponse
 
   const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
   if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
@@ -103,7 +87,7 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       message: 'POST /api/inspections reachable',
-      userId,
+      userId: access.clerkUserId ?? null,
     })
   }
 
@@ -123,7 +107,7 @@ export async function POST(request) {
     )
   }
 
-  const inspectorEmail = await getCurrentUserEmail()
+  const inspectorEmail = access.email
   const inspectorName = await getCurrentUserName()
 
   try {

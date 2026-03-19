@@ -38,6 +38,7 @@ export default function DashboardHome() {
     setEmptyStateMessage(null)
 
     try {
+      console.log('[DashboardPage] loadDashboardData start')
       const params = new URLSearchParams()
 
       if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
@@ -54,6 +55,11 @@ export default function DashboardHome() {
       })
 
       const data = await res.json()
+      console.log('[DashboardPage] loadDashboardData response', {
+        status: res.status,
+        code: data?.code || null,
+        errorCode: data?.errorCode || null,
+      })
 
       if (res.status === 401) {
         setAuthCode('UNAUTHORIZED')
@@ -70,6 +76,16 @@ export default function DashboardHome() {
       }
 
       if (!res.ok) {
+        if (res.status === 503 && data?.errorCode === 'DB_AUTH_FAILED') {
+          const source = data?.source ? ` (source: ${data.source})` : ''
+          setError(
+            `Database connection is currently unavailable. Please ask an administrator to check the Neon/Postgres credentials${source}.`
+          )
+          setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+          setInspections([])
+          setLoading(false)
+          return
+        }
         if (res.status === 500 && data?.code === 'DB_NOT_MIGRATED') {
           setError(data?.message || data?.error || 'DB not migrated. Run: prisma migrate deploy')
           setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
@@ -77,11 +93,15 @@ export default function DashboardHome() {
           setLoading(false)
           return
         }
-        throw new Error(data?.details || data?.error || `Request failed: ${res.status}`)
+        throw new Error(data?.message || data?.error || `Request failed: ${res.status}`)
       }
 
       if (data?.message) {
         setEmptyStateMessage(data.message)
+      }
+
+      if (data?.errorCode === 'NEON_QUERY_FAILED' || data?.errorCode === 'DASHBOARD_UNEXPECTED_ERROR') {
+        setError(data?.message || 'Dashboard data is temporarily unavailable.')
       }
 
       setStats({
@@ -92,7 +112,14 @@ export default function DashboardHome() {
 
       setInspections(Array.isArray(data?.inspections) ? data.inspections : [])
     } catch (e) {
-      setError(e?.message || 'Failed to load dashboard data')
+      const message = String(e?.message || '')
+      if (message.toLowerCase().includes('password authentication failed')) {
+        setError(
+          'Database connection is currently unavailable. Please ask an administrator to check the Neon/Postgres credentials.'
+        )
+      } else {
+        setError(message || 'Failed to load dashboard data')
+      }
       setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
       setInspections([])
     } finally {
@@ -209,11 +236,13 @@ export default function DashboardHome() {
         }}>
           <p style={{ margin: 0, fontSize: '1.0625rem', color: '#374151', lineHeight: 1.6 }}>
             {authCode === 'UNAUTHORIZED' && 'Please sign in again to view the dashboard.'}
-            {authCode === 'USER_NOT_PROVISIONED' && 'Your account isn\'t set up yet. Ask an admin to assign your role/estates.'}
+            {authCode === 'NO_AIRTABLE_USER' && 'Your account is signed in but has no matching Airtable user record. Contact an admin.'}
+            {authCode === 'USER_NOT_PROVISIONED' && 'Your account is not set up yet. Ask an admin to assign access.'}
             {authCode === 'USER_INACTIVE' && 'Your account is inactive. Contact an admin if you need access.'}
-            {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard. You can still use templates.'}
+            {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard.'}
+            {authCode === 'ADMIN_REQUIRED' && 'Admin access is required for this area.'}
           </p>
-          {(authCode === 'ROLE_NOT_PERMITTED' || authCode === 'USER_NOT_PROVISIONED') && (
+          {(authCode === 'ROLE_NOT_PERMITTED' || authCode === 'USER_NOT_PROVISIONED' || authCode === 'NO_AIRTABLE_USER') && (
             <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem' }}>
               <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
             </p>
@@ -312,23 +341,13 @@ export default function DashboardHome() {
         alignItems: 'center',
         marginBottom: '1.5rem'
       }}>
-        <Link
-          href="/inspections/new"
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '0.5rem',
-            fontSize: '0.9375rem',
-            fontWeight: '500',
-            cursor: 'pointer',
-            textDecoration: 'none',
-            display: 'inline-block'
-          }}
-        >
-          Start New Inspection
-        </Link>
+        <div style={{ color: '#4b5563', fontSize: '0.9375rem' }}>
+          Create inspections from{' '}
+          <Link href="/inspections" style={{ color: '#0f766e', fontWeight: 600, textDecoration: 'none' }}>
+            Manage Inspections
+          </Link>
+          .
+        </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}

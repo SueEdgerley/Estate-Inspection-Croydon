@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
-import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
+import { getRouteAccess } from '@/lib/permissions'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -12,10 +11,8 @@ const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 
 export async function GET(request) {
   try {
-    const { userId } = auth()
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { access, denialResponse } = await getRouteAccess({ requireDashboard: true })
+    if (denialResponse) return denialResponse
 
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -26,8 +23,8 @@ export async function GET(request) {
       )
     }
 
-    const admin = await isAdmin()
-    const userEmail = await getCurrentUserEmail()
+    const admin = access.permissions.admin
+    const userEmail = access.email
 
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
