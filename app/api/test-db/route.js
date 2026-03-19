@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import {
+  ensureDatabase,
+  getPgUrl,
+  getActiveDatabaseSource,
+  getDatabaseEnvSummary,
+  isDatabaseCredentialError,
+} from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,10 +14,13 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const pgUrl = getPgUrl()
+    const activeSource = getActiveDatabaseSource()
     if (!pgUrl) {
       return NextResponse.json({
         error: 'Database not configured',
-        message: 'Set POSTGRES_URL, POSTGRES_PRISMA_URL, or DATABASE_URL in Vercel environment variables'
+        message: 'Set POSTGRES_URL, POSTGRES_PRISMA_URL, or DATABASE_URL in Vercel environment variables',
+        activeSource,
+        envSummary: getDatabaseEnvSummary(),
       }, { status: 503 })
     }
 
@@ -25,6 +34,8 @@ export async function GET() {
       success: true,
       message: 'Database connection successful!',
       connectionString: pgUrl ? 'Set (hidden for security)' : 'Not set',
+      activeSource,
+      envSummary: getDatabaseEnvSummary(),
       tableExists: true,
       rowCount: result.rows.length,
       sampleData: result.rows,
@@ -32,11 +43,23 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Database test error:', error)
+    if (isDatabaseCredentialError(error)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Database authentication failed',
+        message:
+          'Postgres credentials are invalid for the currently selected connection string. Ensure all DB env vars use the same valid Neon URL.',
+        activeSource: getActiveDatabaseSource(),
+        envSummary: getDatabaseEnvSummary(),
+      }, { status: 503 })
+    }
     return NextResponse.json({
       success: false,
       error: error.message,
       details: error.toString(),
       connectionString: getPgUrl() ? 'Set (hidden for security)' : 'Not set',
+      activeSource: getActiveDatabaseSource(),
+      envSummary: getDatabaseEnvSummary(),
       troubleshooting: [
         'Set POSTGRES_URL, POSTGRES_PRISMA_URL, or DATABASE_URL in Vercel environment variables',
         'Verify the connection string is correct (no extra spaces)',

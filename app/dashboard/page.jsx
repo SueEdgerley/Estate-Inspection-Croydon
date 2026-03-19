@@ -77,8 +77,9 @@ export default function DashboardHome() {
 
       if (!res.ok) {
         if (res.status === 503 && data?.errorCode === 'DB_AUTH_FAILED') {
+          const source = data?.source ? ` (source: ${data.source})` : ''
           setError(
-            'Database connection is currently unavailable. Please ask an administrator to check the Neon/Postgres credentials.'
+            `Database connection is currently unavailable. Please ask an administrator to check the Neon/Postgres credentials${source}.`
           )
           setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
           setInspections([])

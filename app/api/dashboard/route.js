@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl, isDatabaseCredentialError } from '@/lib/db'
+import {
+  ensureDatabase,
+  getPgUrl,
+  isDatabaseCredentialError,
+  getActiveDatabaseSource,
+} from '@/lib/db'
 import { getRouteAccess } from '@/lib/permissions'
 
 // Node Postgres client requires Node runtime
@@ -28,11 +33,12 @@ export async function GET(request) {
   try {
     await ensureDatabase()
     const pgUrl = getPgUrl()
+    const activeDbSource = getActiveDatabaseSource()
     const neonConnected = !!pgUrl
-    logDashboard('neon_connection_status', { connected: neonConnected })
+    logDashboard('neon_connection_status', { connected: neonConnected, source: activeDbSource })
     if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.', source: activeDbSource },
         { status: 503 }
       )
     }
@@ -159,6 +165,7 @@ export async function GET(request) {
             stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
             inspections: [],
             errorCode: 'DB_AUTH_FAILED',
+            source: activeDbSource,
             message:
               'Dashboard database connection failed. Please contact an administrator to update the Postgres credentials.',
           },
@@ -185,6 +192,7 @@ export async function GET(request) {
           stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
           inspections: [],
           errorCode: 'DB_AUTH_FAILED',
+          source: getActiveDatabaseSource(),
           message:
             'Dashboard database connection failed. Please contact an administrator to update the Postgres credentials.',
         },
