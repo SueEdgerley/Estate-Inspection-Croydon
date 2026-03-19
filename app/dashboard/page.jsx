@@ -76,6 +76,15 @@ export default function DashboardHome() {
       }
 
       if (!res.ok) {
+        if (res.status === 503 && data?.errorCode === 'DB_AUTH_FAILED') {
+          setError(
+            'Database connection is currently unavailable. Please ask an administrator to check the Neon/Postgres credentials.'
+          )
+          setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+          setInspections([])
+          setLoading(false)
+          return
+        }
         if (res.status === 500 && data?.code === 'DB_NOT_MIGRATED') {
           setError(data?.message || data?.error || 'DB not migrated. Run: prisma migrate deploy')
           setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
@@ -83,7 +92,7 @@ export default function DashboardHome() {
           setLoading(false)
           return
         }
-        throw new Error(data?.details || data?.error || `Request failed: ${res.status}`)
+        throw new Error(data?.message || data?.error || `Request failed: ${res.status}`)
       }
 
       if (data?.message) {
@@ -102,7 +111,14 @@ export default function DashboardHome() {
 
       setInspections(Array.isArray(data?.inspections) ? data.inspections : [])
     } catch (e) {
-      setError(e?.message || 'Failed to load dashboard data')
+      const message = String(e?.message || '')
+      if (message.toLowerCase().includes('password authentication failed')) {
+        setError(
+          'Database connection is currently unavailable. Please ask an administrator to check the Neon/Postgres credentials.'
+        )
+      } else {
+        setError(message || 'Failed to load dashboard data')
+      }
       setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
       setInspections([])
     } finally {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, getPgUrl, isDatabaseCredentialError } from '@/lib/db'
 import { getRouteAccess } from '@/lib/permissions'
 
 // Node Postgres client requires Node runtime
@@ -150,6 +150,21 @@ export async function GET(request) {
         inspections: inspectionsResult.rows,
       })
     } catch (queryError) {
+      if (isDatabaseCredentialError(queryError)) {
+        console.error('[Dashboard] Database credential failure', {
+          message: queryError?.message || String(queryError),
+        })
+        return NextResponse.json(
+          {
+            stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
+            inspections: [],
+            errorCode: 'DB_AUTH_FAILED',
+            message:
+              'Dashboard database connection failed. Please contact an administrator to update the Postgres credentials.',
+          },
+          { status: 503 }
+        )
+      }
       console.error('[Dashboard] Neon query failed', {
         message: queryError?.message || String(queryError),
       })
@@ -161,6 +176,21 @@ export async function GET(request) {
       })
     }
   } catch (error) {
+    if (isDatabaseCredentialError(error)) {
+      console.error('[Dashboard] Database credential failure (outer)', {
+        message: error?.message || String(error),
+      })
+      return NextResponse.json(
+        {
+          stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
+          inspections: [],
+          errorCode: 'DB_AUTH_FAILED',
+          message:
+            'Dashboard database connection failed. Please contact an administrator to update the Postgres credentials.',
+        },
+        { status: 503 }
+      )
+    }
     console.error('[Dashboard] unexpected error', error)
     return NextResponse.json({
       stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
