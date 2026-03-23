@@ -51,6 +51,16 @@ a {
   text-decoration: none;
 }
 
+/* NV inspection wizard: page padding 16px mobile, 24px desktop */
+.nv-wizard-page {
+  padding: 16px;
+}
+@media (min-width: 768px) {
+  .nv-wizard-page {
+    padding: 24px;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;

@@ -3,17 +3,21 @@ import { put } from "@vercel/blob";
 export async function uploadInspectionPdfToBlob(opts: {
   inspectionId: string;
   pdfBytes: Uint8Array;
+  /** "report" = full PDF, "poster" = issues-only poster */
+  kind?: "report" | "poster";
 }) {
-  const { inspectionId, pdfBytes } = opts;
+  const { inspectionId, pdfBytes, kind = "report" } = opts;
 
-  // Keep names stable and predictable
-  const pathname = `inspections/${inspectionId}/report.pdf`;
+  const pathname =
+    kind === "poster"
+      ? `inspections/${inspectionId}/poster.pdf`
+      : `inspections/${inspectionId}/report.pdf`;
 
   const blob = await put(pathname, pdfBytes, {
     access: "public",
     contentType: "application/pdf",
-    addRandomSuffix: false, // makes the URL stable for a given inspection
-    cacheControlMaxAge: 0,  // avoid stale PDFs while you're iterating
+    addRandomSuffix: false,
+    cacheControlMaxAge: 0,
   });
 
   return blob.url;

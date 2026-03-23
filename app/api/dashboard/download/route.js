@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
-import { getAuth, getCurrentUserEmail, isAdmin } from '@/lib/auth'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -11,16 +12,16 @@ const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
 
 export async function GET(request) {
   try {
-    const { userId } = await getAuth()
+    const { userId } = auth()
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     await ensureDatabase()
-    
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }

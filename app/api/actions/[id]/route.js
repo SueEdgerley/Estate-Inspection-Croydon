@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,16 +9,14 @@ export const dynamic = 'force-dynamic'
 export async function GET(request, { params }) {
   try {
     await ensureDatabase()
-    
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-
     const { id } = await params
-
     const result = await sql`
       SELECT 
         id, inspection_id, section_id, section_name, question_id,
@@ -50,14 +48,13 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await ensureDatabase()
-    
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-
     const { id } = await params
     const data = await request.json()
 

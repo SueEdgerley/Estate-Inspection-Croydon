@@ -1,6 +1,6 @@
 # Get Clerk working on Vercel – checklist
 
-If `/api/env-check` returns `{"hasPublishable":false}`, the deployment does not have the env vars. Do this **in order**:
+If you see **`@clerk/nextjs: Missing publishableKey`** in deployment logs, or `/api/env-check` returns `{"hasPublishable":false}`, the deployment does not have the Clerk env vars. Do this **in order**:
 
 ## 1. Add env vars in Vercel
 
@@ -9,13 +9,15 @@ If `/api/env-check` returns `{"hasPublishable":false}`, the deployment does not 
 3. Add **first variable**:
    - **Key:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (copy exactly, no spaces)
    - **Value:** your Clerk publishable key (starts with `pk_live_` or `pk_test_`)
-   - **Environments:** check **Production** and **Preview**
+   - **Environments:** check **Preview** (and **Production** if you use it)
    - Click **Save**.
 4. Add **second variable**:
    - **Key:** `CLERK_SECRET_KEY` (copy exactly)
    - **Value:** your Clerk secret key (starts with `sk_live_` or `sk_test_`)
-   - **Environments:** check **Production** and **Preview**
+   - **Environments:** check **Preview** (and **Production** if you use it)
    - Click **Save**.
+
+**Important:** For preview deployments (e.g. branch deploys), you must enable **Preview** for both variables; otherwise the build has no key and you get "Missing publishableKey".
 
 Get keys from: [Clerk Dashboard → API Keys](https://dashboard.clerk.com/last-active?path=api-keys)
 
@@ -36,5 +38,5 @@ Get keys from: [Clerk Dashboard → API Keys](https://dashboard.clerk.com/last-a
 
 - Confirm you’re in the **correct Vercel project** (the one for this repo).
 - Confirm variable **names** are exactly: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`.
-- Confirm **both** Production and Preview are checked for each variable.
-- Try removing both variables, saving, then adding them again and redeploying.
+- Confirm **Preview** (and Production if needed) are checked for each variable.
+- Try removing both variables, saving, adding them again, then **Redeploy** (new deployment).

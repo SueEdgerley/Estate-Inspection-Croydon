@@ -116,7 +116,7 @@ export default function TemplatesPage() {
   const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => {
-    fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store' })
+    fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store', credentials: 'include' })
       .then(async (res) => {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
@@ -277,6 +277,10 @@ export default function TemplatesPage() {
             Start new inspection
           </Link>
           {' '}to use a template.
+          {' '}
+          <Link href="/templates/preview" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+            Preview QuestionCard (caretaker / NV)
+          </Link>
         </p>
       )}
     </div>

@@ -65,7 +65,7 @@ export default function InspectionSection() {
     const loadAnswers = async () => {
       if (!id || !sectionId) return
       try {
-        const response = await fetch(`/api/inspections/${id}/answers?section_id=${sectionId}`)
+        const response = await fetch(`/api/inspections/${id}/answers?section_id=${sectionId}`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           const answerMap = {}
@@ -104,7 +104,7 @@ export default function InspectionSection() {
         }
       }
       if (question.require_photo_on_no !== false) {
-        const photos = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`)
+        const photos = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
         if (photos.ok) {
           const photoData = await photos.json()
           if (photoData.length === 0) {
@@ -130,7 +130,7 @@ export default function InspectionSection() {
       }
       if (question.create_action_on_no === false) continue
       const comment = answers[`${question.id}_comment`] || ''
-      const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`)
+      const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
       const photos = photosResponse.ok ? await photosResponse.json() : []
       const photoIds = photos.map(p => p.id)
       const priority = answers[`${question.id}_priority`] || question.action_priority || null
@@ -166,11 +166,12 @@ export default function InspectionSection() {
   const saveAnswers = async () => {
     if (!id || !sectionId || Object.keys(answers).length === 0) return
     try {
-      await fetch(`/api/inspections/${id}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section_id: sectionId, answers: answers })
-      })
+await fetch(`/api/inspections/${id}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ section_id: sectionId, answers: answers }),
+    })
     } catch (error) {
       console.error('Error saving answers:', error)
       throw error
@@ -265,7 +266,7 @@ export default function InspectionSection() {
           Section {sectionId}
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          {inspection.title}
+          {[inspection.id?.slice(0, 8), inspection.template_name, inspection.location_label || inspection.location, inspection.submitted_at || inspection.created_at ? new Date(inspection.submitted_at || inspection.created_at).toLocaleDateString('en-GB') : null].filter(Boolean).join(' · ')}
         </p>
       </div>
 

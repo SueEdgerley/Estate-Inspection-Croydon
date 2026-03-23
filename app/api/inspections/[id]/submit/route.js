@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
 import { getTemplateQuestions, normalizeQuestion } from '@/lib/airtable-client'
 import { generatePDF } from '@/lib/pdf-generator'
@@ -13,14 +13,13 @@ export const dynamic = 'force-dynamic'
 export async function POST(request, { params }) {
   try {
     await ensureDatabase()
-    
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-
     const { id } = await params
 
     // Get inspection
@@ -45,8 +44,40 @@ export async function POST(request, { params }) {
     
     const answers = {}
     answersResult.rows.forEach(row => {
-      answers[row.question_id] = row.answer_value || row.answer_text || row.answer_boolean || row.answer_number
+      answers[row.question_id] = row.answer_value || row.answer_text || (row.answer_boolean != null ? (row.answer_boolean ? 'Yes' : 'No') : row.answer_number)
     })
+
+    // If draft, create actions (and optionally tasks/emails) from answers so PDF and emails have data
+    if (inspection.status === 'draft') {
+      const version = inspection.template_version
+      const sections = (version && version.sections) || []
+      for (const sec of sections) {
+        for (const q of sec.questions || []) {
+          const val = answers[q.id]
+          const normalized = val != null ? String(val).toLowerCase().trim() : ''
+          const isNo = normalized === 'no'
+          const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
+          const comment = (answerRow && answerRow.notes) || ''
+          const category = q.action_category || q.category || 'Follow-up'
+          const residentMessage = comment || q.question_text || 'Issue raised from inspection'
+          if (isNo && q.create_action_on_no !== false) {
+            const actionId = `action_${id}_${q.id}_${Date.now()}`
+            await sql`
+              INSERT INTO actions (
+                id, inspection_id, section_id, section_name, question_id,
+                category, priority, title, description, location, status,
+                comment, auto_created, photo_urls
+              )
+              VALUES (
+                ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
+                ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
+                ${comment || null}, true, '[]'::jsonb
+              )
+            `
+          }
+        }
+      }
+    }
 
     // Get all actions (for PDF poster and emails)
     const allActionsResult = await sql`
@@ -119,12 +150,7 @@ export async function POST(request, { params }) {
       `
     }
 
-    return NextResponse.json({
-      success: true,
-      pdf_url: pdfUrl,
-      emails_sent: emailResults.sent.length,
-      recipients: emailResults.sent
-    })
+    return NextResponse.json({ inspectionId: id }, { status: 201 })
   } catch (error) {
     console.error('Error submitting inspection:', error)
     return NextResponse.json(

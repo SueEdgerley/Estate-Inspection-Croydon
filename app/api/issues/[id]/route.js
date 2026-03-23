@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 
 // Route segment config
 export const runtime = 'nodejs'
@@ -10,17 +10,14 @@ export const dynamic = 'force-dynamic'
 export async function GET(request, { params }) {
   try {
     await ensureDatabase()
-    
-    // Check if database is configured
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Vercel Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-    
     const { id } = await params
-    
     const result = await sql`
       SELECT 
         id,
@@ -55,15 +52,13 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
   try {
     await ensureDatabase()
-    
-    // Check if database is configured
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Vercel Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-    
     const { id } = await params
     const body = await request.json()
     
@@ -133,17 +128,14 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   try {
     await ensureDatabase()
-    
-    // Check if database is configured
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Vercel Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-    
     const { id } = await params
-    
     const result = await sql`
       DELETE FROM issues
       WHERE id = ${id}

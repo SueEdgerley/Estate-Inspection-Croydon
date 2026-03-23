@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 
 export default function DashboardHome() {
+  const { isSignedIn } = useAuth()
   const [stats, setStats] = useState({
     totalCompleted: 0,
     scheduledCompleted: 0,
@@ -12,6 +14,8 @@ export default function DashboardHome() {
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [authCode, setAuthCode] = useState(null)
+  const [emptyStateMessage, setEmptyStateMessage] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useState({
     dateFrom: '',
@@ -24,36 +28,72 @@ export default function DashboardHome() {
   })
 
   useEffect(() => {
-    loadDashboardData()
-  }, [filters])
+    if (isSignedIn) loadDashboardData()
+  }, [isSignedIn, filters])
 
-  const loadDashboardData = async () => {
+  async function loadDashboardData() {
+    setLoading(true)
+    setError(null)
+    setAuthCode(null)
+    setEmptyStateMessage(null)
+
     try {
-      setLoading(true)
-      setError(null)
       const params = new URLSearchParams()
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom)
-      if (filters.dateTo) params.append('dateTo', filters.dateTo)
-      if (filters.type !== 'all') params.append('type', filters.type)
-      if (filters.template !== 'all') params.append('template', filters.template)
-      if (filters.inspector !== 'all') params.append('inspector', filters.inspector)
-      if (filters.scheduled !== 'all') params.append('scheduled', filters.scheduled)
-      if (filters.grading !== 'all') params.append('grading', filters.grading)
 
-      const response = await fetch(`/api/dashboard?${params.toString()}`)
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data.stats)
-        setInspections(data.inspections || [])
-      } else {
-        const body = await response.json().catch(() => ({}))
-        const msg = body.error || (response.status === 503 ? 'Database not configured. Set POSTGRES_URL in environment variables.' : 'Failed to load dashboard.')
-        setError(msg)
+      if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
+      if (filters.dateTo) params.set('dateTo', filters.dateTo)
+      if (filters.type && filters.type !== 'all') params.set('type', filters.type)
+      if (filters.template && filters.template !== 'all') params.set('template', filters.template)
+      if (filters.inspector && filters.inspector !== 'all') params.set('inspector', filters.inspector)
+      if (filters.scheduled && filters.scheduled !== 'all') params.set('scheduled', filters.scheduled)
+      if (filters.grading && filters.grading !== 'all') params.set('grading', filters.grading)
+
+      const res = await fetch(`/api/dashboard?${params.toString()}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      })
+
+      const data = await res.json()
+
+      if (res.status === 401) {
+        setAuthCode('UNAUTHORIZED')
+        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
         setInspections([])
+        return
       }
-    } catch (err) {
-      console.error('Error loading dashboard data:', err)
-      setError('Could not reach the server. Run the app and ensure POSTGRES_URL is set for full data.')
+
+      if (res.status === 403 && data?.code) {
+        setAuthCode(data.code)
+        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+        setInspections([])
+        return
+      }
+
+      if (!res.ok) {
+        if (res.status === 500 && data?.code === 'DB_NOT_MIGRATED') {
+          setError(data?.message || data?.error || 'DB not migrated. Run: prisma migrate deploy')
+          setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+          setInspections([])
+          setLoading(false)
+          return
+        }
+        throw new Error(data?.details || data?.error || `Request failed: ${res.status}`)
+      }
+
+      if (data?.message) {
+        setEmptyStateMessage(data.message)
+      }
+
+      setStats({
+        totalCompleted: data?.stats?.totalCompleted ?? 0,
+        scheduledCompleted: data?.stats?.scheduledCompleted ?? 0,
+        adHocCompleted: data?.stats?.adHocCompleted ?? 0
+      })
+
+      setInspections(Array.isArray(data?.inspections) ? data.inspections : [])
+    } catch (e) {
+      setError(e?.message || 'Failed to load dashboard data')
+      setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
       setInspections([])
     } finally {
       setLoading(false)
@@ -69,7 +109,7 @@ export default function DashboardHome() {
         }
       })
 
-      const response = await fetch(`/api/dashboard/download?${params.toString()}`)
+      const response = await fetch(`/api/dashboard/download?${params.toString()}`, { credentials: 'include' })
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
@@ -98,6 +138,50 @@ export default function DashboardHome() {
   }
 
   return (
+    <>
+      <SignedOut>
+        <div style={{
+          minHeight: '60vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem',
+        }}>
+          <div style={{
+            textAlign: 'center',
+            maxWidth: '28rem',
+          }}>
+            <div style={{
+              fontSize: '1.125rem',
+              color: '#6b7280',
+              marginBottom: '1.5rem',
+              lineHeight: 1.6,
+            }}>
+              Please sign in to view the dashboard.
+            </div>
+            <SignInButton mode="modal" forceRedirectUrl="/dashboard">
+              <button
+                type="button"
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  color: '#fff',
+                  backgroundColor: '#0f766e',
+                  border: 'none',
+                  borderRadius: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+              >
+                Sign in
+              </button>
+            </SignInButton>
+          </div>
+        </div>
+      </SignedOut>
+
+      <SignedIn>
     <div>
       <p style={{
         margin: '0 0 1.5rem 0',
@@ -113,6 +197,44 @@ export default function DashboardHome() {
         </div>
       )}
 
+      {!loading && authCode && (
+        <div style={{
+          maxWidth: '32rem',
+          margin: '0 auto 2rem',
+          padding: '1.5rem',
+          backgroundColor: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        }}>
+          <p style={{ margin: 0, fontSize: '1.0625rem', color: '#374151', lineHeight: 1.6 }}>
+            {authCode === 'UNAUTHORIZED' && 'Please sign in again to view the dashboard.'}
+            {authCode === 'USER_NOT_PROVISIONED' && 'Your account isn\'t set up yet. Ask an admin to assign your role/estates.'}
+            {authCode === 'USER_INACTIVE' && 'Your account is inactive. Contact an admin if you need access.'}
+            {authCode === 'ROLE_NOT_PERMITTED' && 'You don\'t have access to the dashboard. You can still use templates.'}
+          </p>
+          {(authCode === 'ROLE_NOT_PERMITTED' || authCode === 'USER_NOT_PROVISIONED') && (
+            <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem' }}>
+              <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+            </p>
+          )}
+        </div>
+      )}
+
+      {!loading && emptyStateMessage && !authCode && (
+        <div style={{
+          marginBottom: '1.5rem',
+          padding: '1rem 1.25rem',
+          backgroundColor: '#FEF3C7',
+          border: '1px solid #F59E0B',
+          borderRadius: '0.5rem',
+          color: '#92400E',
+          fontSize: '0.9375rem',
+        }}>
+          {emptyStateMessage}
+        </div>
+      )}
+
       {error && !loading && (
         <div style={{
           padding: '1rem 1.25rem',
@@ -124,9 +246,14 @@ export default function DashboardHome() {
           fontSize: '0.9375rem'
         }}>
           {error}
+          <p style={{ margin: '0.75rem 0 0', fontSize: '0.875rem' }}>
+            <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+          </p>
         </div>
       )}
 
+      {!authCode && (
+      <>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
@@ -452,6 +579,10 @@ export default function DashboardHome() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
+      </SignedIn>
+    </>
   )
 }

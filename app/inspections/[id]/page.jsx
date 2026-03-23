@@ -24,7 +24,7 @@ export default function InspectionDetail() {
 
     const loadInspection = async () => {
       try {
-        const response = await fetch(`/api/inspections/${id}`)
+        const response = await fetch(`/api/inspections/${id}`, { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           setInspection(data)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getTemplateById } from '@/lib/airtable-client'
 
 // Route segment config
@@ -11,15 +11,13 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     await ensureDatabase()
-    
-    // Check if database is configured
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Vercel Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-    
     const result = await sql`
       SELECT 
         id,
@@ -47,15 +45,13 @@ export async function GET() {
 export async function POST(request) {
   try {
     await ensureDatabase()
-    
-    // Check if database is configured
-    if (!process.env.POSTGRES_URL) {
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
       return NextResponse.json(
-        { error: 'Database not configured. Please set up Vercel Postgres.' },
+        { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
     }
-    
     const body = await request.json()
     const { type, title, description, location, template_id } = body
     

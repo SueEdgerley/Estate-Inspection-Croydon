@@ -1,0 +1,329 @@
+// Prisma schema – source of truth for Postgres (Vercel Postgres / Neon)
+// Apply with: npx prisma migrate deploy
+// https://www.prisma.io/docs/concepts/components/prisma-migrate
+//
+// Prisma only reads DATABASE_URL. In Vercel, set DATABASE_URL to the same value as
+// POSTGRES_URL or POSTGRES_PRISMA_URL so migrations run at deploy time.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Inspection {
+  id                  String    @id @db.VarChar(255)
+  legacyInspectionId   Decimal?  @map("legacy_inspection_id") @db.Decimal
+  type                String    @db.VarChar(50)
+  locationLabel        String?   @map("location_label") @db.VarChar(500)
+  inspectorName        String?   @map("inspector_name") @db.VarChar(255)
+  inspectorId         String?   @map("inspector_id") @db.VarChar(255)
+  templateId         String?   @map("template_id") @db.VarChar(255)
+  templateName        String?   @map("template_name") @db.VarChar(255)
+  templateVersion     Json?     @map("template_version") @db.JsonB
+  dueDate             DateTime? @map("due_date") @db.Timestamptz
+  submittedAt         DateTime? @map("submitted_at") @db.Timestamptz
+  grading             String?   @db.VarChar(50)
+  pdfUrl              String?   @map("pdf_url") @db.Text
+  fullPdfUrl          String?   @map("full_pdf_url") @db.Text
+  posterPdfUrl        String?   @map("poster_pdf_url") @db.Text
+  status              String    @default("draft") @db.VarChar(50)
+  scheduledId         String?   @map("scheduled_id") @db.VarChar(255)
+  isScheduled         Boolean?  @default(false) @map("is_scheduled")
+  title               String?   @db.VarChar(500)
+  description         String?   @db.Text
+  estateId            String?   @map("estate_id") @db.VarChar(255)
+  blockId             String?   @map("block_id") @db.VarChar(255)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  estate              Estate?   @relation(fields: [estateId], references: [id], onDelete: SetNull)
+  block               Block?    @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  inspectionPhotos     InspectionPhoto[]
+  inspectionAnswers    InspectionAnswer[]
+  actions              Action[]
+  inspectionRecipients  InspectionRecipient[]
+  tasks                Task[]
+  outboundEmails       OutboundEmail[]
+
+  @@map("inspections")
+}
+
+// Users table: Clerk authentication only. Do not use People for auth.
+model User {
+  id           String   @id @default(cuid()) @db.VarChar(255)
+  clerkUserId  String   @unique @map("clerk_user_id") @db.VarChar(255) // required, unique
+  email        String?  @db.VarChar(255)
+  role         String   @default("user") @db.VarChar(50) // access control: owner | admin | user
+  peopleId     String?  @unique @map("people_id") @db.VarChar(255) // optional link to Person (people.id)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  person           Person?                  @relation(fields: [peopleId], references: [id], onDelete: SetNull)
+  estateAssignments AppUserEstateAssignment[]
+
+  @@map("users")
+}
+
+model AppUserEstateAssignment {
+  id        String   @id @db.VarChar(255)
+  userId    String   @map("user_id") @db.VarChar(255)
+  estateId  String?  @map("estate_id") @db.VarChar(255)
+  blockId   String?  @map("block_id") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  estate Estate? @relation(fields: [estateId], references: [id], onDelete: Cascade)
+  block  Block?  @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@map("user_estate_assignments")
+}
+
+model Estate {
+  id        String   @id @db.VarChar(255)
+  name      String   @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  blocks    Block[]
+  inspections Inspection[]
+  userAssignments UserAssignment[]
+  appUserEstateAssignments AppUserEstateAssignment[]
+
+  @@map("estates")
+}
+
+model Block {
+  id        String   @id @db.VarChar(255)
+  estateId  String?  @map("estate_id") @db.VarChar(255)
+  name      String   @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  estate    Estate?  @relation(fields: [estateId], references: [id], onDelete: SetNull)
+  inspections Inspection[]
+  userAssignments UserAssignment[]
+  appUserEstateAssignments AppUserEstateAssignment[]
+
+  @@map("blocks")
+}
+
+model UserAssignment {
+  id        String    @id @db.VarChar(255)
+  personId  String    @map("person_id") @db.VarChar(255)
+  estateId  String?   @map("estate_id") @db.VarChar(255)
+  blockId   String?   @map("block_id") @db.VarChar(255)
+  role      String    @db.VarChar(100)
+  startsAt  DateTime  @map("starts_at") @db.Timestamptz
+  endsAt    DateTime? @map("ends_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  estate    Estate?   @relation(fields: [estateId], references: [id], onDelete: Cascade)
+  block     Block?    @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@map("user_assignments")
+}
+
+model Task {
+  id            String   @id @db.VarChar(255)
+  inspectionId  String   @map("inspection_id") @db.VarChar(255)
+  questionId    String?  @map("question_id") @db.VarChar(255)
+  category      String?  @db.VarChar(100)
+  issueType     String?  @map("issue_type") @db.VarChar(100)
+  programmeTag  String?  @map("programme_tag") @db.VarChar(255)
+  description   String?  @db.Text
+  status        String   @default("open") @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  inspection    Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model OutboundEmail {
+  id            String    @id @db.VarChar(255)
+  inspectionId  String    @map("inspection_id") @db.VarChar(255)
+  questionId    String?   @map("question_id") @db.VarChar(255)
+  emailTo       String    @map("email_to") @db.VarChar(500)
+  emailRouting  String?   @map("email_routing") @db.VarChar(255)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz
+  status        String    @default("pending") @db.VarChar(50)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  inspection    Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@map("outbound_emails")
+}
+
+model Person {
+  id         String   @id @db.VarChar(255)
+  airtableId String?  @map("airtable_id") @db.VarChar(255)
+  name       String   @db.VarChar(255)
+  email      String   @unique @db.VarChar(255)
+  role       String?  @db.VarChar(100)
+  category   String?  @db.VarChar(50)
+  active     Boolean? @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user                  User?   @relation // login account linked to this person (optional)
+  actionsReceived       Action[] @relation("RecipientActions")
+  inspectionRecipients   InspectionRecipient[]
+  userAssignments       UserAssignment[]
+
+  @@map("people")
+}
+
+model InspectionPhoto {
+  id            String   @id @db.VarChar(255)
+  inspectionId  String   @map("inspection_id") @db.VarChar(255)
+  questionId    String   @map("question_id") @db.VarChar(255)
+  blobUrl       String   @map("blob_url") @db.Text
+  blobKey       String?  @map("blob_key") @db.VarChar(500)
+  filename      String?  @db.VarChar(255)
+  uploadedAt    DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  actionPhotos ActionPhoto[]
+
+  @@map("inspection_photos")
+}
+
+model InspectionAnswer {
+  id               String   @id @db.VarChar(255)
+  inspectionId     String   @map("inspection_id") @db.VarChar(255)
+  sectionId        String   @map("section_id") @db.VarChar(50)
+  questionId       String   @map("question_id") @db.VarChar(255)
+  questionType     String   @map("question_type") @db.VarChar(50)
+  answerValue      String?  @map("answer_value") @db.Text
+  answerText       String?  @map("answer_text") @db.Text
+  answerNumber     Decimal? @map("answer_number") @db.Decimal
+  answerBoolean    Boolean? @map("answer_boolean")
+  notes            String?  @db.Text
+  // Resolved routing from template (for reporting stability)
+  triggersTask     Boolean? @map("triggers_task")
+  triggersEmail    Boolean? @map("triggers_email")
+  emailRouteTeamId String?  @map("email_route_team_id") @db.VarChar(255)
+  issueType        String?  @map("issue_type") @db.VarChar(100)
+  programmeTag     String?  @map("programme_tag") @db.VarChar(255)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@unique([inspectionId, questionId])
+  @@map("inspection_answers")
+}
+
+model Action {
+  id                   String   @id @db.VarChar(255)
+  inspectionId         String   @map("inspection_id") @db.VarChar(255)
+  sectionId            String?  @map("section_id") @db.VarChar(50)
+  sectionName          String?  @map("section_name") @db.VarChar(255)
+  questionId           String?  @map("question_id") @db.VarChar(255)
+  category             String   @db.VarChar(50)
+  priority             String?  @db.VarChar(20)
+  title                String   @db.VarChar(500)
+  description          String?  @db.Text
+  location             String?  @db.VarChar(500)
+  status               String   @default("open") @db.VarChar(50)
+  comment              String?  @db.Text
+  recipientPersonId    String?  @map("recipient_person_id") @db.VarChar(255)
+  autoCreated           Boolean? @default(false) @map("auto_created")
+  photoUrls             Json?    @default("[]") @map("photo_urls") @db.JsonB
+  jobNumber             String?  @map("job_number") @db.VarChar(100)
+  expectedCompletionDate DateTime? @map("expected_completion_date") @db.Date
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  recipient  Person?    @relation("RecipientActions", fields: [recipientPersonId], references: [id], onDelete: SetNull)
+  actionPhotos ActionPhoto[]
+
+  @@map("actions")
+}
+
+model ActionPhoto {
+  id        String @id @db.VarChar(255)
+  actionId  String @map("action_id") @db.VarChar(255)
+  photoId   String @map("photo_id") @db.VarChar(255)
+
+  action Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  photo  InspectionPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@map("action_photos")
+}
+
+model InspectionRecipient {
+  id            String    @id @db.VarChar(255)
+  inspectionId  String    @map("inspection_id") @db.VarChar(255)
+  personId      String?   @map("person_id") @db.VarChar(255)
+  personEmail   String    @map("person_email") @db.VarChar(255)
+  recipientType String   @map("recipient_type") @db.VarChar(50)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  person     Person?    @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@map("inspection_recipients")
+}
+
+model Issue {
+  id          String   @id @db.VarChar(255)
+  type        String   @db.VarChar(50)
+  title       String   @db.VarChar(500)
+  description String?  @db.Text
+  location    String?  @db.VarChar(500)
+  status      String   @default("open") @db.VarChar(50)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("issues")
+}
+
+model CompletedInspection {
+  photobookId          Int       @id @map("photobook_id")
+  templateName          String?   @map("template_name") @db.Text
+  locationText         String?   @map("location_text") @db.Text
+  inspectorName         String?   @map("inspector_name") @db.Text
+  inspectorEmail        String?   @map("inspector_email") @db.Text
+  dueDate               DateTime? @map("due_date") @db.Date
+  completedAt           DateTime? @map("completed_at") @db.Timestamptz
+  actualScore           Int?      @map("actual_score")
+  totalPossibleScore    Int?      @map("total_possible_score")
+  isAdHoc               Boolean?  @map("is_ad_hoc")
+  isCompleted           Boolean?  @map("is_completed")
+
+  @@map("completed_inspections")
+}
+
+model PhotobookImportRaw {
+  id                   Int     @id
+  frequency            String? @db.Text
+  templateName         String? @map("template_name") @db.Text
+  location             String? @db.Text
+  band                 String? @db.Text
+  actualScore          Int?    @map("actual_score")
+  totalPossibleScore   Int?    @map("total_possible_score")
+  inspectionDate       String? @map("inspection_date") @db.Text
+  inspectionTime       String? @map("inspection_time") @db.Text
+  inspectionDatetime   String? @map("inspection_datetime") @db.Text
+  dueDate              String? @map("due_date") @db.Text
+  completedDate        String? @map("completed_date") @db.Text
+  completedTime        String? @map("completed_time") @db.Text
+  completedDatetime    String? @map("completed_datetime") @db.Text
+  inspectorName        String? @map("inspector_name") @db.Text
+  inspectorEmail       String? @map("inspector_email") @db.Text
+  emailTo              String? @map("email_to") @db.Text
+  isAdHoc              Int?    @map("is_ad_hoc")
+  isCompleted          Int?    @map("is_completed")
+  sourceStatus         String? @map("source_status") @db.Text
+
+  @@map("photobook_import_raw")
+}

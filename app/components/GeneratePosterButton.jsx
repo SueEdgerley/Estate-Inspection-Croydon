@@ -11,6 +11,7 @@ export function GeneratePosterButton({ inspectionId }) {
       const res = await fetch('/api/poster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ inspectionId }),
       })
 

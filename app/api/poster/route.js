@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
 
 export const runtime = 'nodejs'
@@ -16,10 +16,10 @@ export async function POST(request) {
       return new NextResponse('Missing inspectionId', { status: 400 })
     }
 
-    if (!process.env.POSTGRES_URL) {
-      return new NextResponse('Database not configured', { status: 503 })
+    const pgUrl = getPgUrl()
+    if (!pgUrl) {
+      return new NextResponse('Database not configured. Please set up Postgres.', { status: 503 })
     }
-
     await ensureDatabase()
 
     const inspectionResult = await sql`
