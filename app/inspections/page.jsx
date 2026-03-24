@@ -165,20 +165,6 @@ export default function InspectionsListPage() {
             <span aria-hidden style={{ fontSize: '1rem' }}>⏷</span>
             Show Filters
           </button>
-          <Link
-            href="/inspections/new"
-            style={{
-              padding: '0.65rem 1.15rem',
-              backgroundColor: '#0f766e',
-              color: '#fff',
-              textDecoration: 'none',
-              borderRadius: '0.5rem',
-              fontWeight: 600,
-              fontSize: '0.9375rem',
-            }}
-          >
-            New Inspection
-          </Link>
         </div>
       </div>
 
@@ -401,21 +387,6 @@ export default function InspectionsListPage() {
                   ? 'No inspections yet.'
                   : 'No inspections match the current filters.'}
               </p>
-              <Link
-                href="/inspections/new"
-                style={{
-                  display: 'inline-block',
-                  marginTop: '1rem',
-                  padding: '0.75rem 1.25rem',
-                  backgroundColor: '#0f766e',
-                  color: '#fff',
-                  textDecoration: 'none',
-                  borderRadius: '0.5rem',
-                  fontWeight: 600,
-                }}
-              >
-                New Inspection
-              </Link>
             </div>
           ) : (
             <div style={{
