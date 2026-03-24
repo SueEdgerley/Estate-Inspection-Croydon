@@ -11,6 +11,12 @@ import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function parseDueDateInput(raw) {
+  if (raw == null || raw === '') return null
+  const d = raw instanceof Date ? raw : new Date(typeof raw === 'string' ? raw : String(raw))
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 export async function GET() {
   const { userId } = await auth()
   console.log('auth userId', userId)
@@ -107,7 +113,20 @@ export async function POST(request) {
     })
   }
 
-  const { template_id, title, location, description, estate_id: bodyEstateId, block_id: bodyBlockId, answers = {}, answer_extras = {}, draft: createDraft } = body
+  const {
+    template_id,
+    title,
+    location,
+    description,
+    due_date,
+    estate_id: bodyEstateId,
+    block_id: bodyBlockId,
+    answers = {},
+    answer_extras = {},
+    draft: createDraft,
+  } = body
+
+  const dueDateParsed = parseDueDateInput(due_date)
 
   if (!template_id) {
     return NextResponse.json(
@@ -173,7 +192,7 @@ export async function POST(request) {
       })
       await sql`
         INSERT INTO inspections (
-          id, legacy_inspection_id, type, title, description, location_label,
+          id, legacy_inspection_id, type, title, description, location_label, due_date,
           template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
           inspector_id, inspector_name, estate_id, block_id
         )
@@ -184,6 +203,7 @@ export async function POST(request) {
           ${displayTitle},
           ${description && String(description).trim() ? String(description).trim() : null},
           ${location && String(location).trim() ? String(location).trim() : null},
+          ${dueDateParsed},
           ${template_id},
           ${template.name || null},
           ${draftSnapshot}::jsonb,
@@ -231,7 +251,7 @@ export async function POST(request) {
 
     await sql`
       INSERT INTO inspections (
-        id, legacy_inspection_id, type, title, description, location_label,
+        id, legacy_inspection_id, type, title, description, location_label, due_date,
         template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
         inspector_id, inspector_name, estate_id, block_id
       )
@@ -242,6 +262,7 @@ export async function POST(request) {
         ${displayTitle},
         ${description && String(description).trim() ? String(description).trim() : null},
         ${location && String(location).trim() ? String(location).trim() : null},
+        ${dueDateParsed},
         ${template_id},
         ${template.name || null},
         ${templateVersionSnapshot}::jsonb,
@@ -258,6 +279,7 @@ export async function POST(request) {
         title = EXCLUDED.title,
         description = EXCLUDED.description,
         location_label = EXCLUDED.location_label,
+        due_date = EXCLUDED.due_date,
         template_id = EXCLUDED.template_id,
         template_name = EXCLUDED.template_name,
         template_version = EXCLUDED.template_version,

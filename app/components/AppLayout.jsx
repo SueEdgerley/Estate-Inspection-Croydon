@@ -16,7 +16,8 @@ export default function AppLayout({ children }) {
 
   const navItems = [
     { href: '/', label: 'Home' },
-    { href: '/inspections/new', label: 'Manage Inspections' },
+    { href: '/inspections', label: 'Manage Inspections' },
+    { href: '/inspections/ad-hoc', label: 'Create Ad Hoc Inspection' },
     { href: '/actions', label: 'Manage Tasks' },
     { href: '/templates', label: 'Templates' },
     { href: '/import', label: 'Import' },
@@ -28,6 +29,14 @@ export default function AppLayout({ children }) {
 
   const isActive = (href) => {
     if (href === '/') return pathname === '/' || pathname === '/dashboard'
+    // /inspections/new is the create form; keep "Manage Inspections" active only for list + inspection sub-routes
+    if (href === '/inspections') {
+      if (!pathname) return false
+      if (pathname.startsWith('/inspections/ad-hoc')) return false
+      if (pathname === '/inspections' || pathname === '/inspections/') return true
+      if (pathname.startsWith('/inspections/new')) return false
+      return pathname.startsWith('/inspections/')
+    }
     return pathname?.startsWith(href)
   }
 
