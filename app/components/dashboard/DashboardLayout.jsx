@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }) {
     { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { href: '/inspections', label: 'Inspections', icon: '🔍' },
     { href: '/actions', label: 'Actions', icon: '⚡' },
-    { href: '/templates', label: 'Forms', icon: '📋' },
+    { href: '/templates', label: 'Templates', icon: '📋' },
   ]
 
   const isActive = (href) => {

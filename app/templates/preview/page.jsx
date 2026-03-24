@@ -81,7 +81,7 @@ export default function TemplatesPreviewPage() {
           href="/templates"
           style={{ display: 'inline-block', marginBottom: 16, color: '#1E3A8A', fontSize: 14, textDecoration: 'none' }}
         >
-          ← Back to Forms
+          ← Back to templates
         </Link>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#111827', marginBottom: 4 }}>
           Template preview
