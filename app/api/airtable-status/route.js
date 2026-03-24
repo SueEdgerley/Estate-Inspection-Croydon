@@ -8,8 +8,7 @@ export async function GET() {
   const baseIdSet = Boolean(process.env.AIRTABLE_BASE_ID?.trim())
   const tokenSet = Boolean(process.env.AIRTABLE_API_TOKEN?.trim())
   const keySet = Boolean(process.env.AIRTABLE_API_KEY?.trim())
-  const plainTokenSet = Boolean(process.env.AIRTABLE_TOKEN?.trim())
-  const apiKeySet = tokenSet || keySet || plainTokenSet
+  const apiKeySet = tokenSet || keySet
 
   // Show ALL env keys that contain "AIRTABLE" (so user can see exact names the server sees)
   const airtableEnvKeys = Object.keys(process.env || {}).filter((k) =>
@@ -38,7 +37,6 @@ export async function GET() {
       AIRTABLE_BASE_ID: baseIdSet ? 'set' : 'missing',
       AIRTABLE_API_TOKEN: tokenSet ? 'set' : 'missing',
       AIRTABLE_API_KEY: keySet ? 'set' : 'missing',
-      AIRTABLE_TOKEN: plainTokenSet ? 'set' : 'missing',
     },
     allAirtableEnvKeys: airtableEnvKeys,
     hint,

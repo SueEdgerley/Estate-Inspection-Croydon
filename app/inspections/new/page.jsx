@@ -12,8 +12,7 @@ export default async function NewInspectionPage() {
   const hasAirtable =
     process.env.AIRTABLE_BASE_ID?.trim() &&
     (process.env.AIRTABLE_API_TOKEN?.trim() ||
-      process.env.AIRTABLE_API_KEY?.trim() ||
-      process.env.AIRTABLE_TOKEN?.trim())
+      process.env.AIRTABLE_API_KEY?.trim())
   if (hasAirtable) {
     try {
       blocks = await getBlocksCached()

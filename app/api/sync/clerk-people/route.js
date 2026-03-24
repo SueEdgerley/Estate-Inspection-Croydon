@@ -18,7 +18,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
+    const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY
     if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
       return NextResponse.json(
         { error: 'Airtable not configured' },
