@@ -34,6 +34,8 @@ model Inspection {
   scheduledId         String?   @map("scheduled_id") @db.VarChar(255)
   isScheduled         Boolean?  @default(false) @map("is_scheduled")
   title               String?   @db.VarChar(500)
+  /// e.g. ad_hoc when created from Create Ad Hoc Inspection flow
+  source              String?   @db.VarChar(50)
   description         String?   @db.Text
   estateId            String?   @map("estate_id") @db.VarChar(255)
   blockId             String?   @map("block_id") @db.VarChar(255)

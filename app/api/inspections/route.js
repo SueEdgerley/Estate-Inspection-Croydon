@@ -38,7 +38,7 @@ export async function GET() {
     if (admin) {
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
         FROM inspections i
@@ -50,7 +50,7 @@ export async function GET() {
     } else if (userEmail) {
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
         FROM inspections i
@@ -63,7 +63,7 @@ export async function GET() {
     } else {
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.description, i.created_at, i.updated_at,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
         FROM inspections i
@@ -127,6 +127,12 @@ export async function POST(request) {
   } = body
 
   const dueDateParsed = parseDueDateInput(due_date)
+
+  const rawSource = body?.source
+  const sourceValue =
+    typeof rawSource === 'string' && rawSource.trim().length > 0
+      ? rawSource.trim().slice(0, 50)
+      : null
 
   if (!template_id) {
     return NextResponse.json(
@@ -194,7 +200,7 @@ export async function POST(request) {
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
           template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
-          inspector_id, inspector_name, estate_id, block_id
+          inspector_id, inspector_name, estate_id, block_id, source
         )
         VALUES (
           ${inspectionId},
@@ -214,7 +220,8 @@ export async function POST(request) {
           ${inspectorEmail || null},
           ${inspectorName || null},
           ${estateId},
-          ${blockId}
+          ${blockId},
+          ${sourceValue}
         )
       `
       return NextResponse.json({ inspectionId }, { status: 201 })
@@ -253,7 +260,7 @@ export async function POST(request) {
       INSERT INTO inspections (
         id, legacy_inspection_id, type, title, description, location_label, due_date,
         template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
-        inspector_id, inspector_name, estate_id, block_id
+        inspector_id, inspector_name, estate_id, block_id, source
       )
       VALUES (
         ${inspectionId},
@@ -273,7 +280,8 @@ export async function POST(request) {
         ${inspectorEmail || null},
         ${inspectorName || null},
         ${estateId},
-        ${blockId}
+        ${blockId},
+        ${sourceValue}
       )
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
@@ -289,6 +297,7 @@ export async function POST(request) {
         inspector_name = COALESCE(EXCLUDED.inspector_name, inspections.inspector_name),
         estate_id = COALESCE(EXCLUDED.estate_id, inspections.estate_id),
         block_id = COALESCE(EXCLUDED.block_id, inspections.block_id),
+        source = COALESCE(EXCLUDED.source, inspections.source),
         updated_at = ${new Date()}
     `
 
