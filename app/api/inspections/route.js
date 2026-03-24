@@ -90,14 +90,6 @@ export async function POST(request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
-  if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
-    return NextResponse.json(
-      { error: 'Airtable not configured. Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY or AIRTABLE_API_TOKEN.' },
-      { status: 503 }
-    )
-  }
-
   let body
   try {
     body = await request.json()
@@ -133,6 +125,86 @@ export async function POST(request) {
     typeof rawSource === 'string' && rawSource.trim().length > 0
       ? rawSource.trim().slice(0, 50)
       : null
+
+  const inspectionTypeRaw =
+    typeof body?.inspection_type === 'string' ? body.inspection_type.trim().toLowerCase() : ''
+  const isAdHocCreate =
+    body?.ad_hoc === true || inspectionTypeRaw === 'ad_hoc'
+
+  if (isAdHocCreate) {
+    if (!getPgUrl()) {
+      return NextResponse.json(
+        { error: 'Database not configured. Please set up Postgres.' },
+        { status: 503 }
+      )
+    }
+    const titleTrimmed =
+      typeof title === 'string' && title.trim() ? title.trim() : ''
+    if (!titleTrimmed) {
+      return NextResponse.json({ error: 'title is required' }, { status: 400 })
+    }
+
+    const inspectorEmail = await getCurrentUserEmail()
+    const inspectorName = await getCurrentUserName()
+    const estateId =
+      bodyEstateId && String(bodyEstateId).trim() ? String(bodyEstateId).trim() : null
+    const blockId =
+      bodyBlockId && String(bodyBlockId).trim() ? String(bodyBlockId).trim() : null
+    const adHocSource = sourceValue ?? 'ad_hoc'
+
+    try {
+      await ensureDatabase()
+      const inspectionId = crypto.randomUUID()
+      const loc =
+        location && String(location).trim() ? String(location).trim() : null
+      const desc =
+        description && String(description).trim() ? String(description).trim() : null
+
+      await sql`
+        INSERT INTO inspections (
+          id, legacy_inspection_id, type, title, description, location_label, due_date,
+          template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
+          inspector_id, inspector_name, estate_id, block_id, source
+        )
+        VALUES (
+          ${inspectionId},
+          NULL,
+          'ad_hoc',
+          ${titleTrimmed},
+          ${desc},
+          ${loc},
+          ${dueDateParsed},
+          NULL,
+          NULL,
+          NULL,
+          'draft',
+          NULL,
+          ${new Date()},
+          ${new Date()},
+          ${inspectorEmail || null},
+          ${inspectorName || null},
+          ${estateId},
+          ${blockId},
+          ${adHocSource}
+        )
+      `
+      return NextResponse.json({ inspectionId, id: inspectionId }, { status: 201 })
+    } catch (error) {
+      console.error('Error creating ad hoc inspection:', error)
+      return NextResponse.json(
+        { error: 'Failed to create inspection', details: error.message },
+        { status: 500 }
+      )
+    }
+  }
+
+  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN
+  if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
+    return NextResponse.json(
+      { error: 'Airtable not configured. Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY or AIRTABLE_API_TOKEN.' },
+      { status: 503 }
+    )
+  }
 
   if (!template_id) {
     return NextResponse.json(
