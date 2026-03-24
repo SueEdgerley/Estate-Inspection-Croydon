@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getTemplatesNested } from '@/lib/airtable-client'
+import { getAirtableDiagnosticsForLogging, getTemplatesNested } from '@/lib/airtable-client'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,13 +10,20 @@ export async function GET() {
     return NextResponse.json(
       {
         error: 'Airtable not configured',
-        details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY (or AIRTABLE_API_TOKEN) in environment variables.',
+        details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY in environment variables.',
         hint: 'Vercel → Settings → Environment Variables (Production), then Redeploy.',
         envVarsUrl: 'https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings/environment-variables',
       },
       { status: 503, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   }
+
+  // TEMPORARY: Production auth diagnosis (no secrets). Remove when resolved.
+  console.log('[Airtable diag] GET /api/templates', {
+    ...getAirtableDiagnosticsForLogging(),
+    note:
+      'Production: expect AIRTABLE_API_TOKEN_present=false, credential_chosen=AIRTABLE_API_KEY. If Airtable returns 401, update the key or base access in Airtable.',
+  })
 
   try {
     const templates = await getTemplatesNested()
