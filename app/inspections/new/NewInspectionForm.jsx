@@ -514,7 +514,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   if (loadError) {
     return (
       <div>
-        <Link href="/inspections" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '0.875rem' }}>
+        <Link href="/" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '0.875rem' }}>
           ← Back to Inspections
         </Link>
         <div style={{ marginTop: '1rem', padding: '1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '0.5rem' }}>
@@ -528,7 +528,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <Link
-          href="/inspections"
+          href="/"
           style={{
             color: '#3b82f6',
             textDecoration: 'none',
