@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getAirtableDiagnosticsForLogging, getTemplatesNested } from '@/lib/airtable-client'
+import {
+  getAirtableProductionDiagnostics,
+  getLastTemplatesNestedFetchMeta,
+  getTemplatesNested,
+} from '@/lib/airtable-client'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,31 +14,50 @@ export async function GET() {
     return NextResponse.json(
       {
         error: 'Airtable not configured',
-        details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY in environment variables.',
+        details: 'Set AIRTABLE_BASE_ID and AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY) in environment variables.',
         hint: 'Vercel → Settings → Environment Variables (Production), then Redeploy.',
         envVarsUrl: 'https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings/environment-variables',
+        diagnostics: getAirtableProductionDiagnostics(),
       },
       { status: 503, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   }
 
-  // TEMPORARY: Production auth diagnosis (no secrets). Remove when resolved.
-  console.log('[Airtable diag] GET /api/templates', {
-    ...getAirtableDiagnosticsForLogging(),
-    note:
-      'Production: expect AIRTABLE_API_TOKEN_present=false, credential_chosen=AIRTABLE_API_KEY. If Airtable returns 401, update the key or base access in Airtable.',
-  })
-
   try {
     const templates = await getTemplatesNested()
-    return NextResponse.json({ templates }, {
-      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+    const diagnostics = getAirtableProductionDiagnostics({
+      failing_table: null,
+      airtable_status_code: null,
+      grading_first_attempt: getLastTemplatesNestedFetchMeta(),
     })
+    console.log('[Airtable diag] GET /api/templates OK', diagnostics)
+    return NextResponse.json(
+      { templates, diagnostics },
+      {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
+      }
+    )
   } catch (error) {
     console.error('Error fetching templates:', error)
+    const airtableStatus = error.airtableStatus ?? error.statusCode ?? error.status
+    const httpStatus =
+      typeof airtableStatus === 'number' && airtableStatus >= 400 && airtableStatus < 600
+        ? airtableStatus
+        : 500
+    const diagnostics = getAirtableProductionDiagnostics({
+      failing_table: error.airtableTableName ?? null,
+      airtable_status_code:
+        typeof airtableStatus === 'number' ? airtableStatus : null,
+      grading_first_attempt: getLastTemplatesNestedFetchMeta(),
+    })
+    console.log('[Airtable diag] GET /api/templates ERROR', diagnostics)
     return NextResponse.json(
-      { error: 'Failed to fetch templates', details: error.message },
-      { status: 500 }
+      {
+        error: 'Failed to fetch templates',
+        details: error.message,
+        diagnostics,
+      },
+      { status: httpStatus, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   }
 }
