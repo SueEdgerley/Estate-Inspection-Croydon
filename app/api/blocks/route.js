@@ -14,7 +14,7 @@ export async function GET() {
       {
         error: 'Airtable not configured',
         details:
-          'Set AIRTABLE_BASE_ID and AIRTABLE_API_KEY (or AIRTABLE_API_TOKEN) in environment variables.',
+          'Set AIRTABLE_BASE_ID and AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY) in environment variables.',
       },
       { status: 503, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )

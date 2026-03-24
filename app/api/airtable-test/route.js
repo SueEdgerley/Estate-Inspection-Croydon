@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
-          error: 'AIRTABLE_API_KEY or AIRTABLE_API_TOKEN is not set',
+          error: 'AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY) is not set',
         },
         { status: 500 }
       )
@@ -68,8 +68,8 @@ export async function GET() {
         details: error.toString(),
         troubleshooting: [
           'Check that AIRTABLE_BASE_ID is set in environment variables',
-          'Check that AIRTABLE_API_KEY or AIRTABLE_API_TOKEN is set in environment variables',
-          'Verify the API key has access to the base',
+          'Check that AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY) is set in environment variables',
+          'Verify the token has access to the base',
           'Check that the Templates table exists in your Airtable base',
           'Verify the table name matches exactly (case-sensitive)',
           'Check server logs for detailed error information',

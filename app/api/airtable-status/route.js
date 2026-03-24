@@ -17,7 +17,7 @@ export async function GET() {
 
   const noVarsAtAll = airtableEnvKeys.length === 0
   const hint = !apiKeySet
-    ? 'Set AIRTABLE_API_TOKEN or AIRTABLE_API_KEY in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
+    ? 'Set AIRTABLE_API_TOKEN (recommended) or legacy AIRTABLE_API_KEY in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
     : !baseIdSet
       ? 'Set AIRTABLE_BASE_ID in Vercel → Settings → Environment Variables (for Production), then Redeploy.'
       : null
@@ -26,7 +26,7 @@ export async function GET() {
   const envVarsUrl = 'https://vercel.com/photobook-73dad537/estate-inspection-croydon/settings/environment-variables'
   const checklist = [
     '1. Use the PHOTOBOOK project (paid), not the trial project. Open: ' + envVarsUrl,
-    '2. Add AIRTABLE_BASE_ID and either AIRTABLE_API_KEY or AIRTABLE_API_TOKEN (values from your Airtable account).',
+    '2. Add AIRTABLE_BASE_ID and AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY) from your Airtable account.',
     '3. For each variable, tick "Production" (and Preview if you use preview URLs). Save.',
     '4. Deployments → latest Production deployment → ⋮ → Redeploy (env vars apply only after redeploy).',
   ]
