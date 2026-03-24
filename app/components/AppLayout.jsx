@@ -16,7 +16,7 @@ export default function AppLayout({ children }) {
 
   const navItems = [
     { href: '/', label: 'Home' },
-    { href: '/inspections', label: 'Manage Inspections' },
+    { href: '/inspections/new', label: 'Manage Inspections' },
     { href: '/actions', label: 'Manage Tasks' },
     { href: '/templates', label: 'Templates' },
     { href: '/import', label: 'Import' },
