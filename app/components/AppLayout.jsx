@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  useAuth,
   SignInButton,
   SignUpButton,
   SignedIn,
@@ -11,21 +13,66 @@ import {
 } from '@clerk/nextjs'
 import { colours } from '@/lib/nv-theme'
 
+const ALL_NAV_ITEMS = [
+  { href: '/', label: 'Home' },
+  { href: '/inspections', label: 'Manage Inspections' },
+  { href: '/inspections/ad-hoc', label: 'Create Ad Hoc Inspection' },
+  { href: '/actions', label: 'Manage Tasks' },
+  { href: '/templates', label: 'Forms' },
+  { href: '/import', label: 'Import' },
+  { href: '/guides', label: 'Best Practice Guides' },
+  { href: '/settings', label: 'Settings' },
+  { href: '/downloads', label: 'Data Download' },
+  { href: '/analytics', label: 'Analytics' },
+]
+
+/** Hrefs visible to app role `user` (non-admin); order matches ALL_NAV_ITEMS subset */
+const USER_ROLE_NAV_HREFS = new Set([
+  '/',
+  '/inspections',
+  '/inspections/ad-hoc',
+  '/actions',
+  '/templates',
+])
+
 export default function AppLayout({ children }) {
   const pathname = usePathname()
+  const { isSignedIn, isLoaded: authLoaded } = useAuth()
+  const [appRole, setAppRole] = useState(null)
+  const [clerkIsAdmin, setClerkIsAdmin] = useState(false)
 
-  const navItems = [
-    { href: '/', label: 'Home' },
-    { href: '/inspections', label: 'Manage Inspections' },
-    { href: '/inspections/ad-hoc', label: 'Create Ad Hoc Inspection' },
-    { href: '/actions', label: 'Manage Tasks' },
-    { href: '/templates', label: 'Forms' },
-    { href: '/import', label: 'Import' },
-    { href: '/guides', label: 'Best Practice Guides' },
-    { href: '/settings', label: 'Settings' },
-    { href: '/downloads', label: 'Data Download' },
-    { href: '/analytics', label: 'Analytics' },
-  ]
+  useEffect(() => {
+    if (!authLoaded || !isSignedIn) {
+      setAppRole(null)
+      setClerkIsAdmin(false)
+      return
+    }
+    let cancelled = false
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => {
+        if (cancelled) return
+        setAppRole(typeof data?.role === 'string' ? data.role : null)
+        setClerkIsAdmin(data?.clerkIsAdmin === true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAppRole(null)
+          setClerkIsAdmin(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authLoaded, isSignedIn])
+
+  const navItems = useMemo(() => {
+    if (!isSignedIn) return ALL_NAV_ITEMS
+    const r = (appRole || '').toLowerCase().trim()
+    const isRestrictedUser = r === 'user' && !clerkIsAdmin
+    if (!isRestrictedUser) return ALL_NAV_ITEMS
+    return ALL_NAV_ITEMS.filter((item) => USER_ROLE_NAV_HREFS.has(item.href))
+  }, [isSignedIn, appRole, clerkIsAdmin])
 
   const isActive = (href) => {
     if (href === '/') return pathname === '/' || pathname === '/dashboard'

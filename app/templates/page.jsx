@@ -122,7 +122,7 @@ export default function TemplatesPage() {
         if (!res.ok) {
           const msg = res.status === 503
             ? 'Airtable not configured'
-            : (body.details || body.error || 'Failed to load templates')
+            : (body.details || body.error || 'Failed to load forms')
           throw new Error(msg)
         }
         return body
@@ -138,15 +138,15 @@ export default function TemplatesPage() {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-          Templates
+          Forms
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Inspection templates from Airtable (read-only)
+          Inspection forms from Airtable (read-only)
         </p>
       </div>
 
       {loading && (
-        <p style={{ color: '#6b7280' }}>Loading templates…</p>
+        <p style={{ color: '#6b7280' }}>Loading forms…</p>
       )}
 
       {error && (
@@ -184,7 +184,7 @@ export default function TemplatesPage() {
           textAlign: 'center',
           color: '#6b7280',
         }}>
-          No templates found. Add active templates in Airtable and set AIRTABLE_BASE_ID and AIRTABLE_API_KEY.
+          No forms found. Add active templates in Airtable and set AIRTABLE_BASE_ID and AIRTABLE_API_KEY.
         </div>
       )}
 
@@ -260,7 +260,7 @@ export default function TemplatesPage() {
                         href={`/inspections/new`}
                         style={{ color: '#3b82f6', fontSize: '0.875rem', textDecoration: 'none' }}
                       >
-                        Start new inspection with this template →
+                        Start new inspection with this form →
                       </Link>
                     </div>
                   </div>
@@ -276,7 +276,7 @@ export default function TemplatesPage() {
           <Link href="/inspections/new" style={{ color: '#3b82f6', textDecoration: 'none' }}>
             Start new inspection
           </Link>
-          {' '}to use a template.
+          {' '}to use a form.
           {' '}
           <Link href="/templates/preview" style={{ color: '#3b82f6', textDecoration: 'none' }}>
             Preview QuestionCard (caretaker / NV)

@@ -215,7 +215,7 @@ export default function DashboardHome() {
           </p>
           {(authCode === 'ROLE_NOT_PERMITTED' || authCode === 'USER_NOT_PROVISIONED') && (
             <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem' }}>
-              <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+              <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Forms</Link>
             </p>
           )}
         </div>
@@ -247,7 +247,7 @@ export default function DashboardHome() {
         }}>
           {error}
           <p style={{ margin: '0.75rem 0 0', fontSize: '0.875rem' }}>
-            <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+            <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Forms</Link>
           </p>
         </div>
       )}
