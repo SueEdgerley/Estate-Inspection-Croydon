@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },
@@ -22,7 +23,26 @@ export default function InspectionsListPage() {
     search: '',
   })
 
+  const pathname = usePathname()
+  const prevPathRef = useRef(null)
+
   useEffect(() => {
+    const isList = pathname === '/inspections' || pathname === '/inspections/'
+    if (!isList) {
+      prevPathRef.current = pathname
+      return
+    }
+
+    // Entering the list from outside /inspections/* (e.g. dashboard after submit): reset type/search so
+    // Street/Block/Estate filters do not hide type=inspection rows; keep date range unless user prefers otherwise.
+    const prev = prevPathRef.current
+    const cameFromOutsideInspections =
+      prev != null && prev !== '' && !prev.startsWith('/inspections')
+    if (cameFromOutsideInspections) {
+      setFilters((f) => ({ ...f, type: 'all', search: '' }))
+    }
+    prevPathRef.current = pathname
+
     const load = async () => {
       setLoading(true)
       setError(null)
@@ -42,6 +62,27 @@ export default function InspectionsListPage() {
       }
     }
     load()
+  }, [pathname])
+
+  // Back-forward cache restore can resurrect a stale list without remounting; refetch when page is shown from bfcache.
+  useEffect(() => {
+    const onPageShow = (e) => {
+      if (!e.persisted) return
+      const p = window.location?.pathname || ''
+      if (p !== '/inspections' && p !== '/inspections/') return
+      ;(async () => {
+        try {
+          const res = await fetch('/api/inspections', { credentials: 'include', cache: 'no-store' })
+          if (!res.ok) return
+          const data = await res.json()
+          if (Array.isArray(data)) setInspections(data)
+        } catch {
+          /* ignore */
+        }
+      })()
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
   }, [])
 
   const formatDate = (dateString) => {
