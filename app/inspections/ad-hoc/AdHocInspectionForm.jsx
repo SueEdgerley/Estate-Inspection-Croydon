@@ -1,11 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-export default function AdHocInspectionForm() {
+export default function AdHocInspectionForm({ initialEstates = [], initialBlocks = [] }) {
   const router = useRouter()
+  const estates = Array.isArray(initialEstates) ? initialEstates : []
+  const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
+  const [estateId, setEstateId] = useState('')
+  const [postgresBlockId, setPostgresBlockId] = useState('')
   const [title, setTitle] = useState('')
   const [inspectionDate, setInspectionDate] = useState('')
   const [location, setLocation] = useState('')
@@ -13,12 +17,27 @@ export default function AdHocInspectionForm() {
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const blocksForEstate = useMemo(
+    () => blocks.filter((b) => b.estate_id && b.estate_id === estateId),
+    [blocks, estateId]
+  )
+
+  useEffect(() => {
+    if (!postgresBlockId) return
+    const stillValid = blocksForEstate.some((b) => b.id === postgresBlockId)
+    if (!stillValid) setPostgresBlockId('')
+  }, [estateId, postgresBlockId, blocksForEstate])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitError(null)
     const name = title.trim()
     if (!name) {
       setSubmitError('Please enter an inspection name.')
+      return
+    }
+    if (!estateId || !String(estateId).trim()) {
+      setSubmitError('Please select an estate.')
       return
     }
 
@@ -36,6 +55,8 @@ export default function AdHocInspectionForm() {
           location: location.trim() || undefined,
           description: notes.trim() || undefined,
           source: 'ad_hoc',
+          estate_id: estateId.trim(),
+          block_id: postgresBlockId.trim() || undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -120,6 +141,83 @@ export default function AdHocInspectionForm() {
               {submitError}
             </div>
           )}
+
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label
+              htmlFor="ad-hoc-estate"
+              style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: '#374151',
+              }}
+            >
+              Estate <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <select
+              id="ad-hoc-estate"
+              value={estateId}
+              onChange={(e) => setEstateId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                boxSizing: 'border-box',
+              }}
+            >
+              <option value="">— Select estate —</option>
+              {estates.map((es) => (
+                <option key={es.id} value={es.id}>
+                  {es.name}
+                </option>
+              ))}
+            </select>
+            {estates.length === 0 && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
+                No estates in Postgres. Add them in Admin first.
+              </p>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label
+              htmlFor="ad-hoc-block"
+              style={{
+                display: 'block',
+                marginBottom: '0.5rem',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: '#374151',
+              }}
+            >
+              Block (optional)
+            </label>
+            <select
+              id="ad-hoc-block"
+              value={postgresBlockId}
+              onChange={(e) => setPostgresBlockId(e.target.value)}
+              disabled={!estateId}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                boxSizing: 'border-box',
+                backgroundColor: estateId ? 'white' : '#f3f4f6',
+              }}
+            >
+              <option value="">Whole estate (no specific block)</option>
+              {blocksForEstate.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div style={{ marginBottom: '1.25rem' }}>
             <label

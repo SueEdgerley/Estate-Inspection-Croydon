@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
-import { getTemplateById } from '@/lib/airtable-client'
 
 // Route segment config
 export const runtime = 'nodejs'
@@ -53,7 +52,7 @@ export async function POST(request) {
       )
     }
     const body = await request.json()
-    const { type, title, description, location, template_id } = body
+    const { type, title, description, location, template_id, template_name } = body
     
     // Validation
     if (!title || !title.trim()) {
@@ -70,19 +69,26 @@ export async function POST(request) {
       )
     }
     
-    // Get template name from Airtable
-    let templateName = null
-    try {
-      if (template_id) {
-        const template = await getTemplateById(template_id)
-        if (template && template.name) {
-          templateName = template.name
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching template name:', error)
-      // Continue without template name - not a fatal error
+    // Keep template name from request only; no runtime Airtable dependency
+    const templateName =
+      typeof template_name === 'string' && template_name.trim()
+        ? template_name.trim()
+        : null
+    const templateVersionResult = await sql`
+      SELECT id, snapshot
+      FROM template_versions
+      WHERE template_id = ${template_id}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `
+    if (templateVersionResult.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'No template version found for template_id. Start an inspection from /api/inspections first.' },
+        { status: 400 }
+      )
     }
+    const templateVersionId = templateVersionResult.rows[0].id
+    const templateVersionSnapshot = templateVersionResult.rows[0].snapshot
     
     const id = Date.now().toString()
     const status = 'draft' // Start as draft since it's an inspection
@@ -91,7 +97,7 @@ export async function POST(request) {
     await sql`
       INSERT INTO inspections (
         id, type, title, description, location_label, status, 
-        template_id, template_name, created_at, updated_at
+        template_id, template_name, template_version_id, template_version, created_at, updated_at
       )
       VALUES (
         ${id}, 
@@ -102,6 +108,8 @@ export async function POST(request) {
         ${status},
         ${template_id},
         ${templateName},
+        ${templateVersionId},
+        ${JSON.stringify(templateVersionSnapshot)}::jsonb,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       )
@@ -123,6 +131,7 @@ export async function POST(request) {
       status,
       template_id,
       template_name: templateName,
+      template_version_id: templateVersionId,
       createdAt: new Date().toISOString(),
     }
     

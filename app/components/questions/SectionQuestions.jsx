@@ -2,37 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import QuestionRenderer from './QuestionRenderer'
-import { getSectionQuestions, getVisibleQuestions, validateRequiredQuestions } from '@/lib/airtable'
+import { getVisibleQuestions } from '@/lib/airtable'
 
-export default function SectionQuestions({ sectionId, inspectionId, answers = {}, onAnswersChange, errors = {}, onQuestionsLoaded }) {
+export default function SectionQuestions({ sectionId, inspectionId, section, sectionQuestions = [], answers = {}, onAnswersChange, errors = {}, onQuestionsLoaded }) {
   const [questions, setQuestions] = useState([])
-  const [loading, setLoading] = useState(true)
   const [localAnswers, setLocalAnswers] = useState(answers)
 
   useEffect(() => {
-    loadQuestions()
-  }, [sectionId])
+    setQuestions(sectionQuestions)
+    if (onQuestionsLoaded) onQuestionsLoaded(sectionQuestions)
+  }, [sectionId, sectionQuestions, onQuestionsLoaded])
 
   useEffect(() => {
     // Update local answers when prop changes
     setLocalAnswers(answers)
   }, [answers])
-
-  const loadQuestions = async () => {
-    try {
-      setLoading(true)
-      const fetchedQuestions = await getSectionQuestions(sectionId)
-      setQuestions(fetchedQuestions)
-      // Notify parent component of loaded questions
-      if (onQuestionsLoaded) {
-        onQuestionsLoaded(fetchedQuestions)
-      }
-    } catch (error) {
-      console.error('Error loading questions:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleAnswerChange = (questionId, value) => {
     const newAnswers = {
@@ -45,10 +29,6 @@ export default function SectionQuestions({ sectionId, inspectionId, answers = {}
 
   // Get visible questions based on conditional logic
   const visibleQuestions = getVisibleQuestions(questions, localAnswers)
-
-  if (loading) {
-    return <div style={{ padding: '1rem', color: '#6b7280' }}>Loading questions...</div>
-  }
 
   if (questions.length === 0) {
     return <div style={{ padding: '1rem', color: '#6b7280' }}>No questions found for this section.</div>

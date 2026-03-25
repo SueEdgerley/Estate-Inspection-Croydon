@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
-import { getTemplateQuestions, normalizeQuestion } from '@/lib/airtable-client'
 import { generatePDF } from '@/lib/pdf-generator'
 import { sendEmails } from '@/lib/email-sender'
 
@@ -104,12 +103,19 @@ export async function POST(request, { params }) {
       WHERE id = ${id}
     `
 
-    // Get template questions to extract recipients
+    // Extract recipients from persisted template snapshot (no live Airtable dependency)
     let recipients = []
-    if (inspection.template_id) {
-      const templateQuestions = await getTemplateQuestions(inspection.template_id)
-      const normalizedQuestions = templateQuestions.map(normalizeQuestion)
-      recipients = extractCaretakerRecipients(answers, normalizedQuestions)
+    const version = inspection.template_version
+    const versionSections = (version && version.sections) || []
+    const allQuestions = versionSections.flatMap((sec) => sec.questions || [])
+    if (allQuestions.length > 0) {
+      recipients = extractCaretakerRecipients(answers, allQuestions)
+      if (recipients.length === 0) {
+        const recipientQuestion = findRecipientQuestion(allQuestions)
+        if (recipientQuestion && answers[recipientQuestion.id]) {
+          recipients = [answers[recipientQuestion.id]]
+        }
+      }
     }
     
     // Get actions grouped by category

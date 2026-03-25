@@ -1,32 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { QUESTION_TYPES } from '@/lib/airtable'
-import { getPeople } from '@/lib/airtable'
 import YesNoQuestion from './YesNoQuestion'
 
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
   const [localValue, setLocalValue] = useState(value || '')
-  const [peopleOptions, setPeopleOptions] = useState([])
-  
-  // Load people if this is a "Who to send to?" type question
-  useEffect(() => {
-    if (question.id === 'who_to_send_to' || question.label?.toLowerCase().includes('who to send')) {
-      loadPeople()
-    }
-  }, [question])
-  
-  const loadPeople = async () => {
-    try {
-      const people = await getPeople()
-      setPeopleOptions(people.map(person => ({
-        value: person.id,
-        label: `${person.name} (${person.email})`
-      })))
-    } catch (error) {
-      console.error('Error loading people:', error)
-    }
-  }
 
   const handleChange = (newValue) => {
     setLocalValue(newValue)
@@ -97,8 +76,8 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
         )
 
       case QUESTION_TYPES.SINGLE_SELECT:
-        // Use people options if available, otherwise use question options
-        const options = peopleOptions.length > 0 ? peopleOptions : (question.options || [])
+        // Use only snapshot options from persisted template_version
+        const options = question.options || []
         return (
           <select
             value={localValue}

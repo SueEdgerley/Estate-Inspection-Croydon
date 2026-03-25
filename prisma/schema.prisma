@@ -24,6 +24,7 @@ model Inspection {
   templateId         String?   @map("template_id") @db.VarChar(255)
   templateName        String?   @map("template_name") @db.VarChar(255)
   templateVersion     Json?     @map("template_version") @db.JsonB
+  templateVersionId   String?   @map("template_version_id") @db.VarChar(255)
   dueDate             DateTime? @map("due_date") @db.Timestamptz
   submittedAt         DateTime? @map("submitted_at") @db.Timestamptz
   grading             String?   @db.VarChar(50)
@@ -44,6 +45,7 @@ model Inspection {
 
   estate              Estate?   @relation(fields: [estateId], references: [id], onDelete: SetNull)
   block               Block?    @relation(fields: [blockId], references: [id], onDelete: SetNull)
+  templateVersionRef  TemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
   inspectionPhotos     InspectionPhoto[]
   inspectionAnswers    InspectionAnswer[]
   actions              Action[]
@@ -52,6 +54,21 @@ model Inspection {
   outboundEmails       OutboundEmail[]
 
   @@map("inspections")
+}
+
+model TemplateVersion {
+  id            String   @id @db.VarChar(255)
+  templateId    String   @map("template_id") @db.VarChar(255)
+  templateName  String?  @map("template_name") @db.VarChar(255)
+  versionHash   String   @map("version_hash") @db.VarChar(64)
+  snapshot      Json     @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  inspections   Inspection[]
+
+  @@index([templateId, createdAt(sort: Desc)])
+  @@index([templateId, versionHash])
+  @@map("template_versions")
 }
 
 // Users table: Clerk authentication only. Do not use People for auth.

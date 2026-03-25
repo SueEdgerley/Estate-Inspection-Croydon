@@ -1,38 +1,34 @@
 import { NextResponse } from 'next/server'
-import { getBlocksCached } from '@/lib/airtable-client'
+import { auth } from '@clerk/nextjs/server'
+import { sql } from '@vercel/postgres'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+/** Reference blocks from Postgres (same source as inspection forms). Not Airtable. */
 export async function GET() {
-  const hasKey =
-    process.env.AIRTABLE_API_TOKEN ||
-    process.env.AIRTABLE_API_KEY
-
-  if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
-    return NextResponse.json(
-      {
-        error: 'Airtable not configured',
-        details:
-          'Set AIRTABLE_BASE_ID and AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY) in environment variables.',
-      },
-      { status: 503, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-    )
+  const { userId } = await auth()
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-
+  if (!getPgUrl()) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
+  }
   try {
-    const blocks = await getBlocksCached()
-
+    await ensureDatabase()
+    const result = await sql`
+      SELECT id, estate_id, name FROM blocks ORDER BY name
+    `
     return NextResponse.json(
-      { blocks },
+      { blocks: result.rows },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   } catch (error) {
-    console.error('Error fetching blocks from Airtable:', error)
+    console.error('Error fetching blocks from Postgres:', error)
     return NextResponse.json(
       { error: 'Failed to fetch blocks', details: error.message },
       { status: 500 }
     )
   }
 }
-

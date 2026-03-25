@@ -1,10 +1,12 @@
+import { loadEstatesAndBlocksForInspectionForm } from '@/lib/load-reference-estates-blocks'
 import AdHocInspectionForm from './AdHocInspectionForm'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Create Ad Hoc Inspection — Postgres-only create (no Airtable).
+ * Ad hoc inspection — Postgres-only create; estate/block pickers use same reference data as New Inspection.
  */
-export default function AdHocInspectionPage() {
-  return <AdHocInspectionForm />
+export default async function AdHocInspectionPage() {
+  const { estates, blocks } = await loadEstatesAndBlocksForInspectionForm()
+  return <AdHocInspectionForm initialEstates={estates} initialBlocks={blocks} />
 }

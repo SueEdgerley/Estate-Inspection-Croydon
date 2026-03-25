@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
@@ -305,14 +305,27 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   )
 }
 
-export default function NewInspectionForm({ initialBlocks = [] }) {
+export default function NewInspectionForm({ initialEstates = [], initialBlocks = [] }) {
   const router = useRouter()
   const [apiPayload, setApiPayload] = useState({ templates: [] })
+  const estates = Array.isArray(initialEstates) ? initialEstates : []
   const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
-  const [blockRecordId, setBlockRecordId] = useState('')
+  const [estateId, setEstateId] = useState('')
+  const [postgresBlockId, setPostgresBlockId] = useState('')
+
+  const blocksForEstate = useMemo(
+    () => blocks.filter((b) => b.estate_id && b.estate_id === estateId),
+    [blocks, estateId]
+  )
+
+  useEffect(() => {
+    if (!postgresBlockId) return
+    const stillValid = blocksForEstate.some((b) => b.id === postgresBlockId)
+    if (!stillValid) setPostgresBlockId('')
+  }, [estateId, postgresBlockId, blocksForEstate])
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [answers, setAnswers] = useState({})
@@ -332,6 +345,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const startWizard = async () => {
     if (!templateId || !selectedTemplate) return
+    if (!estateId || !String(estateId).trim()) {
+      setSubmitError('Select an estate before starting the guided inspection.')
+      return
+    }
     setStartingWizard(true)
     setSubmitError(null)
     try {
@@ -345,7 +362,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           title: selectedTemplate.name || 'Neighbourhood Voice Inspection',
           location: location.trim() || undefined,
           description: description.trim() || undefined,
-          block_id: blockRecordId || undefined,
+          estate_id: estateId.trim(),
+          block_id: postgresBlockId.trim() || undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -414,6 +432,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const validate = () => {
     const errs = {}
+    if (!estateId || !String(estateId).trim()) errs.estate_id = 'Select an estate'
+    if (postgresBlockId) {
+      const b = blocksForEstate.find((x) => x.id === postgresBlockId)
+      if (!b) errs.block_id = 'Select a block for this estate or choose whole estate'
+    }
     if (!templateId) errs.template_id = 'Select a template'
     if (!selectedTemplate) return { ...errs }
 
@@ -471,7 +494,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         credentials: 'include',
         body: JSON.stringify({
           template_id: templateId,
-          block_id: blockRecordId || undefined,
+          estate_id: estateId.trim(),
+          block_id: postgresBlockId.trim() || undefined,
           location: location.trim() || undefined,
           description: description.trim() || undefined,
           answers,
@@ -543,7 +567,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           New Inspection
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Choose a template and complete the form
+          Choose estate (required), optional block, then a template from Airtable
         </p>
       </div>
 
@@ -574,6 +598,111 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
+            htmlFor="estate_id"
+            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
+          >
+            Estate <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <select
+            id="estate_id"
+            name="estate_id"
+            value={estateId}
+            onChange={(e) => {
+              setEstateId(e.target.value)
+              setValidationErrors((prev) => ({ ...prev, estate_id: undefined, block_id: undefined }))
+            }}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: validationErrors.estate_id ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              backgroundColor: 'white',
+            }}
+          >
+            <option value="">— Select estate —</option>
+            {estates.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </select>
+          {validationErrors.estate_id && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.estate_id}</p>
+          )}
+          {estates.length === 0 && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
+              No estates in Postgres. Add them in Admin before creating an inspection.
+            </p>
+          )}
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label
+            htmlFor="postgres_block_id"
+            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
+          >
+            Block (optional)
+          </label>
+          <select
+            id="postgres_block_id"
+            name="postgres_block_id"
+            value={postgresBlockId}
+            onChange={(e) => setPostgresBlockId(e.target.value)}
+            disabled={!estateId}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: validationErrors.block_id ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              backgroundColor: estateId ? 'white' : '#f3f4f6',
+            }}
+          >
+            <option value="">Whole estate (no specific block)</option>
+            {blocksForEstate.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          {validationErrors.block_id && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.block_id}</p>
+          )}
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label
+            htmlFor="location"
+            style={{
+              display: 'block',
+              marginBottom: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#374151',
+            }}
+          >
+            Location note (optional)
+          </label>
+          <input
+            type="text"
+            id="location"
+            name="location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Stairwell, entrance, or flat number"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label
             htmlFor="template_id"
             style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
@@ -587,7 +716,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               setTemplateId(e.target.value)
               setAnswers({})
               setAnswerExtras({})
-              setValidationErrors({})
+              setValidationErrors((prev) => {
+                const next = { ...prev }
+                delete next.template_id
+                return next
+              })
             }}
             required
             style={{
@@ -638,70 +771,6 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             </button>
           </div>
         )}
-
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label
-            htmlFor="block"
-            style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: '#374151',
-            }}
-          >
-            Block (optional)
-          </label>
-          <select
-            id="block"
-            name="block"
-            value={blockRecordId}
-            onChange={(e) => setBlockRecordId(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              backgroundColor: 'white',
-              marginBottom: '0.75rem',
-            }}
-          >
-            <option value="">Select a block (optional)</option>
-            {blocks.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <label
-            htmlFor="location"
-            style={{
-              display: 'block',
-              marginBottom: '0.5rem',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: '#374151',
-            }}
-          >
-            Location note (optional)
-          </label>
-          <input
-            type="text"
-            id="location"
-            name="location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Stairwell, entrance, or flat number"
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-            }}
-          />
-        </div>
 
         {selectedTemplate && selectedTemplate.sections && selectedTemplate.sections.length > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>

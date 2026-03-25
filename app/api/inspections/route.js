@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
+import { createHash } from 'crypto'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
+import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,6 +17,81 @@ function parseDueDateInput(raw) {
   if (raw == null || raw === '') return null
   const d = raw instanceof Date ? raw : new Date(typeof raw === 'string' ? raw : String(raw))
   return Number.isNaN(d.getTime()) ? null : d
+}
+
+function buildTemplateVersionSnapshot(template) {
+  return {
+    id: template.id,
+    name: template.name,
+    template_type: template.template_type ?? template.type ?? null,
+    sections: (template.sections || []).map((sec, secIndex) => ({
+      id: sec.id,
+      order: sec.order ?? secIndex + 1,
+      title: sec.title ?? sec.name,
+      name: sec.name ?? sec.title ?? null,
+      help_text: sec.help_text ?? null,
+      what_to_look_for: sec.what_to_look_for ?? null,
+      questions: (sec.questions || []).map((q, qIndex) => ({
+        id: q.id,
+        question_key: q.question_key ?? q.id,
+        order: q.order ?? qIndex + 1,
+        label: q.label ?? q.question_text ?? null,
+        question_text: q.question_text ?? q.label,
+        resident_wording: q.resident_wording ?? null,
+        helper_text: q.helper_text ?? null,
+        question_type: q.question_type ?? null,
+        answer_mode: q.answer_mode ?? q.question_type ?? null,
+        options: q.options ?? null,
+        grading_scheme_name: q.grading_scheme_name ?? null,
+        is_required: q.is_required ?? false,
+        category: q.category ?? null,
+        action_category: q.action_category ?? q.category ?? null,
+        create_action_on_no: q.create_action_on_no ?? true,
+        require_comment_on_no: q.require_comment_on_no ?? true,
+        require_photo_on_no: q.require_photo_on_no ?? true,
+        triggers_task: q.triggers_task ?? false,
+        triggers_email: q.triggers_email ?? false,
+        email_routing: q.email_routing ?? null,
+        email_route_team_id: q.email_route_team_id ?? null,
+        issue_type: q.issue_type ?? null,
+        programme_tag: q.programme_tag ?? null,
+        depends_on_question_id: q.depends_on_question_id ?? null,
+        show_when_value: q.show_when_value ?? null,
+      })),
+    })),
+  }
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`
+  const keys = Object.keys(value).sort()
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`
+}
+
+function hashSnapshot(snapshot) {
+  return createHash('sha256').update(stableStringify(snapshot)).digest('hex')
+}
+
+async function getOrCreateTemplateVersion(templateId, templateName, snapshot) {
+  const versionHash = hashSnapshot(snapshot)
+  const latest = await sql`
+    SELECT id, snapshot, version_hash
+    FROM template_versions
+    WHERE template_id = ${templateId}
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `
+  if (latest.rows[0] && latest.rows[0].version_hash === versionHash) {
+    return { id: latest.rows[0].id, snapshot: latest.rows[0].snapshot, versionHash, reused: true }
+  }
+
+  const versionId = `tv_${templateId}_${Date.now()}_${versionHash.slice(0, 8)}`
+  await sql`
+    INSERT INTO template_versions (id, template_id, template_name, version_hash, snapshot)
+    VALUES (${versionId}, ${templateId}, ${templateName || null}, ${versionHash}, ${JSON.stringify(snapshot)}::jsonb)
+  `
+  return { id: versionId, snapshot, versionHash, reused: false }
 }
 
 export async function GET() {
@@ -146,24 +223,33 @@ export async function POST(request) {
 
     const inspectorEmail = await getCurrentUserEmail()
     const inspectorName = await getCurrentUserName()
-    const estateId =
-      bodyEstateId && String(bodyEstateId).trim() ? String(bodyEstateId).trim() : null
-    const blockId =
-      bodyBlockId && String(bodyBlockId).trim() ? String(bodyBlockId).trim() : null
     const adHocSource = sourceValue ?? 'ad_hoc'
 
     try {
       await ensureDatabase()
+      const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
+      if (!loc.ok) {
+        return NextResponse.json({ error: loc.message }, { status: loc.status })
+      }
+      const estateId = loc.estateId
+      const blockId = loc.blockId
       const inspectionId = crypto.randomUUID()
-      const loc =
+      const locationLabel =
         location && String(location).trim() ? String(location).trim() : null
       const desc =
         description && String(description).trim() ? String(description).trim() : null
+      const adHocSnapshot = {
+        id: 'ad_hoc',
+        name: 'Ad Hoc Inspection',
+        template_type: 'ad_hoc',
+        sections: [],
+      }
+      const adHocVersion = await getOrCreateTemplateVersion('ad_hoc', 'Ad Hoc Inspection', adHocSnapshot)
 
       await sql`
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
-          template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
+          template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
           inspector_id, inspector_name, estate_id, block_id, source
         )
         VALUES (
@@ -172,11 +258,12 @@ export async function POST(request) {
           'ad_hoc',
           ${titleTrimmed},
           ${desc},
-          ${loc},
+          ${locationLabel},
           ${dueDateParsed},
           NULL,
           NULL,
-          NULL,
+          ${adHocVersion.id},
+          ${JSON.stringify(adHocVersion.snapshot)}::jsonb,
           'draft',
           NULL,
           ${new Date()},
@@ -233,45 +320,26 @@ export async function POST(request) {
       )
     }
 
+    await ensureDatabase()
+    const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
+    if (!loc.ok) {
+      return NextResponse.json({ error: loc.message }, { status: loc.status })
+    }
+    const estateId = loc.estateId
+    const blockId = loc.blockId
     const inspectionId = crypto.randomUUID()
-    const estateId = bodyEstateId && String(bodyEstateId).trim() ? String(bodyEstateId).trim() : null
-    const blockId = bodyBlockId && String(bodyBlockId).trim() ? String(bodyBlockId).trim() : null
+    const snapshot = buildTemplateVersionSnapshot(template)
+    const templateVersion = await getOrCreateTemplateVersion(template_id, template.name || null, snapshot)
 
     // Draft-only: create inspection with status 'draft' for wizard flow (e.g. Neighbourhood Voice)
     if (createDraft === true) {
-      await ensureDatabase()
       const displayTitle = (typeof title === 'string' && title.trim())
         ? title.trim()
         : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
-      const draftSnapshot = JSON.stringify({
-        id: template.id,
-        name: template.name,
-        sections: (template.sections || []).map((sec) => ({
-          id: sec.id,
-          title: sec.title ?? sec.name,
-          help_text: sec.help_text,
-          questions: (sec.questions || []).map((q) => ({
-            id: q.id,
-            question_text: q.question_text ?? q.label,
-            resident_wording: q.resident_wording,
-            helper_text: q.helper_text,
-            question_type: q.question_type,
-            options: q.options,
-            action_category: q.action_category,
-            create_action_on_no: q.create_action_on_no,
-            triggers_task: q.triggers_task,
-            triggers_email: q.triggers_email,
-            email_route_team_id: q.email_route_team_id,
-            issue_type: q.issue_type,
-            programme_tag: q.programme_tag,
-            category: q.category,
-          })),
-        })),
-      })
       await sql`
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
-          template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
+          template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
           inspector_id, inspector_name, estate_id, block_id, source
         )
         VALUES (
@@ -284,7 +352,8 @@ export async function POST(request) {
           ${dueDateParsed},
           ${template_id},
           ${template.name || null},
-          ${draftSnapshot}::jsonb,
+          ${templateVersion.id},
+          ${JSON.stringify(templateVersion.snapshot)}::jsonb,
           'draft',
           NULL,
           ${new Date()},
@@ -296,33 +365,16 @@ export async function POST(request) {
           ${sourceValue}
         )
       `
-      return NextResponse.json({ inspectionId }, { status: 201 })
+      return NextResponse.json(
+        {
+          inspectionId,
+          templateVersionId: templateVersion.id,
+          templateVersionHash: templateVersion.versionHash,
+          templateVersionReused: templateVersion.reused,
+        },
+        { status: 201 }
+      )
     }
-
-    const templateVersionSnapshot = JSON.stringify({
-      id: template.id,
-      name: template.name,
-      sections: (template.sections || []).map((sec) => ({
-        id: sec.id,
-        title: sec.title ?? sec.name,
-        questions: (sec.questions || []).map((q) => ({
-          id: q.id,
-          question_text: q.question_text ?? q.label,
-          question_type: q.question_type,
-          options: q.options,
-          action_category: q.action_category,
-          triggers_task: q.triggers_task,
-          triggers_email: q.triggers_email,
-          email_routing: q.email_routing,
-          email_route_team_id: q.email_route_team_id,
-          issue_type: q.issue_type,
-          programme_tag: q.programme_tag,
-          category: q.category,
-        })),
-      })),
-    })
-
-    await ensureDatabase()
 
     const displayTitle = (typeof title === 'string' && title.trim())
       ? title.trim()
@@ -331,7 +383,7 @@ export async function POST(request) {
     await sql`
       INSERT INTO inspections (
         id, legacy_inspection_id, type, title, description, location_label, due_date,
-        template_id, template_name, template_version, status, submitted_at, created_at, updated_at,
+        template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
         inspector_id, inspector_name, estate_id, block_id, source
       )
       VALUES (
@@ -344,7 +396,8 @@ export async function POST(request) {
         ${dueDateParsed},
         ${template_id},
         ${template.name || null},
-        ${templateVersionSnapshot}::jsonb,
+        ${templateVersion.id},
+        ${JSON.stringify(templateVersion.snapshot)}::jsonb,
         'submitted',
         ${new Date()},
         ${new Date()},
@@ -362,6 +415,7 @@ export async function POST(request) {
         due_date = EXCLUDED.due_date,
         template_id = EXCLUDED.template_id,
         template_name = EXCLUDED.template_name,
+        template_version_id = EXCLUDED.template_version_id,
         template_version = EXCLUDED.template_version,
         status = EXCLUDED.status,
         submitted_at = EXCLUDED.submitted_at,
@@ -665,6 +719,9 @@ export async function POST(request) {
     return NextResponse.json({
       inspectionId,
       id: inspectionId,
+      templateVersionId: templateVersion.id,
+      templateVersionHash: templateVersion.versionHash,
+      templateVersionReused: templateVersion.reused,
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,

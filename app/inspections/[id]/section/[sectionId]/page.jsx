@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getAllIssues, updateIssue } from '@/lib/issues'
 import SectionQuestions from '@/app/components/questions/SectionQuestions'
-import { getTemplateSections } from '@/lib/airtable'
 import { validateCaretakerTemplate } from '@/lib/caretaker-template'
 import { validateRequiredQuestions } from '@/lib/airtable'
 import { handleYesAnswer, handleNoAnswer } from '@/lib/yesno-action-handler'
@@ -26,7 +24,6 @@ export default function InspectionSection() {
   }, [params])
   const [inspection, setInspection] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [sectionData, setSectionData] = useState({})
   const [answers, setAnswers] = useState({})
   const [createdActions, setCreatedActions] = useState([])
   const [questions, setQuestions] = useState([])
@@ -37,18 +34,23 @@ export default function InspectionSection() {
     const loadInspection = async () => {
       try {
         if (!id) return
-        const issues = await getAllIssues()
-        const found = issues.find(i => i.id === id)
-        if (found) {
-          setInspection(found)
-          if (found.template_id) {
-            const sections = await getTemplateSections(found.template_id)
-            const currentSection = sections.find(s => s.order === parseInt(sectionId))
-            if (currentSection) {
-              setSection(currentSection)
-            }
+        const response = await fetch(`/api/inspections/${id}`, { credentials: 'include' })
+        if (!response.ok) {
+          throw new Error('Inspection not found')
+        }
+        const found = await response.json()
+        setInspection(found)
+        let version = found.template_version
+        if (typeof version === 'string') {
+          try {
+            version = JSON.parse(version)
+          } catch {
+            version = null
           }
         }
+        const sections = (version && version.sections) || []
+        const currentSection = sections[parseInt(sectionId, 10) - 1] || null
+        setSection(currentSection)
       } catch (error) {
         console.error('Error loading inspection:', error)
       } finally {
@@ -191,7 +193,6 @@ await fetch(`/api/inspections/${id}/answers`, {
       }
       setErrors({})
       await saveAnswers()
-      await updateIssue(id, { ...sectionData })
       await processNoAnswers(questions, answers)
       alert('Section saved!')
     } catch (error) {
@@ -287,6 +288,7 @@ await fetch(`/api/inspections/${id}/answers`, {
             sectionId={section.id}
             inspectionId={id}
             section={section}
+            sectionQuestions={section.questions || []}
             answers={answers}
             onAnswersChange={handleAnswersChange}
             errors={errors}
