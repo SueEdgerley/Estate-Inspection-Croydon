@@ -51,10 +51,14 @@ export default function AdminInspectionsPage() {
               <td style={{ border: '1px solid #ccc', padding: '6px 8px' }}>{i.status || '—'}</td>
               <td style={{ border: '1px solid #ccc', padding: '6px 8px' }}>{i.has_template_snapshot ? 'Yes' : 'No'}</td>
               <td style={{ border: '1px solid #ccc', padding: '6px 8px' }}>
-                {i.full_pdf_url && <a href={i.full_pdf_url} target="_blank" rel="noopener noreferrer">Full</a>}
-                {i.full_pdf_url && i.poster_pdf_url && ' · '}
-                {i.poster_pdf_url && <a href={i.poster_pdf_url} target="_blank" rel="noopener noreferrer">Poster</a>}
-                {!i.full_pdf_url && !i.poster_pdf_url && '—'}
+                {(i.full_pdf_url || i.pdf_url) && (
+                  <a href={i.full_pdf_url || i.pdf_url} target="_blank" rel="noopener noreferrer">Full</a>
+                )}
+                {(i.full_pdf_url || i.pdf_url) && i.poster_pdf_url && ' · '}
+                {i.poster_pdf_url && (
+                  <a href={i.poster_pdf_url} target="_blank" rel="noopener noreferrer">Poster</a>
+                )}
+                {!i.full_pdf_url && !i.pdf_url && !i.poster_pdf_url && '—'}
               </td>
             </tr>
           ))}

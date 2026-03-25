@@ -24,7 +24,7 @@ export async function GET() {
     const result = await sql`
       SELECT id, type, title, location_label, template_id, template_name,
              status, submitted_at, created_at, inspector_id, inspector_name,
-             pdf_url, full_pdf_url, poster_pdf_url, estate_id, block_id,
+             pdf_url, estate_id, block_id,
              template_version IS NOT NULL AS has_template_snapshot
       FROM inspections
       ORDER BY submitted_at DESC NULLS LAST, created_at DESC

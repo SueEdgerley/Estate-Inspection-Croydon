@@ -127,7 +127,7 @@ export async function GET() {
     if (canListAll) {
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
         FROM inspections i
@@ -141,7 +141,7 @@ export async function GET() {
       const emailNorm = userEmail.trim().toLowerCase()
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
         FROM inspections i
@@ -154,7 +154,7 @@ export async function GET() {
     } else {
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
+               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
                e.name AS estate_name, b.name AS block_name,
                (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
         FROM inspections i
