@@ -36,6 +36,18 @@ const USER_ROLE_NAV_HREFS = new Set([
   '/templates',
 ])
 
+/** Croydon Housing banner asset (designed for dark background) */
+const LOGO_SRC = '/croydon-housing-logo.png'
+
+const logoBannerWrap = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  backgroundColor: '#000',
+  borderRadius: 8,
+  padding: '6px 12px',
+  lineHeight: 0,
+}
+
 export default function AppLayout({ children }) {
   const pathname = usePathname()
   const { isSignedIn, isLoaded: authLoaded } = useAuth()
@@ -115,16 +127,18 @@ export default function AppLayout({ children }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 auto' }}>
             <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Council – Home">
-              <img
-                src="/croydon-housing-logo.png"
-                alt="Croydon Council"
-                style={{
-                  height: 'clamp(32px, 4vw, 42px)',
-                  width: 'auto',
-                  maxWidth: 'min(220px, 52vw)',
-                  objectFit: 'contain',
-                }}
-              />
+              <span style={logoBannerWrap}>
+                <img
+                  src={LOGO_SRC}
+                  alt="Croydon Council"
+                  style={{
+                    height: 'clamp(30px, 4vw, 40px)',
+                    width: 'auto',
+                    maxWidth: 'min(260px, 55vw)',
+                    objectFit: 'contain',
+                  }}
+                />
+              </span>
             </Link>
             <h1 style={{
               margin: 0,
@@ -158,7 +172,18 @@ export default function AppLayout({ children }) {
             </nav>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.75rem', color: photobook.primaryMuted, whiteSpace: 'nowrap' }}>Croydon Council</span>
+            <span style={logoBannerWrap} aria-hidden>
+              <img
+                src={LOGO_SRC}
+                alt=""
+                style={{
+                  height: 28,
+                  width: 'auto',
+                  maxWidth: 'min(200px, 38vw)',
+                  objectFit: 'contain',
+                }}
+              />
+            </span>
             <SignedOut>
               <SignInButton mode="modal">
                 <button

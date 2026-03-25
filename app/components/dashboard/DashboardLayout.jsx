@@ -34,6 +34,21 @@ export default function DashboardLayout({ children }) {
         overflowY: 'auto'
       }}>
         <div style={{ padding: '0 1.5rem', marginBottom: '2rem' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            backgroundColor: '#000',
+            borderRadius: 8,
+            padding: '6px 12px',
+            lineHeight: 0,
+            marginBottom: '0.75rem',
+          }}>
+            <img
+              src="/croydon-housing-logo.png"
+              alt="Croydon Council"
+              style={{ height: 36, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+            />
+          </div>
           <h1 style={{
             margin: 0,
             fontSize: '1.5rem',
@@ -42,13 +57,6 @@ export default function DashboardLayout({ children }) {
           }}>
             Estate Inspection
           </h1>
-          <p style={{
-            margin: '0.25rem 0 0 0',
-            fontSize: '0.875rem',
-            color: '#6b7280'
-          }}>
-            Croydon Council
-          </p>
         </div>
 
         <nav>

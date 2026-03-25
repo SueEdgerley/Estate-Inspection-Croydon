@@ -317,7 +317,23 @@ export default function InspectionWizardPage() {
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <img src="/croydon-housing-logo.png" alt="Croydon Council" style={{ height: 48, width: 'auto', marginBottom: 16 }} />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                backgroundColor: '#000',
+                borderRadius: 8,
+                padding: '8px 14px',
+                lineHeight: 0,
+                marginBottom: 16,
+              }}
+            >
+              <img
+                src="/croydon-housing-logo.png"
+                alt="Croydon Council"
+                style={{ height: 48, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+              />
+            </span>
             <h1 style={{ fontSize: '24px', fontWeight: 600, color: nv.text, margin: '0 0 8px' }}>Neighbourhood Voice Inspection</h1>
             <p style={{ fontSize: nv.baseSize, color: nv.muted }}>Your feedback helps improve our estates.</p>
           </div>
