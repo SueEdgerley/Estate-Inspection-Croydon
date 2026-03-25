@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
+import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { generatePDF } from '@/lib/pdf-generator'
 import { sendEmails } from '@/lib/email-sender'
 
@@ -45,6 +46,8 @@ export async function POST(request, { params }) {
     answersResult.rows.forEach(row => {
       answers[row.question_id] = row.answer_value || row.answer_text || (row.answer_boolean != null ? (row.answer_boolean ? 'Yes' : 'No') : row.answer_number)
     })
+
+    const gradingValue = deriveInspectionGrading(inspection.template_version, answers)
 
     // If draft, create actions (and optionally tasks/emails) from answers so PDF and emails have data
     if (inspection.status === 'draft') {
@@ -96,7 +99,8 @@ export async function POST(request, { params }) {
       UPDATE inspections
       SET status = 'submitted',
           submitted_at = CURRENT_TIMESTAMP,
-          pdf_generation_error = NULL
+          pdf_generation_error = NULL,
+          grading = COALESCE(${gradingValue}, grading)
       WHERE id = ${id}
     `
 

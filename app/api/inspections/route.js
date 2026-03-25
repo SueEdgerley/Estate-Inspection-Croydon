@@ -9,6 +9,7 @@ import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
+import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -394,11 +395,13 @@ export async function POST(request) {
       ? title.trim()
       : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
 
+    const gradingValue = deriveInspectionGrading(template, answers)
+
     await sql`
       INSERT INTO inspections (
         id, legacy_inspection_id, type, title, description, location_label, due_date,
         template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
-        inspector_id, inspector_name, estate_id, block_id, source
+        inspector_id, inspector_name, estate_id, block_id, source, grading
       )
       VALUES (
         ${inspectionId},
@@ -420,7 +423,8 @@ export async function POST(request) {
         ${inspectorName || null},
         ${estateId},
         ${blockId},
-        ${sourceValue}
+        ${sourceValue},
+        ${gradingValue}
       )
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
@@ -438,6 +442,7 @@ export async function POST(request) {
         estate_id = COALESCE(EXCLUDED.estate_id, inspections.estate_id),
         block_id = COALESCE(EXCLUDED.block_id, inspections.block_id),
         source = COALESCE(EXCLUDED.source, inspections.source),
+        grading = COALESCE(EXCLUDED.grading, inspections.grading),
         updated_at = ${new Date()}
     `
 
