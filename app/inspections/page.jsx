@@ -10,6 +10,17 @@ const INTERNAL_TABS = [
   { id: 'inspections', label: 'Manage Inspections', icon: '📄' },
 ]
 
+/** Local calendar YYYY-MM-DD; aligns with `<input type="date">` (avoids UTC vs local mix from `new Date('YYYY-MM-DD')`). */
+function localDateKeyFromTimestamp(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function InspectionsListPage() {
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
@@ -129,13 +140,12 @@ export default function InspectionsListPage() {
       if (filters.search && !loc.includes(filters.search.toLowerCase())) return false
       if (!rowMatchesTypeFilter(row.type, filters.type)) return false
       const completed = row.submitted_at || row.created_at
-      if (filters.dateFrom && completed) {
-        if (new Date(completed) < new Date(filters.dateFrom)) return false
+      const dayKey = localDateKeyFromTimestamp(completed)
+      if (filters.dateFrom && dayKey) {
+        if (dayKey < filters.dateFrom) return false
       }
-      if (filters.dateTo && completed) {
-        const end = new Date(filters.dateTo)
-        end.setHours(23, 59, 59, 999)
-        if (new Date(completed) > end) return false
+      if (filters.dateTo && dayKey) {
+        if (dayKey > filters.dateTo) return false
       }
       return true
     })
