@@ -137,6 +137,8 @@ export async function GET() {
         LIMIT 200
       `
     } else if (userEmail) {
+      // Case-insensitive match so template rows (same officer) are not dropped if email casing differs from Clerk.
+      const emailNorm = userEmail.trim().toLowerCase()
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
                i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
@@ -145,7 +147,7 @@ export async function GET() {
         FROM inspections i
         LEFT JOIN estates e ON e.id = i.estate_id
         LEFT JOIN blocks b ON b.id = i.block_id
-        WHERE i.inspector_id = ${userEmail}
+        WHERE lower(trim(i.inspector_id)) = ${emailNorm}
         ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
         LIMIT 200
       `

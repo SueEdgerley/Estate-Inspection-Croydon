@@ -219,6 +219,8 @@ export default function InspectionsListPage() {
                 }}
               >
                 <option value="all">All types</option>
+                <option value="inspection">Template (inspection)</option>
+                <option value="ad_hoc">Ad hoc</option>
                 <option value="street">Street</option>
                 <option value="block">Block</option>
                 <option value="estate">Estate</option>
