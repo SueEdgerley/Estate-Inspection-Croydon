@@ -439,8 +439,8 @@ export default function InspectionWizardPage() {
                 try {
                   const res = await fetch(`/api/inspections/${id}/submit`, { method: 'POST', credentials: 'include' })
                   if (res.ok) {
-                    const data = await res.json().catch(() => ({}))
-                    router.push(`/inspections/${data.inspectionId || id}`)
+                    await res.json().catch(() => ({}))
+                    router.push('/dashboard')
                   } else {
                     const data = await res.json().catch(() => ({}))
                     setError(data?.error || 'Submit failed')
