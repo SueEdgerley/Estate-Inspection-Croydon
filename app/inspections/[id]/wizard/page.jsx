@@ -3,10 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
+import WizardQuestionFields from '@/app/components/wizard/WizardQuestionFields'
 
 // NV design system (wizard only): calm, modern, resident-friendly
-const OPTIONS = ['Yes', 'No', 'NA']
 const MAX_PHOTOS_PER_QUESTION = 3
 
 const MOBILE_BREAKPOINT = 768
@@ -482,11 +481,7 @@ export default function InspectionWizardPage() {
     const sec = currentSectionForQuestion
     const q = currentQuestion
     const value = normalizeVal(answers[q.id])
-    const ext = extras[q.id] || {}
     const isNo = value === 'No'
-    const raiseIssue = ext.raise_issue || isNo
-    const commentId = `comment-${q.id}`
-    const severityId = `severity-${q.id}`
 
     if (isNo && focusedNoForQuestionId.current !== q.id && commentFocusRef.current) {
       focusedNoForQuestionId.current = q.id
@@ -520,90 +515,18 @@ export default function InspectionWizardPage() {
             <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
             {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-              {OPTIONS.map((opt) => {
-                const isSelected = value === opt
-                const isYes = opt === 'Yes'
-                const isNoOpt = opt === 'No'
-                const isNA = opt === 'NA'
-                const fillColor = isYes ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
-                const bg = isSelected ? fillColor : nv.cardBg
-                const border = isSelected ? `2px solid ${fillColor}` : nv.btnUnselectedBorder
-                const color = isSelected ? '#fff' : nv.text
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    id={`answer-${q.id}-${opt}`}
-                    onClick={() => handleAnswer(q.id, opt, sec.id)}
-                    style={{
-                      minHeight: nv.btnMinHeightMobile,
-                      padding: '14px 16px',
-                      fontSize: 18,
-                      fontWeight: nv.btnFontWeight,
-                      backgroundColor: bg,
-                      color,
-                      border,
-                      borderRadius: nv.btnRadius,
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      transition: nv.transition,
-                      width: '100%',
-                    }}
-                  >
-                    {opt}
-                  </button>
-                )
-              })}
-            </div>
-
-            {value === 'Yes' && (
-              <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
-                <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
-                Raise an issue anyway (e.g. still a concern)
-              </label>
-            )}
-
-            {raiseIssue && (
-              <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
-                <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
-                <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details (required for issues)</p>
-                <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
-                <textarea
-                  ref={commentFocusRef}
-                  id={commentId}
-                  name={commentId}
-                  placeholder="e.g. Please ensure the area is kept clear."
-                  value={ext.comment || ''}
-                  onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
-                  rows={2}
-                  style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
-                />
-                <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to 3)</p>
-                <div style={{ width: '100%', minHeight: 52 }}>
-                  <PhotoUploadControl
-                    id={`photo-${q.id}`}
-                    value={(ext.photo_urls || []).slice(0, MAX_PHOTOS_PER_QUESTION)}
-                    onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, MAX_PHOTOS_PER_QUESTION) })}
-                    label="Add photo"
-                    multiple={true}
-                  />
-                </div>
-                <label htmlFor={severityId} style={{ display: 'block', fontSize: nv.helperSize, marginTop: 12, marginBottom: 4, color: nv.text }}>Severity (optional)</label>
-                <select
-                  id={severityId}
-                  name={severityId}
-                  value={ext.severity || ''}
-                  onChange={(e) => handleExtras(q.id, sec.id, { severity: e.target.value })}
-                  style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.helperSize, minHeight: nv.btnMinHeightMobile, fontFamily: nv.font }}
-                >
-                  <option value="">Optional</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-            )}
+            <WizardQuestionFields
+              q={q}
+              sec={sec}
+              nv={nv}
+              answers={answers}
+              extras={extras}
+              handleAnswer={handleAnswer}
+              handleExtras={handleExtras}
+              maxPhotos={MAX_PHOTOS_PER_QUESTION}
+              commentFocusRef={commentFocusRef}
+              isMobile
+            />
           </div>
 
           {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>Saving…</p>}
@@ -660,104 +583,24 @@ export default function InspectionWizardPage() {
         </div>
 
         {/* Questions: white cards, 16px padding, 16px between cards; question 16-18px medium, helper 14px muted; space question–answers 12px */}
-        {sectionQuestions.map((q) => {
-          const value = normalizeVal(answers[q.id])
-          const ext = extras[q.id] || {}
-          const isNo = value === 'No'
-          const raiseIssue = ext.raise_issue || isNo
-          const commentId = `comment-${q.id}`
-          const severityId = `severity-${q.id}`
+        {sectionQuestions.map((q) => (
+          <div key={q.id} style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
+            <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
+            {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: nv.spaceQuestionAnswers }}>{q.helper_text}</p>}
 
-          return (
-            <div key={q.id} style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
-              <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
-              {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: nv.spaceQuestionAnswers }}>{q.helper_text}</p>}
-
-              {/* Y/N/NA: full width, min 48px height, radius 10px, font 600; Yes #16A34A, No #DC2626, NA #6B7280 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-                {OPTIONS.map((opt) => {
-                  const isSelected = value === opt
-                  const isYes = opt === 'Yes'
-                  const isNoOpt = opt === 'No'
-                  const isNA = opt === 'NA'
-                  const fillColor = isYes ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
-                  const bg = isSelected ? fillColor : nv.cardBg
-                  const border = isSelected ? `2px solid ${fillColor}` : nv.btnUnselectedBorder
-                  const color = isSelected ? '#fff' : nv.text
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      id={`answer-${q.id}-${opt}`}
-                      onClick={() => handleAnswer(q.id, opt, sec.id)}
-                      style={{
-                        minHeight: nv.btnMinHeight,
-                        padding: `12px ${nv.btnPx}px`,
-                        width: '100%',
-                        fontSize: nv.baseSize,
-                        fontWeight: nv.btnFontWeight,
-                        backgroundColor: bg,
-                        color,
-                        border,
-                        borderRadius: nv.btnRadius,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        transition: nv.transition,
-                      }}
-                    >
-                      {opt}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {value === 'Yes' && (
-                <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
-                  <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
-                  Raise an issue anyway (e.g. still a concern)
-                </label>
-              )}
-
-              {raiseIssue && (
-                <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
-                  <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
-                  <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details (required for issues)</p>
-                  <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
-                  <textarea
-                    id={commentId}
-                    name={commentId}
-                    placeholder="e.g. Please ensure the area is kept clear."
-                    value={ext.comment || ''}
-                    onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
-                    rows={2}
-                    style={{ width: '100%', padding: 8, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font }}
-                  />
-                  <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to 3)</p>
-                  <PhotoUploadControl
-                    id={`photo-${q.id}`}
-                    value={(ext.photo_urls || []).slice(0, MAX_PHOTOS_PER_QUESTION)}
-                    onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, MAX_PHOTOS_PER_QUESTION) })}
-                    label="Add photo"
-                    multiple={true}
-                  />
-                  <label htmlFor={severityId} style={{ display: 'block', fontSize: nv.helperSize, marginTop: 12, marginBottom: 4, color: nv.text }}>Severity (optional)</label>
-                  <select
-                    id={severityId}
-                    name={severityId}
-                    value={ext.severity || ''}
-                    onChange={(e) => handleExtras(q.id, sec.id, { severity: e.target.value })}
-                    style={{ width: '100%', padding: 8, border: nv.cardBorder, borderRadius: 8, fontSize: nv.helperSize, minHeight: nv.btnMinHeight, fontFamily: nv.font }}
-                  >
-                    <option value="">Optional</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          )
-        })}
+            <WizardQuestionFields
+              q={q}
+              sec={sec}
+              nv={nv}
+              answers={answers}
+              extras={extras}
+              handleAnswer={handleAnswer}
+              handleExtras={handleExtras}
+              maxPhotos={MAX_PHOTOS_PER_QUESTION}
+              isMobile={false}
+            />
+          </div>
+        ))}
 
         {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted }}>Saving…</p>}
 

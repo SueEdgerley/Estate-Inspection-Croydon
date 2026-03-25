@@ -1,11 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { QUESTION_TYPES } from '@/lib/airtable'
+import { getEffectiveQuestionKind } from '@/lib/question-types'
 import YesNoQuestion from './YesNoQuestion'
 
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
-  const [localValue, setLocalValue] = useState(value || '')
+  const [localValue, setLocalValue] = useState(value ?? '')
+
+  useEffect(() => {
+    setLocalValue(value ?? '')
+  }, [value])
 
   const handleChange = (newValue) => {
     setLocalValue(newValue)
@@ -16,8 +21,6 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
     const file = e.target.files[0]
     if (!file) return
 
-    // TODO: Upload to blob storage and get URL
-    // For now, create a data URL
     const reader = new FileReader()
     reader.onload = (event) => {
       const photoUrl = event.target.result
@@ -26,13 +29,11 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
     reader.readAsDataURL(file)
   }
 
-  // Normalize yes/no variants (yesno, yes_no, yes/no) so Yes/No/NA + photo render correctly
-  const qType = (question.question_type || '').toString().toLowerCase().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
-  const isYesNo = qType === 'yes_no' || qType === 'yesno'
+  const kind = getEffectiveQuestionKind(question)
 
   const renderQuestion = () => {
-    switch (isYesNo ? QUESTION_TYPES.YESNO : question.question_type) {
-      case QUESTION_TYPES.YESNO:
+    switch (kind) {
+      case 'yes_no':
         return (
           <YesNoQuestion
             question={question}
@@ -45,42 +46,84 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
         )
 
       case QUESTION_TYPES.GRADED:
+      case 'graded': {
+        const opts =
+          (question.grading_options && question.grading_options.length ? question.grading_options : null) ||
+          (question.options && Array.isArray(question.options) && question.options.length ? question.options : null) ||
+          ['A', 'B', 'C', 'D', 'NA']
         return (
           <div>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              {[1, 2, 3, 4, 5].map((grade) => (
-                <button
-                  key={grade}
-                  type="button"
-                  onClick={() => handleChange(grade)}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    backgroundColor: localValue === grade ? '#3b82f6' : 'white',
-                    color: localValue === grade ? 'white' : '#374151',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    cursor: 'pointer',
-                    fontWeight: localValue === grade ? '600' : '500'
-                  }}
-                >
-                  {grade}
-                </button>
-              ))}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              {opts.map((grade) => {
+                const label = typeof grade === 'string' ? grade : String(grade?.value ?? grade?.label ?? grade)
+                const isSelected = localValue === label
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => handleChange(label)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: isSelected ? '#3b82f6' : 'white',
+                      color: isSelected ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.375rem',
+                      cursor: 'pointer',
+                      fontWeight: isSelected ? '600' : '500',
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
-            {localValue && (
-              <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-                Selected: {localValue}/5
-              </p>
+            {localValue != null && localValue !== '' && (
+              <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Selected: {String(localValue)}</p>
             )}
           </div>
         )
+      }
+
+      case 'rating': {
+        const max = 5
+        const selected = typeof localValue === 'number' ? localValue : parseInt(String(localValue), 10)
+        return (
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => handleChange(n)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: selected === n ? '#3b82f6' : 'white',
+                  color: selected === n ? 'white' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  fontWeight: selected === n ? '600' : '500',
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )
+      }
 
       case QUESTION_TYPES.SINGLE_SELECT:
-        // Use only snapshot options from persisted template_version
-        const options = question.options || []
+      case 'single_select':
+      case 'select': {
+        const rawOpts = question.options || []
+        const options = Array.isArray(rawOpts)
+          ? rawOpts.map((o) => (typeof o === 'string' ? o : o?.value ?? o?.label ?? o))
+          : String(rawOpts)
+              .split(/\r?\n|,/)
+              .map((p) => p.trim())
+              .filter(Boolean)
         return (
           <select
-            value={localValue}
+            value={localValue ?? ''}
             onChange={(e) => handleChange(e.target.value)}
             style={{
               width: '100%',
@@ -88,19 +131,21 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
               border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
-              backgroundColor: 'white'
+              backgroundColor: 'white',
             }}
           >
             <option value="">Select an option...</option>
-            {options.map((option, idx) => (
-              <option key={idx} value={option.value || option}>
-                {option.label || option}
+            {(options.length ? options : ['—']).map((option, idx) => (
+              <option key={idx} value={option}>
+                {option}
               </option>
             ))}
           </select>
         )
+      }
 
       case QUESTION_TYPES.PHOTO:
+      case 'photo':
         return (
           <div>
             <input
@@ -108,7 +153,7 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
               accept="image/*"
               onChange={handlePhotoUpload}
               style={{
-                marginBottom: '0.5rem'
+                marginBottom: '0.5rem',
               }}
             />
             {localValue && (
@@ -120,7 +165,7 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
                     maxWidth: '100%',
                     maxHeight: '300px',
                     borderRadius: '0.375rem',
-                    border: '1px solid #e5e7eb'
+                    border: '1px solid #e5e7eb',
                   }}
                 />
               </div>
@@ -128,18 +173,51 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
           </div>
         )
 
-      default:
+      case 'number':
         return (
           <input
-            type="text"
-            value={localValue}
+            type="number"
+            value={localValue ?? ''}
             onChange={(e) => handleChange(e.target.value)}
             style={{
               width: '100%',
               padding: '0.75rem',
               border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '0.375rem',
-              fontSize: '1rem'
+              fontSize: '1rem',
+            }}
+          />
+        )
+
+      case 'long_text':
+        return (
+          <textarea
+            value={localValue ?? ''}
+            onChange={(e) => handleChange(e.target.value)}
+            rows={4}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              fontFamily: 'inherit',
+            }}
+          />
+        )
+
+      default:
+        return (
+          <input
+            type="text"
+            value={localValue ?? ''}
+            onChange={(e) => handleChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
             }}
           />
         )
@@ -148,36 +226,40 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
 
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      <label style={{
-        display: 'block',
-        marginBottom: '0.5rem',
-        fontWeight: '500',
-        color: '#111827'
-      }}>
+      <label
+        style={{
+          display: 'block',
+          marginBottom: '0.5rem',
+          fontWeight: '500',
+          color: '#111827',
+        }}
+      >
         {question.label || question.id}
-        {question.is_required && (
-          <span style={{ color: '#ef4444', marginLeft: '0.25rem' }}>*</span>
-        )}
+        {question.is_required && <span style={{ color: '#ef4444', marginLeft: '0.25rem' }}>*</span>}
       </label>
-      
+
       {question.description && (
-        <p style={{
-          fontSize: '0.875rem',
-          color: '#6b7280',
-          marginBottom: '0.75rem'
-        }}>
+        <p
+          style={{
+            fontSize: '0.875rem',
+            color: '#6b7280',
+            marginBottom: '0.75rem',
+          }}
+        >
           {question.description}
         </p>
       )}
-      
+
       {renderQuestion()}
-      
+
       {errors[question.id] && (
-        <p style={{
-          marginTop: '0.5rem',
-          fontSize: '0.875rem',
-          color: '#ef4444'
-        }}>
+        <p
+          style={{
+            marginTop: '0.5rem',
+            fontSize: '0.875rem',
+            color: '#ef4444',
+          }}
+        >
           {errors[question.id]}
         </p>
       )}
