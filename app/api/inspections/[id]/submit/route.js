@@ -91,21 +91,44 @@ export async function POST(request, { params }) {
     `
     const allActions = allActionsResult.rows
 
-    // Generate Estate Walkabout Poster PDF (uses actions with photo_urls)
-    const pdfUrl = await generatePDF(inspection, answersResult.rows, allActions)
-
-    // Update inspection with PDF URL
+    // Mark submitted before PDF so dashboard/reporting see completion even if blob/PDF fails (same path as ad hoc).
     await sql`
-      UPDATE inspections 
-      SET pdf_url = ${pdfUrl}, 
-          status = 'submitted',
-          submitted_at = CURRENT_TIMESTAMP
+      UPDATE inspections
+      SET status = 'submitted',
+          submitted_at = CURRENT_TIMESTAMP,
+          pdf_generation_error = NULL
       WHERE id = ${id}
     `
 
+    const refreshedResult = await sql`
+      SELECT * FROM inspections WHERE id = ${id}
+    `
+    const inspectionLive = refreshedResult.rows[0] || inspection
+
+    let pdfUrl = null
+    let pdfError = null
+    try {
+      pdfUrl = await generatePDF(inspectionLive, answersResult.rows, allActions)
+      await sql`
+        UPDATE inspections
+        SET pdf_url = ${pdfUrl},
+            pdf_generation_error = NULL
+        WHERE id = ${id}
+      `
+    } catch (pdfErr) {
+      pdfError = pdfErr?.message || String(pdfErr)
+      console.error('[inspections/submit] PDF generation failed:', pdfError)
+      const truncated = pdfError.length > 2000 ? pdfError.slice(0, 2000) : pdfError
+      await sql`
+        UPDATE inspections
+        SET pdf_generation_error = ${truncated}
+        WHERE id = ${id}
+      `
+    }
+
     // Extract recipients from persisted template snapshot (no live Airtable dependency)
     let recipients = []
-    const version = inspection.template_version
+    const version = inspectionLive.template_version
     const versionSections = (version && version.sections) || []
     const allQuestions = versionSections.flatMap((sec) => sec.questions || [])
     if (allQuestions.length > 0) {
@@ -133,7 +156,7 @@ export async function POST(request, { params }) {
 
     // Send emails
     const emailResults = await sendEmails({
-      inspection,
+      inspection: inspectionLive,
       recipients,
       actionCategories: actionsResult.rows,
       allActions,
@@ -156,7 +179,14 @@ export async function POST(request, { params }) {
       `
     }
 
-    return NextResponse.json({ inspectionId: id }, { status: 201 })
+    return NextResponse.json(
+      {
+        inspectionId: id,
+        pdfUrl: pdfUrl || null,
+        ...(pdfError ? { pdfError } : {}),
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error submitting inspection:', error)
     return NextResponse.json(

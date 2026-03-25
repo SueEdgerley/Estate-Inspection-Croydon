@@ -110,9 +110,21 @@ export async function GET() {
       )
     }
     const userEmail = await getCurrentUserEmail()
-    const admin = await isAdmin()
+    const clerkAdmin = await isAdmin()
+    // Align with /api/dashboard: Postgres users.role owner|admin sees all rows (Clerk isAdmin alone does not).
+    let postgresListAll = false
+    try {
+      const roleRow = await sql`
+        SELECT lower(trim(role)) AS r FROM users WHERE clerk_user_id = ${userId} LIMIT 1
+      `
+      const r = roleRow.rows[0]?.r || ''
+      postgresListAll = r === 'owner' || r === 'admin'
+    } catch {
+      postgresListAll = false
+    }
+    const canListAll = clerkAdmin || postgresListAll
     let result
-    if (admin) {
+    if (canListAll) {
       result = await sql`
         SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
                i.due_date, i.submitted_at, i.grading, i.pdf_url, i.poster_pdf_url, i.full_pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,

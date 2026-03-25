@@ -29,6 +29,8 @@ model Inspection {
   submittedAt         DateTime? @map("submitted_at") @db.Timestamptz
   grading             String?   @db.VarChar(50)
   pdfUrl              String?   @map("pdf_url") @db.Text
+  /// Set when poster PDF/blob step fails; submission still completes (status=submitted).
+  pdfGenerationError  String?   @map("pdf_generation_error") @db.Text
   fullPdfUrl          String?   @map("full_pdf_url") @db.Text
   posterPdfUrl        String?   @map("poster_pdf_url") @db.Text
   status              String    @default("draft") @db.VarChar(50)

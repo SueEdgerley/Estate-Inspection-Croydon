@@ -26,7 +26,18 @@ export async function GET(request) {
       )
     }
 
-    const admin = await isAdmin()
+    const clerkAdmin = await isAdmin()
+    let postgresListAll = false
+    try {
+      const roleRow = await sql`
+        SELECT lower(trim(role)) AS r FROM users WHERE clerk_user_id = ${userId} LIMIT 1
+      `
+      const r = roleRow.rows[0]?.r || ''
+      postgresListAll = r === 'owner' || r === 'admin'
+    } catch {
+      postgresListAll = false
+    }
+    const admin = clerkAdmin || postgresListAll
     const userEmail = await getCurrentUserEmail()
 
     const { searchParams } = new URL(request.url)
