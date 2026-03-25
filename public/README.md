@@ -6,6 +6,12 @@ This directory contains static public assets such as:
 - Fonts
 - Other static files
 
-## Croydon Council logo
+## Croydon Council logo (required for header)
 
-Place the official Croydon Housing logo here as **croydon-housing-logo.png** (PNG or SVG). It appears in the top navigation (left), inspection intro screen, and report headers. Use a file with transparent background; SVG is best for scaling. Alt text used: "Croydon Council".
+Place the official logo file in this folder:
+
+| File | Purpose |
+|------|--------|
+| **`public/croydon-housing-logo.png`** | Main app header (top left), Neighbourhood Voice wizard intro, and anywhere `/croydon-housing-logo.png` is referenced |
+
+Use a PNG or SVG (if you use SVG, name it `croydon-housing-logo.png` only if your build serves it; otherwise keep **PNG** for broad compatibility). Prefer transparent background. Recommended height at source ~80–120px; the header scales with `clamp` for mobile. Alt text: "Croydon Council".

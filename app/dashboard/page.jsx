@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
+import { photobook } from '@/lib/photobook-theme'
 
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
@@ -167,11 +168,11 @@ export default function DashboardHome() {
                   fontSize: '1rem',
                   fontWeight: 600,
                   color: '#fff',
-                  backgroundColor: '#0f766e',
+                  backgroundColor: photobook.primary,
                   border: 'none',
                   borderRadius: '0.5rem',
                   cursor: 'pointer',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  boxShadow: '0 2px 8px rgba(192, 38, 211, 0.35)',
                 }}
               >
                 Sign in
@@ -186,7 +187,10 @@ export default function DashboardHome() {
       <p style={{
         margin: '0 0 1.5rem 0',
         fontSize: '0.9375rem',
-        color: '#6b7280'
+        color: photobook.primaryMuted,
+        lineHeight: 1.5,
+        borderLeft: `4px solid ${photobook.primary}`,
+        paddingLeft: '1rem',
       }}>
         Real-time data from estate inspections across Croydon Council
       </p>
@@ -215,7 +219,7 @@ export default function DashboardHome() {
           </p>
           {(authCode === 'ROLE_NOT_PERMITTED' || authCode === 'USER_NOT_PROVISIONED') && (
             <p style={{ margin: '1rem 0 0', fontSize: '0.9375rem' }}>
-              <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+              <Link href="/templates" style={{ color: photobook.link, fontWeight: 600 }}>Go to Templates</Link>
             </p>
           )}
         </div>
@@ -247,7 +251,7 @@ export default function DashboardHome() {
         }}>
           {error}
           <p style={{ margin: '0.75rem 0 0', fontSize: '0.875rem' }}>
-            <Link href="/templates" style={{ color: '#0f766e', fontWeight: 600 }}>Go to Templates</Link>
+            <Link href="/templates" style={{ color: photobook.link, fontWeight: 600 }}>Go to Templates</Link>
           </p>
         </div>
       )}
@@ -264,13 +268,14 @@ export default function DashboardHome() {
           backgroundColor: 'white',
           padding: '1.5rem',
           borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          border: '1px solid #e5e7eb'
+          boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
+          border: `1px solid ${photobook.softBorder}`,
+          borderTop: `3px solid ${photobook.primary}`,
         }}>
-          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
             Total Inspections Completed
           </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#111827' }}>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
             {loading ? '...' : stats.totalCompleted}
           </div>
         </div>
@@ -279,13 +284,14 @@ export default function DashboardHome() {
           backgroundColor: 'white',
           padding: '1.5rem',
           borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          border: '1px solid #e5e7eb'
+          boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
+          border: `1px solid ${photobook.softBorder}`,
+          borderTop: `3px solid ${photobook.primary}`,
         }}>
-          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
             Scheduled Inspections Completed
           </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#111827' }}>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
             {loading ? '...' : stats.scheduledCompleted}
           </div>
         </div>
@@ -294,13 +300,14 @@ export default function DashboardHome() {
           backgroundColor: 'white',
           padding: '1.5rem',
           borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-          border: '1px solid #e5e7eb'
+          boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
+          border: `1px solid ${photobook.softBorder}`,
+          borderTop: `3px solid ${photobook.primary}`,
         }}>
-          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
             Ad Hoc Inspections Completed
           </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#111827' }}>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
             {loading ? '...' : stats.adHocCompleted}
           </div>
         </div>
@@ -318,12 +325,12 @@ export default function DashboardHome() {
             style={{
               padding: '0.75rem 1.5rem',
               backgroundColor: 'white',
-              color: '#374151',
-              border: '1px solid #d1d5db',
+              color: photobook.heading,
+              border: `2px solid ${photobook.primary}`,
               borderRadius: '0.5rem',
               fontSize: '0.9375rem',
-              fontWeight: '500',
-              cursor: 'pointer'
+              fontWeight: 600,
+              cursor: 'pointer',
             }}
           >
             Show Filters
@@ -332,13 +339,14 @@ export default function DashboardHome() {
             onClick={handleDownload}
             style={{
               padding: '0.75rem 1.5rem',
-              backgroundColor: '#3b82f6',
+              backgroundColor: photobook.primary,
               color: 'white',
               border: 'none',
               borderRadius: '0.5rem',
               fontSize: '0.9375rem',
-              fontWeight: '500',
-              cursor: 'pointer'
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(192, 38, 211, 0.3)',
             }}
           >
             Download
@@ -348,12 +356,12 @@ export default function DashboardHome() {
 
       {filtersOpen && (
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: photobook.soft,
           padding: '1.5rem',
           borderRadius: '0.5rem',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          boxShadow: '0 4px 6px rgba(88, 28, 135, 0.08)',
           marginBottom: '1.5rem',
-          border: '1px solid #e5e7eb'
+          border: `1px solid ${photobook.softBorder}`
         }}>
           <div style={{
             display: 'grid',
@@ -465,22 +473,22 @@ export default function DashboardHome() {
       <div style={{
         backgroundColor: 'white',
         borderRadius: '0.5rem',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
         overflow: 'hidden',
-        border: '1px solid #e5e7eb'
+        border: `1px solid ${photobook.softBorder}`
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Type</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Location</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>User</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Template</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Due Date</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Completed</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Grading</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>View</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Select</th>
+            <tr style={{ backgroundColor: photobook.soft, borderBottom: `1px solid ${photobook.softBorder}` }}>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Type</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Location</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>User</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Template</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Due Date</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Completed</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Grading</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>View</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Select</th>
             </tr>
           </thead>
           <tbody>
@@ -535,7 +543,7 @@ export default function DashboardHome() {
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
-                          color: '#3b82f6',
+                          color: photobook.link,
                           textDecoration: 'none',
                           fontSize: '1.25rem'
                         }}
@@ -550,7 +558,7 @@ export default function DashboardHome() {
                     <Link
                       href={`/inspections/${inspection.id}`}
                       style={{
-                        color: '#3b82f6',
+                        color: photobook.link,
                         textDecoration: 'none',
                         fontSize: '1.25rem'
                       }}

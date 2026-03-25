@@ -12,6 +12,7 @@ import {
   UserButton,
 } from '@clerk/nextjs'
 import { colours } from '@/lib/nv-theme'
+import { photobook } from '@/lib/photobook-theme'
 
 const ALL_NAV_ITEMS = [
   { href: '/', label: 'Home' },
@@ -95,51 +96,60 @@ export default function AppLayout({ children }) {
       backgroundColor: '#f9fafb'
     }}>
       <header style={{
-        backgroundColor: colours.neutral.card,
-        borderBottom: `1px solid ${colours.neutral.border}`,
-        padding: '0 1.25rem 0 1rem',
+        backgroundColor: photobook.soft,
+        borderBottom: `1px solid ${photobook.softBorder}`,
+        padding: '0.75rem 1rem 0.75rem 1rem',
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)'
+        boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)'
       }}>
         <div style={{
           display: 'flex',
+          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          minHeight: '64px'
+          gap: '0.75rem',
+          minHeight: '56px',
+          rowGap: '0.5rem',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }} aria-label="Croydon Council – Home">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 auto' }}>
+            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Council – Home">
               <img
                 src="/croydon-housing-logo.png"
                 alt="Croydon Council"
-                style={{ height: 40, width: 'auto', maxWidth: 220, objectFit: 'contain' }}
+                style={{
+                  height: 'clamp(32px, 4vw, 42px)',
+                  width: 'auto',
+                  maxWidth: 'min(220px, 52vw)',
+                  objectFit: 'contain',
+                }}
               />
             </Link>
             <h1 style={{
               margin: 0,
-              fontSize: '1.25rem',
+              fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
               fontWeight: 'bold',
-              color: colours.neutral.text,
-              marginRight: '1rem'
+              color: photobook.heading,
+              marginRight: '0.5rem',
+              whiteSpace: 'nowrap',
             }}>
               Estate Inspection
             </h1>
-            <nav style={{ display: 'flex', gap: '0.5rem' }}>
+            <nav style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   style={{
-                    padding: '0.75rem 1rem',
-                    color: isActive(item.href) ? colours.primary : colours.neutral.muted,
+                    padding: '0.5rem 0.65rem',
+                    color: isActive(item.href) ? photobook.primary : colours.neutral.muted,
                     textDecoration: 'none',
                     fontWeight: isActive(item.href) ? '600' : '500',
-                    borderBottom: isActive(item.href) ? `2px solid ${colours.primary}` : '2px solid transparent',
+                    borderBottom: isActive(item.href) ? `2px solid ${photobook.primary}` : '2px solid transparent',
                     marginBottom: '-1px',
                     transition: 'all 0.2s',
-                    fontSize: '0.9375rem'
+                    fontSize: 'clamp(0.8125rem, 1.5vw, 0.9375rem)',
                   }}
                 >
                   {item.label}
@@ -147,14 +157,43 @@ export default function AppLayout({ children }) {
               ))}
             </nav>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '0.875rem', color: colours.neutral.muted }}>Croydon Council</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.75rem', color: photobook.primaryMuted, whiteSpace: 'nowrap' }}>Croydon Council</span>
             <SignedOut>
               <SignInButton mode="modal">
-                <button type="button" style={{ padding: '0.5rem 1rem', marginRight: '0.5rem', cursor: 'pointer', fontWeight: 500 }}>Sign in</button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '0.5rem 1.1rem',
+                    backgroundColor: photobook.primary,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.9375rem',
+                    boxShadow: '0 1px 3px rgba(192, 38, 211, 0.35)',
+                  }}
+                >
+                  Sign in
+                </button>
               </SignInButton>
               <SignUpButton mode="modal">
-                <button type="button" style={{ padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: 500 }}>Sign up</button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    color: photobook.primary,
+                    backgroundColor: '#fff',
+                    border: `2px solid ${photobook.primary}`,
+                    borderRadius: '0.5rem',
+                  }}
+                >
+                  Sign up
+                </button>
               </SignUpButton>
             </SignedOut>
             <SignedIn>
