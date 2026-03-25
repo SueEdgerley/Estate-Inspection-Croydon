@@ -125,7 +125,7 @@ export default function AppLayout({ children }) {
           minHeight: '56px',
           rowGap: '0.5rem',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 0' }}>
             <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Council – Home">
               <span style={logoBannerWrap}>
                 <img
@@ -171,19 +171,17 @@ export default function AppLayout({ children }) {
               ))}
             </nav>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0, flexWrap: 'wrap' }}>
-            <span style={logoBannerWrap} aria-hidden>
-              <img
-                src={LOGO_SRC}
-                alt=""
-                style={{
-                  height: 28,
-                  width: 'auto',
-                  maxWidth: 'min(200px, 38vw)',
-                  objectFit: 'contain',
-                }}
-              />
-            </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '0.65rem',
+              flexShrink: 0,
+              flexWrap: 'wrap',
+              marginLeft: 'auto',
+            }}
+          >
             <SignedOut>
               <SignInButton mode="modal">
                 <button
