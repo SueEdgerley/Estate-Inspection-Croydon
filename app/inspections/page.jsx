@@ -50,7 +50,8 @@ export default function InspectionsListPage() {
         const res = await fetch('/api/inspections', { credentials: 'include', cache: 'no-store' })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          throw new Error(data?.error || `Request failed: ${res.status}`)
+          const msg = [data?.error, data?.details].filter(Boolean).join(' — ')
+          throw new Error(msg || `Request failed: ${res.status}`)
         }
         const data = await res.json()
         setInspections(Array.isArray(data) ? data : [])
