@@ -139,13 +139,14 @@ export default function InspectionsListPage() {
       const loc = locationDisplay(row).toLowerCase()
       if (filters.search && !loc.includes(filters.search.toLowerCase())) return false
       if (!rowMatchesTypeFilter(row.type, filters.type)) return false
-      const completed = row.submitted_at || row.created_at
-      const dayKey = localDateKeyFromTimestamp(completed)
-      if (filters.dateFrom && dayKey) {
-        if (dayKey < filters.dateFrom) return false
-      }
-      if (filters.dateTo && dayKey) {
-        if (dayKey > filters.dateTo) return false
+      const hasDateFilter = Boolean(filters.dateFrom || filters.dateTo)
+      if (hasDateFilter) {
+        // Home (/api/dashboard) only lists submitted inspections and filters by submitted_at — not created_at.
+        // Match that so "Completed from/to" matches the same completion date as the Home page.
+        const dayKey = localDateKeyFromTimestamp(row.submitted_at)
+        if (!dayKey) return false
+        if (filters.dateFrom && dayKey < filters.dateFrom) return false
+        if (filters.dateTo && dayKey > filters.dateTo) return false
       }
       return true
     })
