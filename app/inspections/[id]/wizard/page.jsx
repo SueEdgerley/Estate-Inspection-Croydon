@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import WizardQuestionFields from '@/app/components/wizard/WizardQuestionFields'
+import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
 
 // NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3

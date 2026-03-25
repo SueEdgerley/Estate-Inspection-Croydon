@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { QUESTION_TYPES } from '@/lib/airtable'
-import { getEffectiveQuestionKind } from '@/lib/question-types'
+import { getEffectiveQuestionKind } from '../../../lib/question-types'
 import YesNoQuestion from './YesNoQuestion'
 
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
