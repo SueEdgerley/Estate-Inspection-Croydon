@@ -32,6 +32,8 @@ export default function InspectionsListPage() {
     dateTo: '',
     type: 'all',
     search: '',
+    /** active = drafts & in-progress (default); completed = submitted only; all = both */
+    completionScope: 'active',
   })
 
   const pathname = usePathname()
@@ -50,7 +52,7 @@ export default function InspectionsListPage() {
     const cameFromOutsideInspections =
       prev != null && prev !== '' && !prev.startsWith('/inspections')
     if (cameFromOutsideInspections) {
-      setFilters((f) => ({ ...f, type: 'all', search: '' }))
+      setFilters((f) => ({ ...f, type: 'all', search: '', completionScope: 'active' }))
     }
     prevPathRef.current = pathname
 
@@ -134,16 +136,26 @@ export default function InspectionsListPage() {
     return false
   }
 
+  const isSubmittedRow = (row) => String(row.status || '').toLowerCase() === 'submitted'
+
   const filteredInspections = useMemo(() => {
     return inspections.filter((row) => {
       const loc = locationDisplay(row).toLowerCase()
       if (filters.search && !loc.includes(filters.search.toLowerCase())) return false
       if (!rowMatchesTypeFilter(row.type, filters.type)) return false
+
+      const scope = filters.completionScope || 'active'
+      if (scope === 'active' && isSubmittedRow(row)) return false
+      if (scope === 'completed' && !isSubmittedRow(row)) return false
+
       const hasDateFilter = Boolean(filters.dateFrom || filters.dateTo)
       if (hasDateFilter) {
-        // Home (/api/dashboard) only lists submitted inspections and filters by submitted_at — not created_at.
-        // Match that so "Completed from/to" matches the same completion date as the Home page.
-        const dayKey = localDateKeyFromTimestamp(row.submitted_at)
+        let dayKey
+        if (scope === 'completed') {
+          dayKey = localDateKeyFromTimestamp(row.submitted_at)
+        } else {
+          dayKey = localDateKeyFromTimestamp(row.submitted_at || row.created_at)
+        }
         if (!dayKey) return false
         if (filters.dateFrom && dayKey < filters.dateFrom) return false
         if (filters.dateTo && dayKey > filters.dateTo) return false
@@ -167,7 +179,8 @@ export default function InspectionsListPage() {
         maxWidth: '48rem',
       }}>
         Create and schedule new inspections here. View inspections in progress, edit series and manage
-        existing inspections and schedules.
+        schedules. Completed work is listed on the Home page; use the list below for active work by default,
+        or switch to Completed / All when needed.
       </p>
 
       <div style={{
@@ -215,6 +228,26 @@ export default function InspectionsListPage() {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8125rem', color: '#374151', fontWeight: 500 }}>
+            Show
+            <select
+              value={filters.completionScope}
+              onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+              style={{
+                padding: '0.5rem 0.65rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                minWidth: '11rem',
+                backgroundColor: '#fff',
+              }}
+              aria-label="Show inspections"
+            >
+              <option value="active">Active work (drafts and in progress)</option>
+              <option value="completed">Completed</option>
+              <option value="all">All</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
@@ -255,6 +288,26 @@ export default function InspectionsListPage() {
             gap: '1rem',
             marginBottom: '1rem',
           }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
+                Show
+              </label>
+              <select
+                value={filters.completionScope}
+                onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.65rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                }}
+              >
+                <option value="active">Active work</option>
+                <option value="completed">Completed</option>
+                <option value="all">All</option>
+              </select>
+            </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
                 Search location
@@ -333,7 +386,7 @@ export default function InspectionsListPage() {
           </div>
           <button
             type="button"
-            onClick={() => setFilters({ dateFrom: '', dateTo: '', type: 'all', search: '' })}
+            onClick={() => setFilters({ dateFrom: '', dateTo: '', type: 'all', search: '', completionScope: 'active' })}
             style={{
               padding: '0.45rem 0.9rem',
               backgroundColor: '#f3f4f6',
