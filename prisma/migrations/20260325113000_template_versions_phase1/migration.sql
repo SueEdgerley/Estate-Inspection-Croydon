@@ -18,9 +18,20 @@ CREATE INDEX IF NOT EXISTS idx_template_versions_template_hash
 ALTER TABLE inspections
   ADD COLUMN IF NOT EXISTS template_version_id VARCHAR(255);
 
+-- Required for backfill below when DB predates phase1 (template_version JSONB on inspections)
 ALTER TABLE inspections
-  ADD CONSTRAINT inspections_template_version_id_fk
-  FOREIGN KEY (template_version_id) REFERENCES template_versions(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS template_version JSONB;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'inspections_template_version_id_fk'
+  ) THEN
+    ALTER TABLE inspections
+      ADD CONSTRAINT inspections_template_version_id_fk
+      FOREIGN KEY (template_version_id) REFERENCES template_versions(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- Backfill: create one template_versions row per distinct existing inspection snapshot
 INSERT INTO template_versions (id, template_id, template_name, version_hash, snapshot, created_at)
