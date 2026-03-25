@@ -7,36 +7,51 @@ import { GeneratePosterButton } from '@/app/components/GeneratePosterButton'
 
 export default function InspectionDetail() {
   const params = useParams()
-  const [id, setId] = useState(null)
+  // Match wizard: dynamic [id] can be string | string[]; never await useParams() (sync hook).
+  const id =
+    typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : undefined
   const [inspection, setInspection] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadParams = async () => {
-      const resolvedParams = await params
-      setId(resolvedParams.id)
+    if (!id) {
+      setLoading(false)
+      setInspection(null)
+      setLoadError(null)
+      return
     }
-    loadParams()
-  }, [params])
 
-  useEffect(() => {
-    if (!id) return
-
+    let cancelled = false
     const loadInspection = async () => {
+      setLoading(true)
+      setLoadError(null)
       try {
         const response = await fetch(`/api/inspections/${id}`, { credentials: 'include' })
+        const data = await response.json().catch(() => ({}))
+        if (cancelled) return
         if (response.ok) {
-          const data = await response.json()
           setInspection(data)
+          setLoadError(null)
+        } else {
+          setInspection(null)
+          setLoadError(data?.error || data?.details || `Could not load inspection (${response.status})`)
         }
       } catch (error) {
-        console.error('Error loading inspection:', error)
+        if (!cancelled) {
+          console.error('Error loading inspection:', error)
+          setInspection(null)
+          setLoadError(error?.message || 'Failed to load inspection')
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     loadInspection()
+    return () => {
+      cancelled = true
+    }
   }, [id])
 
   const formatDate = (dateString) => {
@@ -58,7 +73,11 @@ export default function InspectionDetail() {
   if (!inspection) {
     return (
       <div style={{ padding: '2rem' }}>
-        <p>Inspection not found</p>
+        {loadError ? (
+          <p style={{ color: '#b45309', marginBottom: '0.75rem' }}>{loadError}</p>
+        ) : (
+          <p>Inspection not found</p>
+        )}
         <Link href="/inspections">Back to Inspections</Link>
       </div>
     )
