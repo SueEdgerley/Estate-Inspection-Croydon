@@ -467,17 +467,13 @@ export async function POST(request) {
             questionType === 'number' && Number.isFinite(asNumber) ? asNumber : null
 
           const answerId = `answer_${inspectionId}_${questionId}`
-          const triggersTask = !!question.triggers_task
-          const triggersEmail = !!question.triggers_email
-          const emailRouteTeamId = question.email_route_team_id && String(question.email_route_team_id).trim() ? String(question.email_route_team_id).trim() : null
-          const issueType = question.issue_type && String(question.issue_type).trim() ? String(question.issue_type).trim() : null
-          const programmeTag = question.programme_tag && String(question.programme_tag).trim() ? String(question.programme_tag).trim() : null
 
+          // Base columns only (matches POST /api/inspections/[id]/answers). Phase-2 routing columns
+          // (triggers_task, etc.) require migration 20250302000000; omit so inserts work on init schema.
           await sql`
             INSERT INTO inspection_answers (
               id, inspection_id, section_id, question_id, question_type,
-              answer_value, answer_text, answer_number, answer_boolean, notes,
-              triggers_task, triggers_email, email_route_team_id, issue_type, programme_tag
+              answer_value, answer_text, answer_number, answer_boolean, notes
             )
             VALUES (
               ${answerId},
@@ -489,12 +485,7 @@ export async function POST(request) {
               ${rawValue},
               ${answerNumber},
               ${answerBoolean},
-              ${comment || null},
-              ${triggersTask},
-              ${triggersEmail},
-              ${emailRouteTeamId},
-              ${issueType},
-              ${programmeTag}
+              ${comment || null}
             )
             ON CONFLICT (inspection_id, question_id) DO UPDATE SET
               answer_value = EXCLUDED.answer_value,
@@ -502,16 +493,11 @@ export async function POST(request) {
               answer_number = EXCLUDED.answer_number,
               answer_boolean = EXCLUDED.answer_boolean,
               notes = EXCLUDED.notes,
-              triggers_task = EXCLUDED.triggers_task,
-              triggers_email = EXCLUDED.triggers_email,
-              email_route_team_id = EXCLUDED.email_route_team_id,
-              issue_type = EXCLUDED.issue_type,
-              programme_tag = EXCLUDED.programme_tag,
               updated_at = CURRENT_TIMESTAMP
           `
         }
     } catch (answersErr) {
-      console.warn('[Inspections] Could not persist inspection answers to Postgres:', answersErr.message)
+      console.error('[Inspections] Could not persist inspection answers to Postgres:', answersErr)
     }
 
     // Store photos in inspection_photos for PDF/noticeboard pipeline

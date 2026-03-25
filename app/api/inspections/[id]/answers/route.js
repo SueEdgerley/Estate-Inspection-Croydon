@@ -63,7 +63,8 @@ export async function POST(request, { params }) {
     }
     const { id } = await params
     const data = await request.json()
-    const { section_id, answers } = data
+    const { section_id, answers: answersRaw } = data
+    const answers = answersRaw && typeof answersRaw === 'object' ? answersRaw : {}
 
     // Save each answer
     const savedAnswers = []
