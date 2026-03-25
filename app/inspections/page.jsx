@@ -106,11 +106,28 @@ export default function InspectionsListPage() {
     return '–'
   }
 
+  /** Aligns DB `type` strings with filter option values (see photobook import: estate_walkabout). */
+  const normalizeInspectionType = (raw) =>
+    String(raw || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/-/g, '_')
+
+  const rowMatchesTypeFilter = (rowType, filterType) => {
+    if (filterType === 'all') return true
+    const row = normalizeInspectionType(rowType)
+    const f = normalizeInspectionType(filterType)
+    if (row === f) return true
+    if (f === 'estate' && row === 'estate_walkabout') return true
+    return false
+  }
+
   const filteredInspections = useMemo(() => {
     return inspections.filter((row) => {
       const loc = locationDisplay(row).toLowerCase()
       if (filters.search && !loc.includes(filters.search.toLowerCase())) return false
-      if (filters.type !== 'all' && (row.type || '').toLowerCase() !== filters.type) return false
+      if (!rowMatchesTypeFilter(row.type, filters.type)) return false
       const completed = row.submitted_at || row.created_at
       if (filters.dateFrom && completed) {
         if (new Date(completed) < new Date(filters.dateFrom)) return false
