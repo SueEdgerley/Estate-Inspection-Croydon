@@ -221,15 +221,12 @@ export default function TemplatesPage() {
                     gap: '0.75rem',
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                  <Link
+                    href={`/inspections/new?template_id=${encodeURIComponent(t.id)}`}
                     style={{
                       flex: 1,
                       textAlign: 'left',
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: 'pointer',
+                      textDecoration: 'none',
                       fontSize: '1rem',
                       fontWeight: 500,
                       color: '#111827',
@@ -240,22 +237,24 @@ export default function TemplatesPage() {
                     <span style={{ color: '#6b7280', fontSize: '0.875rem', marginLeft: '0.75rem' }}>
                       {sectionCount} section{sectionCount !== 1 ? 's' : ''}, {questionCount} question{questionCount !== 1 ? 's' : ''}
                     </span>
-                  </button>
-                  <Link
-                    href={`/inspections/new?template_id=${encodeURIComponent(t.id)}`}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : t.id)}
                     style={{
                       flexShrink: 0,
-                      padding: '0.5rem 0.875rem',
+                      padding: '0.5rem 0.625rem',
                       borderRadius: '0.375rem',
-                      textDecoration: 'none',
-                      backgroundColor: '#2563eb',
-                      color: '#fff',
-                      fontSize: '0.8125rem',
+                      border: '1px solid #d1d5db',
+                      backgroundColor: '#fff',
+                      color: '#374151',
+                      fontSize: '0.75rem',
                       fontWeight: 600,
+                      cursor: 'pointer',
                     }}
                   >
-                    Start
-                  </Link>
+                    {isExpanded ? 'Hide' : 'Details'}
+                  </button>
                 </div>
                 {isExpanded && (
                   <div style={{ padding: '0 1.25rem 1.25rem', backgroundColor: '#f9fafb' }}>
