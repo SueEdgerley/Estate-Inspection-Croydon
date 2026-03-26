@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getAllIssues, updateIssue } from '@/lib/issues'
-import { ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS } from '@/lib/issues'
+import { getAllIssues, updateIssue } from '../../../../lib/issues'
+import { ISSUE_TYPE_LABELS, ISSUE_STATUS_LABELS } from '../../../../lib/issues'
 
 export default function InspectionReview() {
   const params = useParams()

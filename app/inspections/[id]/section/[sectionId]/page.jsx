@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import SectionQuestions from '@/app/components/questions/SectionQuestions'
-import { validateCaretakerTemplate } from '@/lib/caretaker-template'
-import { validateRequiredQuestions } from '@/lib/airtable'
-import { handleYesAnswer, handleNoAnswer } from '@/lib/yesno-action-handler'
+import SectionQuestions from '../../../../components/questions/SectionQuestions'
+import { validateCaretakerTemplate } from '../../../../../lib/caretaker-template'
+import { validateRequiredQuestions } from '../../../../../lib/airtable'
+import { handleYesAnswer, handleNoAnswer } from '../../../../../lib/yesno-action-handler'
 
 export default function InspectionSection() {
   const params = useParams()
