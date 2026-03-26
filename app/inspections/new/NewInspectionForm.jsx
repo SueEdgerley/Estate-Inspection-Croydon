@@ -399,9 +399,26 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
 
     async function load() {
       try {
-        const templatesRes = await fetch('/api/templates', { credentials: 'include' })
+        let templatesRes = await fetch(`/api/templates?t=${Date.now()}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        // Mobile browsers can hold onto stale cached/API responses after deploy;
+        // retry once with a second cache-busted URL before surfacing an error.
+        if (!templatesRes.ok) {
+          templatesRes = await fetch(`/api/templates?t=${Date.now()}&retry=1`, {
+            credentials: 'include',
+            cache: 'no-store',
+          })
+        }
 
         if (!templatesRes.ok) {
+          const body = await templatesRes.json().catch(() => ({}))
+          const status = templatesRes.status
+          const isAirtableAuth = status === 401 || body?.diagnostics?.airtable_status_code === 401
+          if (isAirtableAuth) {
+            throw new Error('Template source is returning Airtable 401 via /api/templates. This is a server-side Airtable auth/config error (not phone credentials).')
+          }
           throw new Error(
             templatesRes.status === 503 ? 'Airtable not configured' : 'Failed to load templates'
           )
