@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
-import { photobook } from '@/lib/photobook-theme'
+import { photobook } from '../../lib/photobook-theme'
 
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
