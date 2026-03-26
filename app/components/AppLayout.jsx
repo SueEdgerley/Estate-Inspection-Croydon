@@ -36,7 +36,7 @@ const USER_ROLE_NAV_HREFS = new Set([
   '/templates',
 ])
 
-/** Croydon Housing banner asset (designed for dark background) */
+/** Croydon Housing + Council horizontal banner (`public/croydon-housing-logo.png`, dark background) */
 const LOGO_SRC = '/croydon-housing-logo.png'
 
 const logoBannerWrap = {
@@ -126,15 +126,17 @@ export default function AppLayout({ children }) {
           rowGap: '0.5rem',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 0' }}>
-            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Council – Home">
+            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Housing and Croydon Council – Home">
               <span style={logoBannerWrap}>
                 <img
                   src={LOGO_SRC}
-                  alt="Croydon Council"
+                  alt="Croydon Housing and Croydon Council"
+                  fetchPriority="high"
+                  decoding="async"
                   style={{
-                    height: 'clamp(30px, 4vw, 40px)',
+                    height: 'clamp(34px, 5.5vw, 48px)',
                     width: 'auto',
-                    maxWidth: 'min(260px, 55vw)',
+                    maxWidth: 'min(440px, 92vw)',
                     objectFit: 'contain',
                   }}
                 />
