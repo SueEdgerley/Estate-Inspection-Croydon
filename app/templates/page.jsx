@@ -230,7 +230,11 @@ export default function TemplatesPage() {
                       fontSize: '1rem',
                       fontWeight: 500,
                       color: '#111827',
-                      padding: 0,
+                      padding: '0.25rem 0',
+                      minHeight: 44,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      touchAction: 'manipulation',
                     }}
                   >
                     <span>{nameToShow}</span>
@@ -244,6 +248,7 @@ export default function TemplatesPage() {
                     style={{
                       flexShrink: 0,
                       padding: '0.5rem 0.625rem',
+                      minHeight: 44,
                       borderRadius: '0.375rem',
                       border: '1px solid #d1d5db',
                       backgroundColor: '#fff',
@@ -251,6 +256,7 @@ export default function TemplatesPage() {
                       fontSize: '0.75rem',
                       fontWeight: 600,
                       cursor: 'pointer',
+                      touchAction: 'manipulation',
                     }}
                   >
                     {isExpanded ? 'Hide' : 'Details'}

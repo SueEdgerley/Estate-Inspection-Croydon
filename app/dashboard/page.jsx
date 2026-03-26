@@ -105,7 +105,7 @@ export default function DashboardHome() {
     }
   }
 
-  const handleDownload = async () => {
+  const handleDownloadPdf = async () => {
     try {
       if (selectedInspectionIds.length === 0) {
         alert('Please select at least one inspection to download')
@@ -140,6 +140,44 @@ export default function DashboardHome() {
     } catch (error) {
       console.error('Error downloading inspection PDF(s):', error)
       alert(error?.message || 'Failed to download selected inspection PDF(s)')
+    }
+  }
+
+  const handleExportCsv = () => {
+    try {
+      if (selectedInspectionIds.length === 0) {
+        alert('Please select at least one inspection to export')
+        return
+      }
+
+      const selectedRows = inspections.filter((i) => selectedInspectionIds.includes(i.id))
+      const headers = ['Inspection ID', 'Type', 'Location', 'User', 'Template', 'Due Date', 'Completed', 'Grading', 'PDF URL']
+      const escapeCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`
+      const rows = selectedRows.map((i) => [
+        i.id || '',
+        i.type || '',
+        i.location_label || '',
+        i.inspector_name || '',
+        i.template_name || '',
+        i.due_date || '',
+        i.submitted_at || '',
+        i.grading || '',
+        i.full_pdf_url || i.pdf_url || i.poster_pdf_url || '',
+      ])
+
+      const csv = [headers.map(escapeCell).join(','), ...rows.map((r) => r.map(escapeCell).join(','))].join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `selected-inspections-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error exporting selected inspections CSV:', error)
+      alert(error?.message || 'Failed to export selected inspections CSV')
     }
   }
 
@@ -373,7 +411,7 @@ export default function DashboardHome() {
             Show Filters
           </button>
           <button
-            onClick={handleDownload}
+            onClick={handleDownloadPdf}
             style={{
               padding: '0.75rem 1.5rem',
               backgroundColor: photobook.primary,
@@ -386,7 +424,22 @@ export default function DashboardHome() {
               boxShadow: '0 2px 8px rgba(192, 38, 211, 0.3)',
             }}
           >
-            Download Selected
+            Download PDF
+          </button>
+          <button
+            onClick={handleExportCsv}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: 'white',
+              color: photobook.heading,
+              border: `2px solid ${photobook.primary}`,
+              borderRadius: '0.5rem',
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Export CSV
           </button>
         </div>
       </div>

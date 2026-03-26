@@ -228,7 +228,8 @@ export default function AppLayout({ children }) {
       <main style={{
         flex: 1,
         padding: '2rem',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch'
       }}>
         {children}
       </main>

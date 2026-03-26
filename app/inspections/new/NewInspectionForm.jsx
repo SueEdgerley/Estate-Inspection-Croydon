@@ -117,6 +117,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             onClick={() => handleChange(val)}
             style={{
               padding: '0.5rem 1rem',
+              minHeight: 44,
               backgroundColor: isSelected ? '#3b82f6' : '#f3f4f6',
               color: isSelected ? 'white' : '#374151',
               border: '1px solid #d1d5db',
@@ -124,6 +125,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
               cursor: 'pointer',
               fontWeight: isSelected ? 600 : 500,
               fontSize: '0.9375rem',
+              touchAction: 'manipulation',
             }}
           >
             {label}
@@ -308,6 +310,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
 export default function NewInspectionForm({ initialEstates = [], initialBlocks = [] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [isMobile, setIsMobile] = useState(false)
   const templateFromUrl = String(searchParams?.get('template_id') || '').trim()
   const isTemplateLocked = !!templateFromUrl
   const [apiPayload, setApiPayload] = useState({ templates: [] })
@@ -338,6 +341,13 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const [validationErrors, setValidationErrors] = useState({})
   const [startingWizard, setStartingWizard] = useState(false)
   const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768)
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const isNVTemplate = (t) => {
     if (!t) return false
@@ -586,10 +596,10 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         onSubmit={handleSubmit}
         style={{
           backgroundColor: 'white',
-          padding: '2rem',
+          padding: isMobile ? '1rem' : '2rem',
           borderRadius: '0.5rem',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          maxWidth: '800px',
+          maxWidth: isMobile ? '100%' : '800px',
         }}
       >
         {submitError && (
@@ -629,6 +639,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
               borderRadius: '0.375rem',
               fontSize: '1rem',
               backgroundColor: 'white',
+              minHeight: 44,
             }}
           >
             <option value="">— Select estate —</option>
@@ -668,6 +679,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
               borderRadius: '0.375rem',
               fontSize: '1rem',
               backgroundColor: estateId ? 'white' : '#f3f4f6',
+              minHeight: 44,
             }}
           >
             <option value="">Whole estate (no specific block)</option>
@@ -751,6 +763,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 borderRadius: '0.375rem',
                 fontSize: '1rem',
                 backgroundColor: 'white',
+                minHeight: 44,
               }}
             >
               <option value="">— Select template —</option>
@@ -864,16 +877,19 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <Link
             href="/inspections"
             style={{
               padding: '0.75rem 1.5rem',
+              minHeight: 44,
               border: '1px solid #d1d5db',
               borderRadius: '0.5rem',
               textDecoration: 'none',
               color: '#374151',
               fontWeight: 500,
+              width: isMobile ? '100%' : 'auto',
+              textAlign: 'center',
             }}
           >
             Cancel
@@ -883,6 +899,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             disabled={isSubmitting}
             style={{
               padding: '0.75rem 1.5rem',
+              minHeight: 44,
               backgroundColor: isSubmitting ? '#9ca3af' : '#3b82f6',
               color: 'white',
               border: 'none',
@@ -890,6 +907,8 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
               fontSize: '1rem',
               fontWeight: 500,
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              width: isMobile ? '100%' : 'auto',
+              touchAction: 'manipulation',
             }}
           >
             {isSubmitting ? 'Saving...' : 'Save inspection'}
