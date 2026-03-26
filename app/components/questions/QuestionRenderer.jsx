@@ -8,6 +8,7 @@ import YesNoQuestion from './YesNoQuestion'
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
   const [localValue, setLocalValue] = useState(value ?? '')
   const [recipientOptions, setRecipientOptions] = useState([])
+  const [costCodeOptions, setCostCodeOptions] = useState([])
 
   useEffect(() => {
     setLocalValue(value ?? '')
@@ -38,6 +39,9 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
     (questionText.includes('who to send') ||
       questionText.includes('recipient') ||
       questionText.includes('send to'))
+  const isCostCodeQuestion =
+    kind === 'single_select' &&
+    (questionText.includes('cost code') || questionText.includes('cost_code') || questionText.includes('costcode'))
 
   useEffect(() => {
     let cancelled = false
@@ -70,6 +74,38 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
       cancelled = true
     }
   }, [isRecipientQuestion])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isCostCodeQuestion) {
+      setCostCodeOptions([])
+      return () => {
+        cancelled = true
+      }
+    }
+
+    async function loadCostCodes() {
+      try {
+        const res = await fetch('/api/cost-codes', { cache: 'no-store', credentials: 'include' })
+        if (!res.ok) return
+        const rows = await res.json()
+        if (cancelled || !Array.isArray(rows)) return
+        const mapped = rows
+          .map((c) => ({
+            value: c.code,
+            label: c.description ? `${c.code} - ${c.description}` : c.code,
+          }))
+          .filter((x) => x.value && x.label)
+        setCostCodeOptions(mapped)
+      } catch {
+        // keep empty options fallback
+      }
+    }
+    loadCostCodes()
+    return () => {
+      cancelled = true
+    }
+  }, [isCostCodeQuestion])
 
   const renderQuestion = () => {
     switch (kind) {
@@ -164,7 +200,7 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
         const options =
           optionsFromQuestion.length > 0
             ? optionsFromQuestion.map((o) => ({ value: o, label: o }))
-            : (isRecipientQuestion ? recipientOptions : [])
+            : (isRecipientQuestion ? recipientOptions : (isCostCodeQuestion ? costCodeOptions : []))
         return (
           <select
             value={localValue ?? ''}
