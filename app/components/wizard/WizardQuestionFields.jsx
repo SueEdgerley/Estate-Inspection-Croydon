@@ -251,8 +251,13 @@ export default function WizardQuestionFields({
           const isYes = opt === 'Yes'
           const isNoOpt = opt === 'No'
           const fillColor = isYes ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
+          // Mobile: match QuestionCard (template preview) — outlined when unselected, solid fill when selected
           const bg = isSelected ? fillColor : nv.cardBg
-          const border = isSelected ? `2px solid ${fillColor}` : nv.btnUnselectedBorder
+          const border = isSelected
+            ? `2px solid ${fillColor}`
+            : isMobile
+              ? '2px solid #E5E7EB'
+              : nv.btnUnselectedBorder
           const color = isSelected ? '#fff' : nv.text
           return (
             <button
@@ -263,7 +268,7 @@ export default function WizardQuestionFields({
               style={{
                 minHeight: btnMinH,
                 padding: isMobile ? '14px 16px' : `12px ${nv.btnPx}px`,
-                fontSize: isMobile ? 18 : nv.baseSize,
+                fontSize: isMobile ? 16 : nv.baseSize,
                 fontWeight: nv.btnFontWeight,
                 backgroundColor: bg,
                 color,

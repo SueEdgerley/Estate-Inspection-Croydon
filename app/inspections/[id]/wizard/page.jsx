@@ -512,6 +512,22 @@ export default function InspectionWizardPage() {
           )}
 
           <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
+            {(q.category || q.action_category) && (
+              <span
+                style={{
+                  display: 'inline-block',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#6B7280',
+                  backgroundColor: '#F3F4F6',
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  marginBottom: 10,
+                }}
+              >
+                {q.category || q.action_category}
+              </span>
+            )}
             <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
             {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
 
