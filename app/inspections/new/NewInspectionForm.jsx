@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
@@ -307,6 +307,9 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
 
 export default function NewInspectionForm({ initialEstates = [], initialBlocks = [] }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const templateFromUrl = String(searchParams?.get('template_id') || '').trim()
+  const isTemplateLocked = !!templateFromUrl
   const [apiPayload, setApiPayload] = useState({ templates: [] })
   const estates = Array.isArray(initialEstates) ? initialEstates : []
   const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
@@ -399,7 +402,15 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         if (!cancelled) {
           setApiPayload(templatesData)
           const list = templatesData.templates || []
-          if (list.length > 0 && !templateId) setTemplateId(list[0].id)
+          if (list.length > 0) {
+            if (templateFromUrl) {
+              const hasRequestedTemplate = list.some((t) => t.id === templateFromUrl)
+              if (hasRequestedTemplate) setTemplateId(templateFromUrl)
+              else if (!templateId) setTemplateId(list[0].id)
+            } else if (!templateId) {
+              setTemplateId(list[0].id)
+            }
+          }
         }
       } catch (err) {
         if (!cancelled) setLoadError(err.message)
@@ -412,7 +423,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [templateFromUrl])
 
   const templates = apiPayload.templates || []
   const selectedTemplate = templates.find((t) => t.id === templateId)
@@ -567,7 +578,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           New Inspection
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Choose estate (required), optional block, then a template from Airtable
+          Choose estate (required), optional block, location note, then complete the form
         </p>
       </div>
 
@@ -701,50 +712,61 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           />
         </div>
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label
-            htmlFor="template_id"
-            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
-          >
-            Template <span style={{ color: '#ef4444' }}>*</span>
-          </label>
-          <select
-            id="template_id"
-            name="template_id"
-            value={templateId}
-            onChange={(e) => {
-              setTemplateId(e.target.value)
-              setAnswers({})
-              setAnswerExtras({})
-              setValidationErrors((prev) => {
-                const next = { ...prev }
-                delete next.template_id
-                return next
-              })
-            }}
-            required
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: validationErrors.template_id ? '1px solid #ef4444' : '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              backgroundColor: 'white',
-            }}
-          >
-            <option value="">— Select template —</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {(t.name || t.template_key || '').trim() && !(t.name || t.template_key || '').trim().startsWith('rec')
-                  ? (t.name || t.template_key).trim()
-                  : `Template ${(t.id || '').slice(0, 12)}…`}
-              </option>
-            ))}
-          </select>
-          {validationErrors.template_id && (
-            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.template_id}</p>
-          )}
-        </div>
+        {isTemplateLocked ? (
+          <div style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}>
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem' }}>Template</div>
+            <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>
+              {selectedTemplate
+                ? ((selectedTemplate.name || selectedTemplate.template_key || '').trim() || selectedTemplate.id)
+                : 'Loading template...'}
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label
+              htmlFor="template_id"
+              style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
+            >
+              Template <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <select
+              id="template_id"
+              name="template_id"
+              value={templateId}
+              onChange={(e) => {
+                setTemplateId(e.target.value)
+                setAnswers({})
+                setAnswerExtras({})
+                setValidationErrors((prev) => {
+                  const next = { ...prev }
+                  delete next.template_id
+                  return next
+                })
+              }}
+              required
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: validationErrors.template_id ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                backgroundColor: 'white',
+              }}
+            >
+              <option value="">— Select template —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {(t.name || t.template_key || '').trim() && !(t.name || t.template_key || '').trim().startsWith('rec')
+                    ? (t.name || t.template_key).trim()
+                    : `Template ${(t.id || '').slice(0, 12)}…`}
+                </option>
+              ))}
+            </select>
+            {validationErrors.template_id && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.template_id}</p>
+            )}
+          </div>
+        )}
 
         {selectedTemplate && isNVTemplate(selectedTemplate) && (
           <div style={{ marginBottom: '1.5rem', padding: '1.25rem', backgroundColor: '#EFF6FF', border: '1px solid #1D4ED8', borderRadius: '0.5rem' }}>

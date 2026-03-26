@@ -210,29 +210,53 @@ export default function TemplatesPage() {
                   borderBottom: '1px solid #e5e7eb',
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                <div
                   style={{
                     width: '100%',
                     padding: '1rem 1.25rem',
-                    textAlign: 'left',
-                    border: 'none',
                     background: isExpanded ? '#f9fafb' : 'transparent',
-                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    fontSize: '1rem',
-                    fontWeight: 500,
-                    color: '#111827',
+                    gap: '0.75rem',
                   }}
                 >
-                  <span>{nameToShow}</span>
-                  <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                    {sectionCount} section{sectionCount !== 1 ? 's' : ''}, {questionCount} question{questionCount !== 1 ? 's' : ''}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                    style={{
+                      flex: 1,
+                      textAlign: 'left',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      fontWeight: 500,
+                      color: '#111827',
+                      padding: 0,
+                    }}
+                  >
+                    <span>{nameToShow}</span>
+                    <span style={{ color: '#6b7280', fontSize: '0.875rem', marginLeft: '0.75rem' }}>
+                      {sectionCount} section{sectionCount !== 1 ? 's' : ''}, {questionCount} question{questionCount !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                  <Link
+                    href={`/inspections/new?template_id=${encodeURIComponent(t.id)}`}
+                    style={{
+                      flexShrink: 0,
+                      padding: '0.5rem 0.875rem',
+                      borderRadius: '0.375rem',
+                      textDecoration: 'none',
+                      backgroundColor: '#2563eb',
+                      color: '#fff',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Start
+                  </Link>
+                </div>
                 {isExpanded && (
                   <div style={{ padding: '0 1.25rem 1.25rem', backgroundColor: '#f9fafb' }}>
                     {(t.sections || []).map((sec) => (
@@ -257,10 +281,10 @@ export default function TemplatesPage() {
                     ))}
                     <div style={{ marginTop: '1rem' }}>
                       <Link
-                        href={`/inspections/new`}
+                        href={`/inspections/new?template_id=${encodeURIComponent(t.id)}`}
                         style={{ color: '#3b82f6', fontSize: '0.875rem', textDecoration: 'none' }}
                       >
-                        Start new inspection with this template →
+                        Start this template →
                       </Link>
                     </div>
                   </div>
