@@ -7,6 +7,7 @@ import YesNoQuestion from './YesNoQuestion'
 
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
   const [localValue, setLocalValue] = useState(value ?? '')
+  const [recipientOptions, setRecipientOptions] = useState([])
 
   useEffect(() => {
     setLocalValue(value ?? '')
@@ -31,6 +32,44 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
 
   const kind = getEffectiveQuestionKind(question)
   const rendersOwnHeading = kind === 'yes_no'
+  const questionText = String(question.label || question.question_text || '').toLowerCase()
+  const isRecipientQuestion =
+    kind === 'single_select' &&
+    (questionText.includes('who to send') ||
+      questionText.includes('recipient') ||
+      questionText.includes('send to'))
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isRecipientQuestion) {
+      setRecipientOptions([])
+      return () => {
+        cancelled = true
+      }
+    }
+
+    async function loadPeople() {
+      try {
+        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
+        if (!res.ok) return
+        const rows = await res.json()
+        if (cancelled || !Array.isArray(rows)) return
+        const mapped = rows
+          .map((p) => ({
+            value: p.id,
+            label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || p.id,
+          }))
+          .filter((x) => x.value && x.label)
+        setRecipientOptions(mapped)
+      } catch {
+        // keep empty options fallback
+      }
+    }
+    loadPeople()
+    return () => {
+      cancelled = true
+    }
+  }, [isRecipientQuestion])
 
   const renderQuestion = () => {
     switch (kind) {
@@ -116,12 +155,16 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
       case 'single_select':
       case 'select': {
         const rawOpts = question.options || []
-        const options = Array.isArray(rawOpts)
+        const optionsFromQuestion = Array.isArray(rawOpts)
           ? rawOpts.map((o) => (typeof o === 'string' ? o : o?.value ?? o?.label ?? o))
           : String(rawOpts)
               .split(/\r?\n|,/)
               .map((p) => p.trim())
               .filter(Boolean)
+        const options =
+          optionsFromQuestion.length > 0
+            ? optionsFromQuestion.map((o) => ({ value: o, label: o }))
+            : (isRecipientQuestion ? recipientOptions : [])
         return (
           <select
             value={localValue ?? ''}
@@ -136,9 +179,9 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
             }}
           >
             <option value="">Select an option...</option>
-            {(options.length ? options : ['—']).map((option, idx) => (
-              <option key={idx} value={option}>
-                {option}
+            {(options.length ? options : [{ value: '', label: '—' }]).map((option, idx) => (
+              <option key={idx} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
