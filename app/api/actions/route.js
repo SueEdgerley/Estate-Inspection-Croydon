@@ -24,34 +24,58 @@ export async function GET(request) {
     if (inspectionId && questionId) {
       query = sql`
         SELECT 
-          id, inspection_id, section_id, section_name, question_id,
-          category, priority, title, description, location, status,
-          comment, recipient_person_id, auto_created,
-          created_at, updated_at
-        FROM actions
-        WHERE inspection_id = ${inspectionId} AND question_id = ${questionId}
+          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+          a.category, a.priority, a.title, a.description,
+          COALESCE(a.location, NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location,
+          a.status, a.comment, a.recipient_person_id, a.auto_created,
+          a.created_at, a.updated_at, a.expected_completion_date,
+          COALESCE(i.inspector_name, u.email, i.inspector_id) AS created_by,
+          rp.name AS assigned_to
+        FROM actions a
+        LEFT JOIN inspections i ON i.id = a.inspection_id
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        LEFT JOIN users u ON u.clerk_user_id = i.inspector_id
+        LEFT JOIN people rp ON rp.id = a.recipient_person_id
+        WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
         ORDER BY created_at DESC
       `
     } else if (inspectionId) {
       query = sql`
         SELECT 
-          id, inspection_id, section_id, section_name, question_id,
-          category, priority, title, description, location, status,
-          comment, recipient_person_id, auto_created,
-          created_at, updated_at
-        FROM actions
-        WHERE inspection_id = ${inspectionId}
+          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+          a.category, a.priority, a.title, a.description,
+          COALESCE(a.location, NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location,
+          a.status, a.comment, a.recipient_person_id, a.auto_created,
+          a.created_at, a.updated_at, a.expected_completion_date,
+          COALESCE(i.inspector_name, u.email, i.inspector_id) AS created_by,
+          rp.name AS assigned_to
+        FROM actions a
+        LEFT JOIN inspections i ON i.id = a.inspection_id
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        LEFT JOIN users u ON u.clerk_user_id = i.inspector_id
+        LEFT JOIN people rp ON rp.id = a.recipient_person_id
+        WHERE a.inspection_id = ${inspectionId}
         ORDER BY created_at DESC
       `
     } else {
       query = sql`
         SELECT 
-          id, inspection_id, section_id, section_name, question_id,
-          category, priority, title, description, location, status,
-          comment, recipient_person_id, auto_created,
-          created_at, updated_at
-        FROM actions
-        ORDER BY created_at DESC
+          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+          a.category, a.priority, a.title, a.description,
+          COALESCE(a.location, NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location,
+          a.status, a.comment, a.recipient_person_id, a.auto_created,
+          a.created_at, a.updated_at, a.expected_completion_date,
+          COALESCE(i.inspector_name, u.email, i.inspector_id) AS created_by,
+          rp.name AS assigned_to
+        FROM actions a
+        LEFT JOIN inspections i ON i.id = a.inspection_id
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        LEFT JOIN users u ON u.clerk_user_id = i.inspector_id
+        LEFT JOIN people rp ON rp.id = a.recipient_person_id
+        ORDER BY a.created_at DESC
       `
     }
     
@@ -81,7 +105,23 @@ export async function POST(request) {
     
     // Generate ID if not provided
     const id = data.id || `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    let resolvedLocation = data.location || null
+    if (!resolvedLocation && data.inspection_id) {
+      const locRow = await sql`
+        SELECT COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location
+        FROM inspections i
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        WHERE i.id = ${data.inspection_id}
+        LIMIT 1
+      `
+      resolvedLocation = locRow.rows[0]?.location || null
+    }
     
+    const expectedCompletionDate = data.expected_completion_date
+      ? data.expected_completion_date
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
     const result = await sql`
       INSERT INTO actions (
         id,
@@ -97,7 +137,8 @@ export async function POST(request) {
         status,
         comment,
         recipient_person_id,
-        auto_created
+        auto_created,
+        expected_completion_date
       ) VALUES (
         ${id},
         ${data.inspection_id || null},
@@ -108,11 +149,12 @@ export async function POST(request) {
         ${data.priority || null},
         ${data.title},
         ${data.description || null},
-        ${data.location || null},
+        ${resolvedLocation},
         ${data.status || 'open'},
         ${data.comment || null},
         ${data.recipient_person_id || null},
-        ${data.auto_created || false}
+        ${data.auto_created || false},
+        ${expectedCompletionDate}
       )
       RETURNING *
     `

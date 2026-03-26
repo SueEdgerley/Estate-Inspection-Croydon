@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '../../../lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
