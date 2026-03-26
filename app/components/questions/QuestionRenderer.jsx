@@ -30,6 +30,7 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
   }
 
   const kind = getEffectiveQuestionKind(question)
+  const rendersOwnHeading = kind === 'yes_no'
 
   const renderQuestion = () => {
     switch (kind) {
@@ -206,6 +207,13 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
           />
         )
 
+      case 'instruction':
+        return (
+          <p style={{ fontSize: '0.9375rem', color: '#4b5563', margin: 0 }}>
+            {question.description || question.label || question.question_text || ''}
+          </p>
+        )
+
       default:
         return (
           <input
@@ -226,19 +234,21 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
 
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      <label
-        style={{
-          display: 'block',
-          marginBottom: '0.5rem',
-          fontWeight: '500',
-          color: '#111827',
-        }}
-      >
-        {question.label || question.id}
-        {question.is_required && <span style={{ color: '#ef4444', marginLeft: '0.25rem' }}>*</span>}
-      </label>
+      {!rendersOwnHeading && (
+        <label
+          style={{
+            display: 'block',
+            marginBottom: '0.5rem',
+            fontWeight: '500',
+            color: '#111827',
+          }}
+        >
+          {question.label || question.id}
+          {question.is_required && <span style={{ color: '#ef4444', marginLeft: '0.25rem' }}>*</span>}
+        </label>
+      )}
 
-      {question.description && (
+      {!rendersOwnHeading && question.description && (
         <p
           style={{
             fontSize: '0.875rem',

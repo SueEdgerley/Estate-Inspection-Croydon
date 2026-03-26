@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { shouldCreateActionOnNo, requiresPhotoOnNo, requiresCommentOnNo } from '@/lib/yesno-action-handler'
 import { uploadPhoto } from '@/lib/blob-storage'
 
-export default function YesNoQuestion({ question, sectionName, value, onChange, errors = {} }) {
+export default function YesNoQuestion({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
   const [answer, setAnswer] = useState(value)
   const [comment, setComment] = useState('')
   const [photos, setPhotos] = useState([])
@@ -60,8 +60,24 @@ export default function YesNoQuestion({ question, sectionName, value, onChange, 
     setPhotoFiles(prev => prev.filter((_, i) => i !== index))
   }
 
-  const requiresPhoto = requiresPhotoOnNo(question)
-  const requiresComment = requiresCommentOnNo(question)
+  const hasExplicitPhotoRule =
+    question.photo_required_when === 'always' ||
+    question.photo_required_when === 'on_no' ||
+    question.require_photo_on_no !== undefined ||
+    question.type_includes_photo === true
+  const hasExplicitCommentRule =
+    question.comment_required_when === 'always' ||
+    question.comment_required_when === 'on_no' ||
+    question.require_comment_on_no !== undefined
+
+  const requiresPhoto =
+    question.photo_required_when === 'always' ||
+    (question.photo_required_when === 'on_no' && (answer === false || answer === 'no' || answer === 'No')) ||
+    (!question.photo_required_when && hasExplicitPhotoRule && requiresPhotoOnNo(question))
+  const requiresComment =
+    question.comment_required_when === 'always' ||
+    (question.comment_required_when === 'on_no' && (answer === false || answer === 'no' || answer === 'No')) ||
+    (!question.comment_required_when && hasExplicitCommentRule && requiresCommentOnNo(question))
   const shouldCreateAction = shouldCreateActionOnNo(question)
   const isNo = answer === false || answer === 'no' || answer === 'No'
 
