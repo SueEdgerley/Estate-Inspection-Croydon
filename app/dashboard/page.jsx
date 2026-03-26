@@ -151,6 +151,20 @@ export default function DashboardHome() {
     )
   }
 
+  const visibleInspectionIds = inspections.map((i) => i.id).filter(Boolean)
+  const allVisibleSelected =
+    visibleInspectionIds.length > 0 &&
+    visibleInspectionIds.every((id) => selectedInspectionIds.includes(id))
+
+  const toggleSelectAllVisible = () => {
+    setSelectedInspectionIds((prev) => {
+      if (allVisibleSelected) {
+        return prev.filter((id) => !visibleInspectionIds.includes(id))
+      }
+      return Array.from(new Set([...prev, ...visibleInspectionIds]))
+    })
+  }
+
   const formatDate = (dateString) => {
     if (!dateString) return '-'
     const date = new Date(dateString)
@@ -511,7 +525,18 @@ export default function DashboardHome() {
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Completed</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Grading</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>View</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Select</th>
+              <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    aria-label="Select all visible inspections"
+                    style={{ width: 18, height: 18, accentColor: photobook.primary, cursor: 'pointer' }}
+                  />
+                  <span>Select</span>
+                </label>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -583,6 +608,7 @@ export default function DashboardHome() {
                       checked={selectedInspectionIds.includes(inspection.id)}
                       onChange={() => toggleInspectionSelection(inspection.id)}
                       aria-label={`Select inspection ${inspection.id}`}
+                      style={{ width: 18, height: 18, accentColor: photobook.primary, cursor: 'pointer' }}
                     />
                   </td>
                 </tr>

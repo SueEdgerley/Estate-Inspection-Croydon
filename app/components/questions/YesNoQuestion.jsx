@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { shouldCreateActionOnNo, requiresPhotoOnNo, requiresCommentOnNo } from '@/lib/yesno-action-handler'
+import { shouldCreateActionOnNo, requiresPhotoOnNo, requiresCommentOnNo } from '../../../lib/yesno-action-handler'
 import { uploadPhoto } from '@/lib/blob-storage'
 
 export default function YesNoQuestion({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
