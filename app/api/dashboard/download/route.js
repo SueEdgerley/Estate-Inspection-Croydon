@@ -9,6 +9,14 @@ export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
 const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
+const joinSqlAnd = (conditions = []) => {
+  if (!Array.isArray(conditions) || conditions.length === 0) return sql`TRUE`
+  let out = conditions[0]
+  for (let i = 1; i < conditions.length; i++) {
+    out = sql`${out} AND ${conditions[i]}`
+  }
+  return out
+}
 
 export async function GET(request) {
   try {
@@ -65,7 +73,7 @@ export async function GET(request) {
       if (!admin && userEmail) {
         taskConditions.push(sql`i.inspector_id = ${userEmail}`)
       }
-      const taskWhere = asArray(taskConditions).length > 0 ? sql`WHERE ${sql.join(asArray(taskConditions), sql` AND `)}` : sql``
+      const taskWhere = asArray(taskConditions).length > 0 ? sql`WHERE ${joinSqlAnd(asArray(taskConditions))}` : sql``
       const actionsResult = await sql`
         SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
                a.title, a.description, a.location, a.status, a.comment, a.auto_created,
@@ -112,7 +120,7 @@ export async function GET(request) {
     if (dataType === 'questions_answers') {
       const qaConditions = [sql`i.status = 'submitted'`]
       if (!admin && userEmail) qaConditions.push(sql`i.inspector_id = ${userEmail}`)
-      const qaWhere = sql`WHERE ${sql.join(asArray(qaConditions), sql` AND `)}`
+      const qaWhere = sql`WHERE ${joinSqlAnd(asArray(qaConditions))}`
       const answersResult = await sql`
         SELECT i.id AS inspection_id, i.title, i.submitted_at,
                ia.section_id, ia.question_id, ia.question_type,
@@ -192,7 +200,7 @@ export async function GET(request) {
     }
 
     const whereClause = asArray(whereConditions).length > 0
-      ? sql`WHERE ${sql.join(asArray(whereConditions), sql` AND `)}`
+      ? sql`WHERE ${joinSqlAnd(asArray(whereConditions))}`
       : sql``
 
     const result = await sql`

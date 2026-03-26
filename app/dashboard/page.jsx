@@ -7,6 +7,7 @@ import { photobook } from '../../lib/photobook-theme'
 
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
+  const [selectedInspectionIds, setSelectedInspectionIds] = useState([])
   const [stats, setStats] = useState({
     totalCompleted: 0,
     scheduledCompleted: 0,
@@ -91,7 +92,10 @@ export default function DashboardHome() {
         adHocCompleted: data?.stats?.adHocCompleted ?? 0
       })
 
-      setInspections(Array.isArray(data?.inspections) ? data.inspections : [])
+      const nextInspections = Array.isArray(data?.inspections) ? data.inspections : []
+      setInspections(nextInspections)
+      const nextIds = new Set(nextInspections.map((i) => i.id))
+      setSelectedInspectionIds((prev) => prev.filter((id) => nextIds.has(id)))
     } catch (e) {
       setError(e?.message || 'Failed to load dashboard data')
       setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
@@ -103,35 +107,48 @@ export default function DashboardHome() {
 
   const handleDownload = async () => {
     try {
-      const params = new URLSearchParams()
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== 'all' && value !== '') {
-          params.append(key, value)
-        }
-      })
-
-      const response = await fetch(`/api/dashboard/download?${params.toString()}`, { credentials: 'include' })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        const msg = data?.details || data?.error || `Download failed (${response.status})`
-        throw new Error(msg)
+      if (selectedInspectionIds.length === 0) {
+        alert('Please select at least one inspection to download')
+        return
       }
 
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const cd = response.headers.get('content-disposition') || ''
-      const m = cd.match(/filename=\"?([^\";]+)\"?/i)
-      a.download = m?.[1] || `inspections-${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      const selectedRows = inspections.filter((i) => selectedInspectionIds.includes(i.id))
+      const rowsWithPdf = selectedRows.filter((i) => i.full_pdf_url || i.pdf_url || i.poster_pdf_url)
+
+      if (rowsWithPdf.length === 0) {
+        alert('Selected inspections do not have a PDF available yet.')
+        return
+      }
+
+      rowsWithPdf.forEach((inspection, index) => {
+        const pdfUrl = inspection.full_pdf_url || inspection.pdf_url || inspection.poster_pdf_url
+        const a = document.createElement('a')
+        a.href = pdfUrl
+        a.target = '_blank'
+        a.rel = 'noopener noreferrer'
+        a.download = `inspection-${inspection.id}.pdf`
+        document.body.appendChild(a)
+        setTimeout(() => {
+          a.click()
+          document.body.removeChild(a)
+        }, index * 100)
+      })
+
+      if (rowsWithPdf.length < selectedRows.length) {
+        alert('Some selected inspections have no PDF yet and were skipped.')
+      }
     } catch (error) {
-      console.error('Error downloading CSV:', error)
-      alert(error?.message || 'Failed to download CSV')
+      console.error('Error downloading inspection PDF(s):', error)
+      alert(error?.message || 'Failed to download selected inspection PDF(s)')
     }
+  }
+
+  const toggleInspectionSelection = (inspectionId) => {
+    setSelectedInspectionIds((prev) =>
+      prev.includes(inspectionId)
+        ? prev.filter((id) => id !== inspectionId)
+        : [...prev, inspectionId]
+    )
   }
 
   const formatDate = (dateString) => {
@@ -355,7 +372,7 @@ export default function DashboardHome() {
               boxShadow: '0 2px 8px rgba(192, 38, 211, 0.3)',
             }}
           >
-            Download
+            Download Selected
           </button>
         </div>
       </div>
@@ -561,16 +578,12 @@ export default function DashboardHome() {
                     )}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                    <Link
-                      href={`/inspections/${inspection.id}`}
-                      style={{
-                        color: photobook.link,
-                        textDecoration: 'none',
-                        fontSize: '1.25rem'
-                      }}
-                    >
-                      ✓
-                    </Link>
+                    <input
+                      type="checkbox"
+                      checked={selectedInspectionIds.includes(inspection.id)}
+                      onChange={() => toggleInspectionSelection(inspection.id)}
+                      aria-label={`Select inspection ${inspection.id}`}
+                    />
                   </td>
                 </tr>
               ))
