@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { isTemplateAdminViewer } from '@/lib/template-visibility'
+import { photobook } from '@/lib/photobook-theme'
 
 // Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo")
 function normalizeQuestionType(v) {
@@ -15,7 +17,6 @@ function normalizeQuestionType(v) {
 }
 
 function QuestionPreview({ q }) {
-  // Fallback: if comment/photo required when "on_no", treat as yes_no even if type isn't set
   const hasYesNoBehavior = (q.comment_required_when === 'on_no' || q.photo_required_when === 'on_no') && !q.question_type
   const qType = normalizeQuestionType(q.question_type || (hasYesNoBehavior ? 'yes_no' : 'text'))
   const opts = q.options || []
@@ -114,10 +115,12 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
+  const [viewer, setViewer] = useState({ appRole: null, clerkIsAdmin: false })
 
   useEffect(() => {
-    fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store', credentials: 'include' })
-      .then(async (res) => {
+    let cancelled = false
+    Promise.all([
+      fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store', credentials: 'include' }).then(async (res) => {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
           const msg = res.status === 503
@@ -126,11 +129,34 @@ export default function TemplatesPage() {
           throw new Error(msg)
         }
         return body
+      }),
+      fetch('/api/auth/me', { cache: 'no-store', credentials: 'include' })
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({})),
+    ])
+      .then(([d, me]) => {
+        if (cancelled) return
+        setData(d)
+        setViewer({
+          appRole: typeof me?.role === 'string' ? me.role : null,
+          clerkIsAdmin: me?.clerkIsAdmin === true,
+        })
       })
-      .then((d) => setData(d))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch((err) => {
+        if (!cancelled) setError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  const isAdminViewer = useMemo(
+    () => isTemplateAdminViewer({ appRole: viewer.appRole, clerkIsAdmin: viewer.clerkIsAdmin }),
+    [viewer.appRole, viewer.clerkIsAdmin]
+  )
 
   const templates = data.templates || []
 
@@ -140,8 +166,13 @@ export default function TemplatesPage() {
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
           Templates
         </h1>
-        <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Inspection templates from Airtable (read-only)
+        <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', lineHeight: 1.5 }}>
+          Tap a template to start a new inspection — no second step.
+          {isAdminViewer && (
+            <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.875rem' }}>
+              Admins can open <strong>Structure</strong> to preview questions without starting.
+            </span>
+          )}
         </p>
       </div>
 
@@ -184,7 +215,7 @@ export default function TemplatesPage() {
           textAlign: 'center',
           color: '#6b7280',
         }}>
-          No templates found. Add active templates in Airtable and set AIRTABLE_BASE_ID and AIRTABLE_API_KEY.
+          No templates available for your account. Contact an admin if you need access.
         </div>
       )}
 
@@ -196,13 +227,15 @@ export default function TemplatesPage() {
           overflow: 'hidden',
         }}>
           {templates.map((t) => {
-            const isExpanded = expandedId === t.id
+            const isExpanded = isAdminViewer && expandedId === t.id
             const sectionCount = (t.sections || []).length
             const questionCount = (t.sections || []).reduce((n, s) => n + (s.questions || []).length, 0)
             const displayName = (t.name || t.template_key || '').trim()
             const nameToShow = displayName && !displayName.startsWith('rec')
               ? displayName
               : `Template ${t.id?.slice(0, 12) || t.id}…`
+            const startHref = `/inspections/new?template_id=${encodeURIComponent(t.id)}`
+
             return (
               <div
                 key={t.id}
@@ -212,55 +245,76 @@ export default function TemplatesPage() {
               >
                 <div
                   style={{
-                    width: '100%',
-                    padding: '1rem 1.25rem',
-                    background: isExpanded ? '#f9fafb' : 'transparent',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '0.75rem',
+                    alignItems: 'stretch',
+                    flexWrap: 'wrap',
+                    gap: 0,
                   }}
                 >
                   <Link
-                    href={`/inspections/new?template_id=${encodeURIComponent(t.id)}`}
+                    href={startHref}
                     style={{
-                      flex: 1,
-                      textAlign: 'left',
-                      textDecoration: 'none',
-                      fontSize: '1rem',
-                      fontWeight: 500,
-                      color: '#111827',
-                      padding: '0.25rem 0',
-                      minHeight: 44,
-                      display: 'inline-flex',
+                      flex: '1 1 220px',
+                      display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '1rem',
+                      padding: '1.25rem 1.25rem',
+                      minHeight: 72,
+                      textDecoration: 'none',
+                      color: '#111827',
+                      backgroundColor: isExpanded ? '#faf5ff' : 'transparent',
                       touchAction: 'manipulation',
+                      WebkitTapHighlightColor: 'transparent',
                     }}
                   >
-                    <span>{nameToShow}</span>
-                    <span style={{ color: '#6b7280', fontSize: '0.875rem', marginLeft: '0.75rem' }}>
-                      {sectionCount} section{sectionCount !== 1 ? 's' : ''}, {questionCount} question{questionCount !== 1 ? 's' : ''}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '1.0625rem', lineHeight: 1.3 }}>
+                        {nameToShow}
+                      </div>
+                      <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.35rem' }}>
+                        {sectionCount} section{sectionCount !== 1 ? 's' : ''} · {questionCount} question{questionCount !== 1 ? 's' : ''}
+                      </div>
+                      <div style={{ fontSize: '0.8125rem', color: photobook.primary, fontWeight: 600, marginTop: '0.5rem' }}>
+                        Start inspection →
+                      </div>
+                    </div>
+                    <span
+                      aria-hidden
+                      style={{
+                        flexShrink: 0,
+                        color: photobook.primary,
+                        fontWeight: 700,
+                        fontSize: '1.5rem',
+                        lineHeight: 1,
+                      }}
+                    >
+                      →
                     </span>
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId(isExpanded ? null : t.id)}
-                    style={{
-                      flexShrink: 0,
-                      padding: '0.5rem 0.625rem',
-                      minHeight: 44,
-                      borderRadius: '0.375rem',
-                      border: '1px solid #d1d5db',
-                      backgroundColor: '#fff',
-                      color: '#374151',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      touchAction: 'manipulation',
-                    }}
-                  >
-                    {isExpanded ? 'Hide' : 'Details'}
-                  </button>
+                  {isAdminViewer && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                      style={{
+                        flex: '0 0 auto',
+                        alignSelf: 'stretch',
+                        padding: '0 1rem',
+                        minHeight: 72,
+                        minWidth: 96,
+                        border: 'none',
+                        borderLeft: '1px solid #e5e7eb',
+                        backgroundColor: '#f9fafb',
+                        color: '#374151',
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        touchAction: 'manipulation',
+                      }}
+                    >
+                      {isExpanded ? 'Hide' : 'Structure'}
+                    </button>
+                  )}
                 </div>
                 {isExpanded && (
                   <div style={{ padding: '0 1.25rem 1.25rem', backgroundColor: '#f9fafb' }}>
@@ -284,14 +338,6 @@ export default function TemplatesPage() {
                         </ul>
                       </div>
                     ))}
-                    <div style={{ marginTop: '1rem' }}>
-                      <Link
-                        href={`/inspections/new?template_id=${encodeURIComponent(t.id)}`}
-                        style={{ color: '#3b82f6', fontSize: '0.875rem', textDecoration: 'none' }}
-                      >
-                        Start this template →
-                      </Link>
-                    </div>
                   </div>
                 )}
               </div>
@@ -301,15 +347,18 @@ export default function TemplatesPage() {
       )}
 
       {!loading && templates.length > 0 && (
-        <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-          <Link href="/inspections/new" style={{ color: '#3b82f6', textDecoration: 'none' }}>
-            Start new inspection
+        <p style={{ marginTop: '1.25rem', fontSize: '0.875rem', color: '#6b7280' }}>
+          <Link href="/inspections/new" style={{ color: photobook.link, textDecoration: 'none', fontWeight: 500 }}>
+            New inspection without a preset template
           </Link>
-          {' '}to use a template.
-          {' '}
-          <Link href="/templates/preview" style={{ color: '#3b82f6', textDecoration: 'none' }}>
-            Preview QuestionCard (caretaker / NV)
-          </Link>
+          {isAdminViewer && (
+            <>
+              {' · '}
+              <Link href="/templates/preview" style={{ color: photobook.link, textDecoration: 'none', fontWeight: 500 }}>
+                QuestionCard preview (caretaker / NV)
+              </Link>
+            </>
+          )}
         </p>
       )}
     </div>

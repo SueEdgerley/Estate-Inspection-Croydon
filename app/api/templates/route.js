@@ -1,11 +1,44 @@
 import { NextResponse } from 'next/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import {
   getAirtableProductionDiagnostics,
   getLastTemplatesNestedFetchMeta,
   getTemplatesNested,
 } from '@/lib/airtable-client'
+import { filterTemplatesForViewer } from '@/lib/template-visibility'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
+
+/** Role + Clerk admin for template list filtering (no Airtable changes). */
+async function getViewerContext() {
+  const { userId } = await auth()
+  if (!userId) {
+    return { userId: null, appRole: null, clerkIsAdmin: false }
+  }
+  let appRole = null
+  let clerkIsAdmin = false
+  try {
+    const cu = await currentUser()
+    clerkIsAdmin = cu?.publicMetadata?.isAdmin === true
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (getPgUrl()) {
+      await ensureDatabase()
+      const r = await sql`SELECT role FROM users WHERE clerk_user_id = ${userId} LIMIT 1`
+      appRole = r.rows[0]?.role ?? null
+    }
+  } catch (e) {
+    console.warn('[api/templates] role lookup failed:', e?.message)
+  }
+  return { userId, appRole, clerkIsAdmin }
+}
+
+function applyTemplateVisibility(templates, viewer) {
+  if (!viewer.userId) return templates
+  return filterTemplatesForViewer(templates, viewer)
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,8 +58,10 @@ export async function GET() {
     )
   }
 
+  const viewer = await getViewerContext()
+
   try {
-    const templates = await getTemplatesNested()
+    const templates = applyTemplateVisibility(await getTemplatesNested(), viewer)
     const diagnostics = getAirtableProductionDiagnostics({
       failing_table: null,
       airtable_status_code: null,
@@ -56,7 +91,7 @@ export async function GET() {
             WHERE snapshot IS NOT NULL
             ORDER BY template_id, created_at DESC
           `
-          const templates = fallbackResult.rows
+          const rawFallback = fallbackResult.rows
             .map((row) => row.snapshot)
             .filter((s) => s && typeof s === 'object')
             .map((s) => ({
@@ -66,6 +101,7 @@ export async function GET() {
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)
+          const templates = applyTemplateVisibility(rawFallback, viewer)
           if (templates.length > 0) {
             const diagnostics = getAirtableProductionDiagnostics({
               failing_table: error.airtableTableName ?? null,
