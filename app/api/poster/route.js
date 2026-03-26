@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
-import { generatePosterPdfBuffer } from '@/lib/poster-pdf'
+import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

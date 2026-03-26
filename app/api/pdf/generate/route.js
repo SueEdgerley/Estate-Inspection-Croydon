@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { generatePosterPdf } from '@/lib/poster-pdf'
+import { generatePosterPdf } from '../../../../lib/poster-pdf'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

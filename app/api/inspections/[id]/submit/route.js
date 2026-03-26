@@ -3,7 +3,9 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
-import { generatePDF } from '@/lib/pdf-generator'
+import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspectionReportPdf'
+import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
+import { uploadInspectionPdfToBlob } from '../../../../../lib/blob/uploadPdf'
 import { sendEmails } from '@/lib/email-sender'
 
 export const runtime = 'nodejs'
@@ -109,13 +111,100 @@ export async function POST(request, { params }) {
     `
     const inspectionLive = refreshedResult.rows[0] || inspection
 
-    let pdfUrl = null
+    let fullPdfUrl = null
+    let posterPdfUrl = null
     let pdfError = null
     try {
-      pdfUrl = await generatePDF(inspectionLive, answersResult.rows, allActions)
+      const answerByQuestionId = {}
+      for (const row of answersResult.rows) {
+        answerByQuestionId[row.question_id] =
+          row.answer_value ||
+          row.answer_text ||
+          (row.answer_boolean != null ? (row.answer_boolean ? 'Yes' : 'No') : row.answer_number) ||
+          ''
+      }
+
+      const photosResult = await sql`
+        SELECT question_id, blob_url, filename
+        FROM inspection_photos
+        WHERE inspection_id = ${id}
+      `
+      const photosByQuestionId = {}
+      for (const p of photosResult.rows) {
+        if (!p.question_id || !p.blob_url) continue
+        if (!photosByQuestionId[p.question_id]) photosByQuestionId[p.question_id] = []
+        photosByQuestionId[p.question_id].push({
+          url: p.blob_url,
+          caption: p.filename || undefined,
+          linkedQuestionId: p.question_id,
+        })
+      }
+
+      const openActionQuestionIds = new Set(
+        allActions.map((a) => a.question_id).filter(Boolean)
+      )
+      const version = inspectionLive.template_version || {}
+      const sections = Array.isArray(version.sections) ? version.sections : []
+      const pdfSections = []
+      const pdfPhotos = []
+
+      for (const section of sections) {
+        const sectionQuestions = []
+        for (const question of section.questions || []) {
+          const qid = question.id
+          const answerVal = answerByQuestionId[qid] ?? ''
+          const answerRow = answersResult.rows.find((r) => r.question_id === qid)
+          const comment = (answerRow && answerRow.notes) || ''
+
+          sectionQuestions.push({
+            id: qid,
+            text: question.question_text || question.label || '',
+            answer: String(answerVal),
+            comment: comment || undefined,
+            grade: question.grading_scheme_name ? String(answerVal) : undefined,
+            actionCreated: openActionQuestionIds.has(qid),
+          })
+
+          const questionPhotos = photosByQuestionId[qid] || []
+          for (const qp of questionPhotos) pdfPhotos.push(qp)
+        }
+        if (sectionQuestions.length > 0) {
+          pdfSections.push({
+            title: section.title || section.name || 'Section',
+            questions: sectionQuestions,
+          })
+        }
+      }
+
+      const fullPdfBytes = await buildInspectionReportPdf({
+        inspectionId: id,
+        templateName: inspectionLive.template_name || version.name || 'Template',
+        blockName: inspectionLive.title || inspectionLive.location_label || 'Block',
+        completedAt: inspectionLive.submitted_at || new Date().toISOString(),
+        officerName: inspectionLive.inspector_name || 'Officer',
+        sections: pdfSections,
+        photos: pdfPhotos,
+      })
+      fullPdfUrl = await uploadInspectionPdfToBlob({
+        inspectionId: id,
+        pdfBytes: fullPdfBytes,
+        kind: 'report',
+      })
+
+      if (allActions.length > 0) {
+        const posterPdfBytes = await generatePosterPdfBuffer(inspectionLive, allActions)
+        posterPdfUrl = await uploadInspectionPdfToBlob({
+          inspectionId: id,
+          pdfBytes: posterPdfBytes,
+          kind: 'poster',
+        })
+      }
+
       await sql`
         UPDATE inspections
-        SET pdf_url = ${pdfUrl},
+        SET pdf_url = ${fullPdfUrl},
+            full_pdf_url = ${fullPdfUrl},
+            poster_pdf_url = ${posterPdfUrl},
             pdf_generation_error = NULL
         WHERE id = ${id}
       `
@@ -164,7 +253,7 @@ export async function POST(request, { params }) {
       recipients,
       actionCategories: actionsResult.rows,
       allActions,
-      pdfUrl
+      pdfUrl: fullPdfUrl
     })
 
     // Save recipient records
@@ -186,7 +275,9 @@ export async function POST(request, { params }) {
     return NextResponse.json(
       {
         inspectionId: id,
-        pdfUrl: pdfUrl || null,
+        pdfUrl: fullPdfUrl || null,
+        fullPdfUrl: fullPdfUrl || null,
+        posterPdfUrl: posterPdfUrl || null,
         ...(pdfError ? { pdfError } : {}),
       },
       { status: 201 }

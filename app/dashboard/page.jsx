@@ -111,20 +111,26 @@ export default function DashboardHome() {
       })
 
       const response = await fetch(`/api/dashboard/download?${params.toString()}`, { credentials: 'include' })
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `inspections-${new Date().toISOString().split('T')[0]}.csv`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        const msg = data?.details || data?.error || `Download failed (${response.status})`
+        throw new Error(msg)
       }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const cd = response.headers.get('content-disposition') || ''
+      const m = cd.match(/filename=\"?([^\";]+)\"?/i)
+      a.download = m?.[1] || `inspections-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
     } catch (error) {
       console.error('Error downloading CSV:', error)
-      alert('Failed to download CSV')
+      alert(error?.message || 'Failed to download CSV')
     }
   }
 
