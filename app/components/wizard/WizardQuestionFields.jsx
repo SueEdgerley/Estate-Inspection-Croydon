@@ -1,6 +1,6 @@
 'use client'
 
-import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
+import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
 
 const YN_OPTIONS = ['Yes', 'No', 'NA']
