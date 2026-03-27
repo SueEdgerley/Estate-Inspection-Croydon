@@ -12,7 +12,7 @@ const INTERNAL_TABS = [
 
 /** Filter panel tabs (Manage Inspections list view only) — layout only; fields map to existing `filters` keys. */
 const INSPECTION_FILTER_TABS = [
-  { id: 'users', label: 'Users or Groups' },
+  { id: 'users', label: 'Users' },
   { id: 'templates', label: 'Templates' },
   { id: 'locations', label: 'Locations' },
   { id: 'gradings', label: 'Gradings' },
@@ -42,8 +42,17 @@ export default function InspectionsListPage() {
     dateTo: '',
     type: 'all',
     search: '',
+    /** inspector email; matches inspections.inspector_id — owner/admin only in API */
+    inspector: 'all',
     /** active = drafts & in-progress (default); completed = submitted only; all = both */
     completionScope: 'active',
+  })
+  const [inspectorOptions, setInspectorOptions] = useState([])
+  const [inspectorPickerLoading, setInspectorPickerLoading] = useState(false)
+  const [inspectorPickerMeta, setInspectorPickerMeta] = useState({
+    canFilterByInspector: false,
+    groupsAvailable: false,
+    message: null,
   })
 
   const pathname = usePathname()
@@ -54,6 +63,7 @@ export default function InspectionsListPage() {
     if (filters.dateTo) params.set('dateTo', filters.dateTo)
     if (filters.type && filters.type !== 'all') params.set('type', filters.type)
     if (filters.search && filters.search.trim()) params.set('search', filters.search.trim())
+    if (filters.inspector && filters.inspector !== 'all') params.set('inspector', filters.inspector)
     if (filters.completionScope) params.set('completionScope', filters.completionScope)
     const qs = params.toString()
     return qs ? `/api/inspections?${qs}` : '/api/inspections'
@@ -72,7 +82,7 @@ export default function InspectionsListPage() {
     const cameFromOutsideInspections =
       prev != null && prev !== '' && !prev.startsWith('/inspections')
     if (cameFromOutsideInspections) {
-      setFilters((f) => ({ ...f, type: 'all', search: '', completionScope: 'active' }))
+      setFilters((f) => ({ ...f, type: 'all', search: '', inspector: 'all', completionScope: 'active' }))
     }
     prevPathRef.current = pathname
 
@@ -118,6 +128,49 @@ export default function InspectionsListPage() {
     window.addEventListener('pageshow', onPageShow)
     return () => window.removeEventListener('pageshow', onPageShow)
   }, [filters])
+
+  useEffect(() => {
+    const isList = pathname === '/inspections' || pathname === '/inspections/'
+    if (!isList || activeTab !== 'inspections') return
+    let cancelled = false
+    ;(async () => {
+      setInspectorPickerLoading(true)
+      try {
+        const res = await fetch('/api/inspections/inspectors', { credentials: 'include', cache: 'no-store' })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        if (!res.ok) {
+          setInspectorOptions([])
+          setInspectorPickerMeta({
+            canFilterByInspector: false,
+            groupsAvailable: false,
+            message: data?.details || data?.error || 'Could not load inspectors',
+          })
+          return
+        }
+        setInspectorOptions(Array.isArray(data.inspectors) ? data.inspectors : [])
+        setInspectorPickerMeta({
+          canFilterByInspector: data.canFilterByInspector === true,
+          groupsAvailable: data.groupsAvailable === true,
+          message: data.message || null,
+        })
+      } catch {
+        if (!cancelled) {
+          setInspectorOptions([])
+          setInspectorPickerMeta({
+            canFilterByInspector: false,
+            groupsAvailable: false,
+            message: 'Could not load inspectors',
+          })
+        }
+      } finally {
+        if (!cancelled) setInspectorPickerLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [pathname, activeTab])
 
   const formatDate = (dateString) => {
     if (!dateString) return '–'
@@ -355,12 +408,28 @@ export default function InspectionsListPage() {
             {inspectionFilterTab === 'users' && (
               <div role="tabpanel">
                 <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
-                  Filter by Users or Groups
+                  Users (inspectors)
                 </h2>
-                <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55, maxWidth: '42rem' }}>
-                  Choose which inspections appear in the list (active work, completed, or everything). Per-inspector and
-                  group pickers can be added here later.
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55, maxWidth: '42rem' }}>
+                  Filter by the inspector on the record (<code style={{ fontSize: '0.8rem' }}>inspector_id</code>, usually
+                  email). <strong>Groups</strong> are not implemented yet — this tab lists users only.
                 </p>
+                {inspectorPickerMeta.message && (
+                  <p
+                    style={{
+                      margin: '0 0 1rem 0',
+                      padding: '0.65rem 0.85rem',
+                      backgroundColor: '#f9fafb',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.8125rem',
+                      color: '#4b5563',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {inspectorPickerMeta.message}
+                  </p>
+                )}
                 <label
                   style={{
                     display: 'block',
@@ -393,6 +462,47 @@ export default function InspectionsListPage() {
                 </select>
                 <label
                   style={{
+                    display: 'block',
+                    fontSize: '0.8125rem',
+                    marginBottom: '0.4rem',
+                    color: '#374151',
+                    fontWeight: 600,
+                  }}
+                >
+                  Inspector (user)
+                </label>
+                {inspectorPickerLoading ? (
+                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>Loading inspectors…</p>
+                ) : inspectorPickerMeta.canFilterByInspector ? (
+                  <select
+                    value={filters.inspector}
+                    onChange={(e) => setFilters((f) => ({ ...f, inspector: e.target.value }))}
+                    style={{
+                      maxWidth: 'min(100%, 28rem)',
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.875rem',
+                      backgroundColor: '#fff',
+                      marginBottom: '1rem',
+                    }}
+                    aria-label="Filter by inspector"
+                  >
+                    <option value="all">All inspectors</option>
+                    {inspectorOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label} ({opt.value})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+                    Inspector filter is limited to your account for this role.
+                  </p>
+                )}
+                <label
+                  style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.5rem',
@@ -402,7 +512,7 @@ export default function InspectionsListPage() {
                   }}
                 >
                   <input type="checkbox" disabled style={{ width: '1rem', height: '1rem' }} />
-                  Include deleted
+                  Include deleted (not available)
                 </label>
               </div>
             )}
@@ -544,7 +654,16 @@ export default function InspectionsListPage() {
           <div style={{ padding: '0 1.5rem 1.25rem' }}>
             <button
               type="button"
-              onClick={() => setFilters({ dateFrom: '', dateTo: '', type: 'all', search: '', completionScope: 'active' })}
+              onClick={() =>
+              setFilters({
+                dateFrom: '',
+                dateTo: '',
+                type: 'all',
+                search: '',
+                inspector: 'all',
+                completionScope: 'active',
+              })
+            }
               style={{
                 padding: '0.5rem 1rem',
                 backgroundColor: '#f3f4f6',
@@ -678,7 +797,16 @@ export default function InspectionsListPage() {
           </div>
           <button
             type="button"
-            onClick={() => setFilters({ dateFrom: '', dateTo: '', type: 'all', search: '', completionScope: 'active' })}
+            onClick={() =>
+              setFilters({
+                dateFrom: '',
+                dateTo: '',
+                type: 'all',
+                search: '',
+                inspector: 'all',
+                completionScope: 'active',
+              })
+            }
             style={{
               padding: '0.45rem 0.9rem',
               backgroundColor: '#f3f4f6',
