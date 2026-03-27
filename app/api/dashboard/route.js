@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
@@ -191,28 +191,31 @@ export async function GET(request) {
       admin,
       fallbackInspectorId: !TEMPORARILY_DISABLE_ESTATE_SCOPING ? internalUser.email : null,
     })
-    const whereSql = joinSqlAnd(whereConditions)
+    const [whereText, whereParams] = joinSqlAnd(whereConditions)
+    const run = getNeonQuery()
 
     // Stats query
-    const statsResult = await sql`
-      SELECT
+    const statsResult = await run(
+      `SELECT
         COUNT(*) FILTER (WHERE status = 'submitted') AS total_completed,
         COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) AS scheduled_completed,
         COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) AS ad_hoc_completed
       FROM inspections
-      WHERE ${whereSql}
-    `
+      WHERE ${whereText}`,
+      whereParams
+    )
 
-    // Inspections query
-    const inspectionsResult = await sql`
-      SELECT
+    const lim = whereParams.length + 1
+    const inspectionsResult = await run(
+      `SELECT
         id, type, location_label, inspector_name, inspector_id,
         template_id, template_name, due_date, submitted_at, grading, pdf_url
       FROM inspections
-      WHERE ${whereSql}
+      WHERE ${whereText}
       ORDER BY submitted_at DESC
-      LIMIT 100
-    `
+      LIMIT $${lim}`,
+      [...whereParams, 100]
+    )
 
     const stats = {
       totalCompleted: parseInt(statsResult.rows[0]?.total_completed || 0),

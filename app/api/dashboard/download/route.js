@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
-import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
+import { buildInspectionWhereConditions, joinSqlAnd, fragment } from '@/lib/inspection-filters'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -59,16 +59,16 @@ export async function GET(request) {
       const taskFilter = taskType || 'raised'
       const taskConditions = []
       if (taskFilter === 'completed') {
-        taskConditions.push(sql`a.status = 'completed'`)
+        taskConditions.push(fragment`a.status = 'completed'`)
       } else if (taskFilter === 'outstanding') {
-        taskConditions.push(sql`(a.status IS DISTINCT FROM 'completed' OR a.status IS NULL)`)
+        taskConditions.push(fragment`(a.status IS DISTINCT FROM 'completed' OR a.status IS NULL)`)
       }
       if (!admin && userEmail) {
-        taskConditions.push(sql`i.inspector_id = ${userEmail}`)
+        taskConditions.push(fragment`i.inspector_id = ${userEmail}`)
       }
-      const taskWhereSql = joinSqlAnd(asArray(taskConditions))
-      const actionsResult = await sql`
-        SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
+      const [taskWhereText, taskWhereParams] = joinSqlAnd(asArray(taskConditions))
+      const actionsResult = await getNeonQuery()(
+        `SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
                a.title, a.description, a.location, a.status, a.comment, a.auto_created,
                a.created_at, a.updated_at,
                i.title AS inspection_title, i.submitted_at AS inspection_submitted,
@@ -76,9 +76,10 @@ export async function GET(request) {
         FROM actions a
         LEFT JOIN inspections i ON i.id = a.inspection_id
         LEFT JOIN people p ON p.id = a.recipient_person_id
-        WHERE ${taskWhereSql}
-        ORDER BY a.created_at DESC
-      `
+        WHERE ${taskWhereText}
+        ORDER BY a.created_at DESC`,
+        taskWhereParams
+      )
       const headers = ['Task ID', 'Inspection ID', 'Inspection', 'Completed', 'Section', 'Category', 'Priority', 'Title', 'Description', 'Location', 'Status', 'Recipient', 'Raised', 'Updated']
       const rows = actionsResult.rows.map(row => [
         row.id || '',
@@ -111,18 +112,19 @@ export async function GET(request) {
 
     // Questions & Answers export: inspection_answers for completed inspections
     if (dataType === 'questions_answers') {
-      const qaConditions = [sql`i.status = 'submitted'`]
-      if (!admin && userEmail) qaConditions.push(sql`i.inspector_id = ${userEmail}`)
-      const qaWhereSql = joinSqlAnd(asArray(qaConditions))
-      const answersResult = await sql`
-        SELECT i.id AS inspection_id, i.title, i.submitted_at,
+      const qaConditions = [fragment`i.status = 'submitted'`]
+      if (!admin && userEmail) qaConditions.push(fragment`i.inspector_id = ${userEmail}`)
+      const [qaWhereText, qaWhereParams] = joinSqlAnd(asArray(qaConditions))
+      const answersResult = await getNeonQuery()(
+        `SELECT i.id AS inspection_id, i.title, i.submitted_at,
                ia.section_id, ia.question_id, ia.question_type,
                ia.answer_value, ia.answer_text, ia.answer_number, ia.answer_boolean, ia.notes
         FROM inspection_answers ia
         JOIN inspections i ON i.id = ia.inspection_id
-        WHERE ${qaWhereSql}
-        ORDER BY i.submitted_at DESC, ia.section_id, ia.question_id
-      `
+        WHERE ${qaWhereText}
+        ORDER BY i.submitted_at DESC, ia.section_id, ia.question_id`,
+        qaWhereParams
+      )
       const headers = ['Inspection ID', 'Title', 'Completed', 'Section', 'Question', 'Type', 'Answer', 'Notes']
       const rows = answersResult.rows.map(row => [
         row.inspection_id || '',
@@ -161,16 +163,17 @@ export async function GET(request) {
       fallbackInspectorId: userEmail || null,
     })
 
-    const whereSql = joinSqlAnd(asArray(whereConditions))
+    const [whereText, whereParams] = joinSqlAnd(asArray(whereConditions))
 
-    const result = await sql`
-      SELECT 
+    const result = await getNeonQuery()(
+      `SELECT 
         type, location_label, inspector_name, template_name, 
         due_date, submitted_at, grading
       FROM inspections
-      WHERE ${whereSql}
-      ORDER BY submitted_at DESC
-    `
+      WHERE ${whereText}
+      ORDER BY submitted_at DESC`,
+      whereParams
+    )
 
     const headers = ['Type', 'Location', 'User', 'Template', 'Due Date', 'Completed', 'Grading']
     const rows = result.rows.map(row => [

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { createHash } from 'crypto'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
@@ -149,20 +149,22 @@ export async function GET(request) {
       admin: canListAll,
       fallbackInspectorId,
     })
-    const whereSql = joinSqlAnd(whereConditions)
+    const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const limit = canListAll ? 200 : 100
-    const result = await sql`
-      SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+    const limitPlaceholder = whereParams.length + 1
+    const result = await getNeonQuery()(
+      `SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
              i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
              e.name AS estate_name, b.name AS block_name,
              (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
       FROM inspections i
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = i.block_id
-      WHERE ${whereSql}
+      WHERE ${whereText}
       ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
-      LIMIT ${limit}
-    `
+      LIMIT $${limitPlaceholder}`,
+      [...whereParams, limit]
+    )
     return NextResponse.json(result.rows)
   } catch (error) {
     console.error('Error listing inspections:', error)
