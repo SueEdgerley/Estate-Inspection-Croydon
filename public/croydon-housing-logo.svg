@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 72" role="img" aria-labelledby="croydonLogoTitle">
+  <title id="croydonLogoTitle">Croydon Housing and Croydon Council</title>
+  <rect width="520" height="72" fill="#ffffff"/>
+  <!-- Left: CROYDON (magenta) + HOUSING (gray) -->
+  <text x="14" y="26" fill="#8a1566" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.02em">CROYDON</text>
+  <text x="14" y="46" fill="#808080" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="0.02em">HOUSING</text>
+  <!-- Divider -->
+  <line x1="132" y1="10" x2="132" y2="62" stroke="#6b7280" stroke-width="1"/>
+  <!-- Right: CROYDON + URL -->
+  <text x="148" y="34" fill="#8a1566" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.02em">CROYDON</text>
+  <text x="148" y="54" fill="#8a1566" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-size="11" font-weight="500">www.croydon.gov.uk</text>
+</svg>

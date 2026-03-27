@@ -36,13 +36,13 @@ const USER_ROLE_NAV_HREFS = new Set([
   '/templates',
 ])
 
-/** Croydon Housing + Council horizontal banner (`public/croydon-housing-logo.png`, dark background) */
-const LOGO_SRC = '/croydon-housing-logo.png'
+/** Croydon Housing + Council horizontal banner (`public/croydon-housing-logo.svg`, white background) */
+const LOGO_SRC = '/croydon-housing-logo.svg'
 
 const logoBannerWrap = {
   display: 'inline-flex',
   alignItems: 'center',
-  backgroundColor: '#000',
+  backgroundColor: '#fff',
   borderRadius: 8,
   padding: '6px 12px',
   lineHeight: 0,

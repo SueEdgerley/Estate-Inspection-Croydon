@@ -37,14 +37,14 @@ export default function DashboardLayout({ children }) {
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
-            backgroundColor: '#000',
+            backgroundColor: '#fff',
             borderRadius: 8,
             padding: '6px 12px',
             lineHeight: 0,
             marginBottom: '0.75rem',
           }}>
             <img
-              src="/croydon-housing-logo.png"
+              src="/croydon-housing-logo.svg"
               alt="Croydon Council"
               style={{ height: 36, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
             />

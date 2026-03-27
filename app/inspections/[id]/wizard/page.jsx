@@ -320,7 +320,7 @@ export default function InspectionWizardPage() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                backgroundColor: '#000',
+                backgroundColor: '#fff',
                 borderRadius: 8,
                 padding: '8px 14px',
                 lineHeight: 0,
@@ -328,7 +328,7 @@ export default function InspectionWizardPage() {
               }}
             >
               <img
-                src="/croydon-housing-logo.png"
+                src="/croydon-housing-logo.svg"
                 alt="Croydon Council"
                 style={{ height: 48, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
               />
