@@ -10,6 +10,15 @@ const INTERNAL_TABS = [
   { id: 'inspections', label: 'Manage Inspections', icon: '📄' },
 ]
 
+/** Filter panel tabs (Manage Inspections list view only) — layout only; fields map to existing `filters` keys. */
+const INSPECTION_FILTER_TABS = [
+  { id: 'users', label: 'Users or Groups' },
+  { id: 'templates', label: 'Templates' },
+  { id: 'locations', label: 'Locations' },
+  { id: 'gradings', label: 'Gradings' },
+  { id: 'dates', label: 'Date Range' },
+]
+
 /** Local calendar YYYY-MM-DD; aligns with `<input type="date">` (avoids UTC vs local mix from `new Date('YYYY-MM-DD')`). */
 function localDateKeyFromTimestamp(iso) {
   if (!iso) return null
@@ -27,6 +36,7 @@ export default function InspectionsListPage() {
   const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('summary')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [inspectionFilterTab, setInspectionFilterTab] = useState('users')
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: '',
@@ -169,79 +179,98 @@ export default function InspectionsListPage() {
         or switch to Completed / All when needed.
       </p>
 
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '1rem',
-        marginBottom: '1rem',
-      }}>
-        <div
-          role="tablist"
-          aria-label="Manage inspections sections"
-          style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}
-        >
-          {INTERNAL_TABS.map((tab) => {
-            const selected = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  padding: '0.65rem 1.1rem',
-                  fontSize: '0.9375rem',
-                  fontWeight: selected ? 600 : 500,
-                  color: selected ? '#111827' : '#6b7280',
-                  backgroundColor: selected ? '#fff' : '#f3f4f6',
-                  border: selected ? '1px solid #e5e7eb' : '1px solid transparent',
-                  borderRadius: '0.5rem',
-                  cursor: 'pointer',
-                  boxShadow: selected ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                }}
-              >
-                <span aria-hidden>{tab.icon}</span>
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8125rem', color: '#374151', fontWeight: 500 }}>
-            Show
-            <select
-              value={filters.completionScope}
-              onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+      {/* Section tabs (Summary / Schedules / Manage Inspections) */}
+      <div
+        role="tablist"
+        aria-label="Manage inspections sections"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+        }}
+      >
+        {INTERNAL_TABS.map((tab) => {
+          const selected = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '0.5rem 0.65rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                minWidth: '11rem',
-                backgroundColor: '#fff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.65rem 1.1rem',
+                fontSize: '0.9375rem',
+                fontWeight: selected ? 600 : 500,
+                color: selected ? '#111827' : '#6b7280',
+                backgroundColor: selected ? '#fff' : '#f3f4f6',
+                border: selected ? '1px solid #e5e7eb' : '1px solid transparent',
+                borderRadius: '0.5rem',
+                cursor: 'pointer',
+                boxShadow: selected ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               }}
-              aria-label="Show inspections"
             >
-              <option value="active">Active work (drafts and in progress)</option>
-              <option value="completed">Completed</option>
-              <option value="all">All</option>
-            </select>
-          </label>
+              <span aria-hidden>{tab.icon}</span>
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Top action row: Show (scope) + Show/Hide filters — filters panel layout differs on Manage Inspections list */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          marginBottom: filtersOpen && activeTab === 'inspections' ? '1.25rem' : '1rem',
+        }}
+      >
+        <label
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.35rem',
+            fontSize: '0.8125rem',
+            color: '#374151',
+            fontWeight: 500,
+            minWidth: 'min(100%, 14rem)',
+          }}
+        >
+          Show
+          <select
+            value={filters.completionScope}
+            onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+            style={{
+              padding: '0.55rem 0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              backgroundColor: '#fff',
+            }}
+            aria-label="Show inspections"
+          >
+            <option value="active">Active work (drafts and in progress)</option>
+            <option value="completed">Completed</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+        <div style={{ marginLeft: 'auto' }}>
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
+            aria-expanded={filtersOpen}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.65rem 1.15rem',
+              padding: '0.65rem 1.25rem',
               backgroundColor: '#fff',
               color: '#374151',
               border: '2px solid #c026d3',
@@ -251,13 +280,241 @@ export default function InspectionsListPage() {
               cursor: 'pointer',
             }}
           >
-            <span aria-hidden style={{ fontSize: '1rem' }}>⏷</span>
-            Show Filters
+            <span aria-hidden style={{ fontSize: '1rem' }}>{filtersOpen ? '▾' : '▸'}</span>
+            {filtersOpen ? 'Hide Filters' : 'Show Filters'}
           </button>
         </div>
       </div>
 
-      {filtersOpen && (
+      {filtersOpen && activeTab === 'inspections' && (
+        <div
+          style={{
+            marginBottom: '1.5rem',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.5rem',
+            overflow: 'hidden',
+            backgroundColor: '#fff',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          }}
+        >
+          <div
+            role="tablist"
+            aria-label="Inspection filters"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 0,
+              backgroundColor: '#f3f4f6',
+              borderBottom: '1px solid #e5e7eb',
+            }}
+          >
+            {INSPECTION_FILTER_TABS.map((t) => {
+              const sel = inspectionFilterTab === t.id
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={sel}
+                  onClick={() => setInspectionFilterTab(t.id)}
+                  style={{
+                    padding: '0.85rem 1.15rem',
+                    fontSize: '0.9375rem',
+                    fontWeight: sel ? 600 : 500,
+                    color: sel ? '#111827' : '#6b7280',
+                    backgroundColor: sel ? '#fff' : 'transparent',
+                    border: 'none',
+                    borderBottom: sel ? '2px solid #0f766e' : '2px solid transparent',
+                    cursor: 'pointer',
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ padding: '1.75rem 1.5rem 1.25rem' }}>
+            {inspectionFilterTab === 'users' && (
+              <div role="tabpanel">
+                <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
+                  Filter by Users or Groups
+                </h2>
+                <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55, maxWidth: '40rem' }}>
+                  Filter and view inspections by user or group. Use <strong>Show</strong> above to choose active, completed, or all inspections.
+                  Per-user and group pickers will plug in here later.
+                </p>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontSize: '0.875rem',
+                    color: '#9ca3af',
+                    cursor: 'not-allowed',
+                  }}
+                >
+                  <input type="checkbox" disabled style={{ width: '1rem', height: '1rem' }} />
+                  Include deleted
+                </label>
+              </div>
+            )}
+            {inspectionFilterTab === 'templates' && (
+              <div role="tabpanel">
+                <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
+                  Filter by template type
+                </h2>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55 }}>
+                  Limit the list to a single inspection type.
+                </p>
+                <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
+                  Type
+                </label>
+                <select
+                  value={filters.type}
+                  onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}
+                  style={{
+                    maxWidth: '24rem',
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    backgroundColor: '#fff',
+                  }}
+                >
+                  <option value="all">All types</option>
+                  <option value="inspection">Template (inspection)</option>
+                  <option value="ad_hoc">Ad hoc</option>
+                  <option value="street">Street</option>
+                  <option value="block">Block</option>
+                  <option value="estate">Estate</option>
+                </select>
+              </div>
+            )}
+            {inspectionFilterTab === 'locations' && (
+              <div role="tabpanel">
+                <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
+                  Filter by location
+                </h2>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55 }}>
+                  Search text is matched against location labels (server-side).
+                </p>
+                <div style={{ position: 'relative', maxWidth: '32rem' }}>
+                  <span
+                    aria-hidden
+                    style={{
+                      position: 'absolute',
+                      left: '0.75rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#9ca3af',
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    🔍
+                  </span>
+                  <input
+                    type="search"
+                    value={filters.search}
+                    onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                    placeholder="Search locations…"
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.75rem 0.65rem 2.25rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.875rem',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+            {inspectionFilterTab === 'gradings' && (
+              <div role="tabpanel">
+                <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
+                  Filter by grading
+                </h2>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55, maxWidth: '36rem' }}>
+                  Grading filters are not wired on this page yet; the list still uses the same API query as before.
+                </p>
+              </div>
+            )}
+            {inspectionFilterTab === 'dates' && (
+              <div role="tabpanel">
+                <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
+                  Date range
+                </h2>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55 }}>
+                  Completed from / to (aligned with API date filters).
+                </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '1rem',
+                    maxWidth: '36rem',
+                  }}
+                >
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
+                      Completed from
+                    </label>
+                    <input
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
+                      Completed to
+                    </label>
+                    <input
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.875rem',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ padding: '0 1.5rem 1.25rem' }}>
+            <button
+              type="button"
+              onClick={() => setFilters({ dateFrom: '', dateTo: '', type: 'all', search: '', completionScope: 'active' })}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#f3f4f6',
+                color: '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.8125rem',
+                cursor: 'pointer',
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        </div>
+      )}
+
+      {filtersOpen && activeTab !== 'inspections' && (
         <div
           style={{
             backgroundColor: '#fff',
@@ -268,12 +525,14 @@ export default function InspectionsListPage() {
             marginBottom: '1.25rem',
           }}
         >
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '1rem',
-            marginBottom: '1rem',
-          }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '1rem',
+              marginBottom: '1rem',
+            }}
+          >
             <div>
               <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
                 Show
