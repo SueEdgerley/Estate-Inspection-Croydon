@@ -66,7 +66,7 @@ export async function GET(request) {
       if (!admin && userEmail) {
         taskConditions.push(sql`i.inspector_id = ${userEmail}`)
       }
-      const taskWhere = asArray(taskConditions).length > 0 ? sql`WHERE ${joinSqlAnd(asArray(taskConditions))}` : sql``
+      const taskWhereSql = joinSqlAnd(asArray(taskConditions))
       const actionsResult = await sql`
         SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
                a.title, a.description, a.location, a.status, a.comment, a.auto_created,
@@ -76,7 +76,7 @@ export async function GET(request) {
         FROM actions a
         LEFT JOIN inspections i ON i.id = a.inspection_id
         LEFT JOIN people p ON p.id = a.recipient_person_id
-        ${taskWhere}
+        WHERE ${taskWhereSql}
         ORDER BY a.created_at DESC
       `
       const headers = ['Task ID', 'Inspection ID', 'Inspection', 'Completed', 'Section', 'Category', 'Priority', 'Title', 'Description', 'Location', 'Status', 'Recipient', 'Raised', 'Updated']
@@ -113,14 +113,14 @@ export async function GET(request) {
     if (dataType === 'questions_answers') {
       const qaConditions = [sql`i.status = 'submitted'`]
       if (!admin && userEmail) qaConditions.push(sql`i.inspector_id = ${userEmail}`)
-      const qaWhere = sql`WHERE ${joinSqlAnd(asArray(qaConditions))}`
+      const qaWhereSql = joinSqlAnd(asArray(qaConditions))
       const answersResult = await sql`
         SELECT i.id AS inspection_id, i.title, i.submitted_at,
                ia.section_id, ia.question_id, ia.question_type,
                ia.answer_value, ia.answer_text, ia.answer_number, ia.answer_boolean, ia.notes
         FROM inspection_answers ia
         JOIN inspections i ON i.id = ia.inspection_id
-        ${qaWhere}
+        WHERE ${qaWhereSql}
         ORDER BY i.submitted_at DESC, ia.section_id, ia.question_id
       `
       const headers = ['Inspection ID', 'Title', 'Completed', 'Section', 'Question', 'Type', 'Answer', 'Notes']
@@ -161,16 +161,14 @@ export async function GET(request) {
       fallbackInspectorId: userEmail || null,
     })
 
-    const whereClause = asArray(whereConditions).length > 0
-      ? sql`WHERE ${joinSqlAnd(asArray(whereConditions))}`
-      : sql``
+    const whereSql = joinSqlAnd(asArray(whereConditions))
 
     const result = await sql`
       SELECT 
         type, location_label, inspector_name, template_name, 
         due_date, submitted_at, grading
       FROM inspections
-      ${whereClause}
+      WHERE ${whereSql}
       ORDER BY submitted_at DESC
     `
 

@@ -191,7 +191,7 @@ export async function GET(request) {
       admin,
       fallbackInspectorId: !TEMPORARILY_DISABLE_ESTATE_SCOPING ? internalUser.email : null,
     })
-    const whereClause = sql`WHERE ${joinSqlAnd(whereConditions)}`
+    const whereSql = joinSqlAnd(whereConditions)
 
     // Stats query
     const statsResult = await sql`
@@ -200,7 +200,7 @@ export async function GET(request) {
         COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) AS scheduled_completed,
         COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) AS ad_hoc_completed
       FROM inspections
-      ${whereClause}
+      WHERE ${whereSql}
     `
 
     // Inspections query
@@ -209,7 +209,7 @@ export async function GET(request) {
         id, type, location_label, inspector_name, inspector_id,
         template_id, template_name, due_date, submitted_at, grading, pdf_url
       FROM inspections
-      ${whereClause}
+      WHERE ${whereSql}
       ORDER BY submitted_at DESC
       LIMIT 100
     `

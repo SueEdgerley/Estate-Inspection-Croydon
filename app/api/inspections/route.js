@@ -149,7 +149,7 @@ export async function GET(request) {
       admin: canListAll,
       fallbackInspectorId,
     })
-    const whereClause = sql`WHERE ${joinSqlAnd(whereConditions)}`
+    const whereSql = joinSqlAnd(whereConditions)
     const limit = canListAll ? 200 : 100
     const result = await sql`
       SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
@@ -159,7 +159,7 @@ export async function GET(request) {
       FROM inspections i
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = i.block_id
-      ${whereClause}
+      WHERE ${whereSql}
       ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
       LIMIT ${limit}
     `
