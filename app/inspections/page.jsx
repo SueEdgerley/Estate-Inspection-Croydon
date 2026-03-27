@@ -38,6 +38,16 @@ export default function InspectionsListPage() {
 
   const pathname = usePathname()
   const prevPathRef = useRef(null)
+  const buildInspectionsApiUrl = () => {
+    const params = new URLSearchParams()
+    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
+    if (filters.dateTo) params.set('dateTo', filters.dateTo)
+    if (filters.type && filters.type !== 'all') params.set('type', filters.type)
+    if (filters.search && filters.search.trim()) params.set('search', filters.search.trim())
+    if (filters.completionScope) params.set('completionScope', filters.completionScope)
+    const qs = params.toString()
+    return qs ? `/api/inspections?${qs}` : '/api/inspections'
+  }
 
   useEffect(() => {
     const isList = pathname === '/inspections' || pathname === '/inspections/'
@@ -60,7 +70,7 @@ export default function InspectionsListPage() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch('/api/inspections', { credentials: 'include', cache: 'no-store' })
+        const res = await fetch(buildInspectionsApiUrl(), { credentials: 'include', cache: 'no-store' })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
           const msg = [data?.error, data?.details].filter(Boolean).join(' — ')
@@ -76,7 +86,7 @@ export default function InspectionsListPage() {
       }
     }
     load()
-  }, [pathname])
+  }, [pathname, filters])
 
   // Back-forward cache restore can resurrect a stale list without remounting; refetch when page is shown from bfcache.
   useEffect(() => {
@@ -86,7 +96,7 @@ export default function InspectionsListPage() {
       if (p !== '/inspections' && p !== '/inspections/') return
       ;(async () => {
         try {
-          const res = await fetch('/api/inspections', { credentials: 'include', cache: 'no-store' })
+          const res = await fetch(buildInspectionsApiUrl(), { credentials: 'include', cache: 'no-store' })
           if (!res.ok) return
           const data = await res.json()
           if (Array.isArray(data)) setInspections(data)
@@ -97,7 +107,7 @@ export default function InspectionsListPage() {
     }
     window.addEventListener('pageshow', onPageShow)
     return () => window.removeEventListener('pageshow', onPageShow)
-  }, [])
+  }, [filters])
 
   const formatDate = (dateString) => {
     if (!dateString) return '–'
@@ -138,31 +148,7 @@ export default function InspectionsListPage() {
 
   const isSubmittedRow = (row) => String(row.status || '').toLowerCase() === 'submitted'
 
-  const filteredInspections = useMemo(() => {
-    return inspections.filter((row) => {
-      const loc = locationDisplay(row).toLowerCase()
-      if (filters.search && !loc.includes(filters.search.toLowerCase())) return false
-      if (!rowMatchesTypeFilter(row.type, filters.type)) return false
-
-      const scope = filters.completionScope || 'active'
-      if (scope === 'active' && isSubmittedRow(row)) return false
-      if (scope === 'completed' && !isSubmittedRow(row)) return false
-
-      const hasDateFilter = Boolean(filters.dateFrom || filters.dateTo)
-      if (hasDateFilter) {
-        let dayKey
-        if (scope === 'completed') {
-          dayKey = localDateKeyFromTimestamp(row.submitted_at)
-        } else {
-          dayKey = localDateKeyFromTimestamp(row.submitted_at || row.created_at)
-        }
-        if (!dayKey) return false
-        if (filters.dateFrom && dayKey < filters.dateFrom) return false
-        if (filters.dateTo && dayKey > filters.dateTo) return false
-      }
-      return true
-    })
-  }, [inspections, filters])
+  const filteredInspections = useMemo(() => inspections, [inspections])
 
   const summaryRows = filteredInspections
 

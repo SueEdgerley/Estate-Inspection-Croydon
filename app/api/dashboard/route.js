@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
+import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
 // Dashboard access: use Users.role (owner | admin) for access control. Do not use People for auth.
 const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin']
@@ -177,89 +178,41 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const dateFrom = searchParams.get('dateFrom')
-    const dateTo = searchParams.get('dateTo')
-    const type = searchParams.get('type')
-    const template = searchParams.get('template')
-    const inspector = searchParams.get('inspector')
-    const scheduled = searchParams.get('scheduled')
-    const grading = searchParams.get('grading')
-
-    // Build WHERE clause as plain SQL + params (avoids sql`` fragment placeholder bugs)
-    const clauses = [`status = 'submitted'`]
-    const params = []
-
-    if (!admin && internalUser.email && !TEMPORARILY_DISABLE_ESTATE_SCOPING) {
-      params.push(internalUser.email)
-      clauses.push(`inspector_id = $${params.length}`)
-    }
-
-    if (dateFrom) {
-      params.push(dateFrom)
-      clauses.push(`submitted_at >= $${params.length}`)
-    }
-
-    if (dateTo) {
-      params.push(dateTo + ' 23:59:59')
-      clauses.push(`submitted_at <= $${params.length}`)
-    }
-
-    if (type && type !== 'all') {
-      params.push(type)
-      clauses.push(`type = $${params.length}`)
-    }
-
-    if (template && template !== 'all') {
-      params.push(template)
-      clauses.push(`template_id = $${params.length}`)
-    }
-
-    if (admin && inspector && inspector !== 'all') {
-      params.push(inspector)
-      clauses.push(`inspector_id = $${params.length}`)
-    }
-
-    if (scheduled && scheduled !== 'all') {
-      if (scheduled === 'scheduled') {
-        clauses.push(`is_scheduled = true`)
-      } else {
-        clauses.push(`(is_scheduled = false OR is_scheduled IS NULL)`)
-      }
-    }
-
-    if (grading && grading !== 'all') {
-      params.push(grading)
-      clauses.push(`grading = $${params.length}`)
-    }
-
-    const whereSql = `WHERE ${clauses.join(' AND ')}`
+    const whereConditions = buildInspectionWhereConditions({
+      completionScope: 'completed',
+      dateField: 'submitted_at',
+      dateFrom: searchParams.get('dateFrom') || '',
+      dateTo: searchParams.get('dateTo') || '',
+      type: searchParams.get('type') || 'all',
+      template: searchParams.get('template') || 'all',
+      inspector: searchParams.get('inspector') || 'all',
+      scheduled: searchParams.get('scheduled') || 'all',
+      grading: searchParams.get('grading') || 'all',
+      admin,
+      fallbackInspectorId: !TEMPORARILY_DISABLE_ESTATE_SCOPING ? internalUser.email : null,
+    })
+    const whereClause = sql`WHERE ${joinSqlAnd(whereConditions)}`
 
     // Stats query
-    const statsResult = await sql.query(
-      `
-  SELECT 
-    COUNT(*) FILTER (WHERE status = 'submitted') as total_completed,
-    COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) as scheduled_completed,
-    COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) as ad_hoc_completed
-  FROM inspections
-  ${whereSql}
-  `,
-      params
-    )
+    const statsResult = await sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'submitted') AS total_completed,
+        COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) AS scheduled_completed,
+        COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) AS ad_hoc_completed
+      FROM inspections
+      ${whereClause}
+    `
 
     // Inspections query
-    const inspectionsResult = await sql.query(
-      `
-  SELECT 
-    id, type, location_label, inspector_name, inspector_id,
-    template_id, template_name, due_date, submitted_at, grading, pdf_url
-  FROM inspections
-  ${whereSql}
-  ORDER BY submitted_at DESC
-  LIMIT 100
-  `,
-      params
-    )
+    const inspectionsResult = await sql`
+      SELECT
+        id, type, location_label, inspector_name, inspector_id,
+        template_id, template_name, due_date, submitted_at, grading, pdf_url
+      FROM inspections
+      ${whereClause}
+      ORDER BY submitted_at DESC
+      LIMIT 100
+    `
 
     const stats = {
       totalCompleted: parseInt(statsResult.rows[0]?.total_completed || 0),

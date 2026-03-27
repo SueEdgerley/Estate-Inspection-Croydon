@@ -10,6 +10,7 @@ import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
+import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -99,7 +100,7 @@ async function getOrCreateTemplateVersion(templateId, templateName, snapshot) {
   return { id: versionId, snapshot, versionHash, reused: false }
 }
 
-export async function GET() {
+export async function GET(request) {
   const { userId } = await auth()
   console.log('auth userId', userId)
   if (!userId) {
@@ -128,47 +129,40 @@ export async function GET() {
       postgresListAll = false
     }
     const canListAll = clerkAdmin || postgresListAll
-    let result
-    if (canListAll) {
-      result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
-               e.name AS estate_name, b.name AS block_name,
-               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
-        FROM inspections i
-        LEFT JOIN estates e ON e.id = i.estate_id
-        LEFT JOIN blocks b ON b.id = i.block_id
-        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
-        LIMIT 200
-      `
-    } else if (typeof userEmail === 'string' && userEmail.trim()) {
-      // Case-insensitive match (no trim() in SQL — avoids PG/driver edge cases; trim client-side only).
-      const emailNorm = userEmail.trim().toLowerCase()
-      result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
-               e.name AS estate_name, b.name AS block_name,
-               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
-        FROM inspections i
-        LEFT JOIN estates e ON e.id = i.estate_id
-        LEFT JOIN blocks b ON b.id = i.block_id
-        WHERE i.inspector_id IS NOT NULL AND lower(i.inspector_id) = ${emailNorm}
-        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
-        LIMIT 200
-      `
-    } else {
-      result = await sql`
-        SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-               i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
-               e.name AS estate_name, b.name AS block_name,
-               (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
-        FROM inspections i
-        LEFT JOIN estates e ON e.id = i.estate_id
-        LEFT JOIN blocks b ON b.id = i.block_id
-        ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
-        LIMIT 50
-      `
-    }
+    const { searchParams } = new URL(request.url)
+    const fallbackInspectorId =
+      !canListAll && typeof userEmail === 'string' && userEmail.trim()
+        ? userEmail.trim()
+        : null
+
+    const whereConditions = buildInspectionWhereConditions({
+      completionScope: searchParams.get('completionScope') || 'active',
+      dateField: searchParams.get('dateField') || null,
+      dateFrom: searchParams.get('dateFrom') || '',
+      dateTo: searchParams.get('dateTo') || '',
+      type: searchParams.get('type') || 'all',
+      template: searchParams.get('template') || 'all',
+      inspector: searchParams.get('inspector') || 'all',
+      scheduled: searchParams.get('scheduled') || 'all',
+      grading: searchParams.get('grading') || 'all',
+      locationSearch: searchParams.get('search') || '',
+      admin: canListAll,
+      fallbackInspectorId,
+    })
+    const whereClause = sql`WHERE ${joinSqlAnd(whereConditions)}`
+    const limit = canListAll ? 200 : 100
+    const result = await sql`
+      SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+             i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
+             e.name AS estate_name, b.name AS block_name,
+             (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
+      FROM inspections i
+      LEFT JOIN estates e ON e.id = i.estate_id
+      LEFT JOIN blocks b ON b.id = i.block_id
+      ${whereClause}
+      ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
+      LIMIT ${limit}
+    `
     return NextResponse.json(result.rows)
   } catch (error) {
     console.error('Error listing inspections:', error)

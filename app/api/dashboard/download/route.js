@@ -3,20 +3,13 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
+import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
 
 const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
-const joinSqlAnd = (conditions = []) => {
-  if (!Array.isArray(conditions) || conditions.length === 0) return sql`TRUE`
-  let out = conditions[0]
-  for (let i = 1; i < conditions.length; i++) {
-    out = sql`${out} AND ${conditions[i]}`
-  }
-  return out
-}
 
 export async function GET(request) {
   try {
@@ -153,51 +146,20 @@ export async function GET(request) {
       })
     }
 
-    // Build WHERE conditions
-    let whereConditions = []
-    if (missed === '1') {
-      whereConditions.push(sql`is_scheduled = true`)
-      whereConditions.push(sql`(status IS DISTINCT FROM 'submitted' OR submitted_at IS NULL)`)
-    } else {
-      whereConditions.push(sql`status = 'submitted'`)
-    }
-    if (!admin && userEmail) {
-      whereConditions.push(sql`inspector_id = ${userEmail}`)
-    }
-
-    if (dateFrom) {
-      if (missed === '1') {
-        whereConditions.push(sql`due_date >= ${dateFrom}`)
-      } else {
-        whereConditions.push(sql`submitted_at >= ${dateFrom}`)
-      }
-    }
-    if (dateTo) {
-      if (missed === '1') {
-        whereConditions.push(sql`due_date <= ${dateTo + ' 23:59:59'}`)
-      } else {
-        whereConditions.push(sql`submitted_at <= ${dateTo + ' 23:59:59'}`)
-      }
-    }
-    if (type && type !== 'all') {
-      whereConditions.push(sql`type = ${type}`)
-    }
-    if (template && template !== 'all') {
-      whereConditions.push(sql`template_id = ${template}`)
-    }
-    if (admin && inspector && inspector !== 'all') {
-      whereConditions.push(sql`inspector_id = ${inspector}`)
-    }
-    if (scheduled && scheduled !== 'all') {
-      if (scheduled === 'scheduled') {
-        whereConditions.push(sql`is_scheduled = true`)
-      } else {
-        whereConditions.push(sql`(is_scheduled = false OR is_scheduled IS NULL)`)
-      }
-    }
-    if (grading && grading !== 'all') {
-      whereConditions.push(sql`grading = ${grading}`)
-    }
+    // Build WHERE conditions (shared with dashboard + inspections list)
+    const whereConditions = buildInspectionWhereConditions({
+      completionScope: missed === '1' ? 'active' : 'completed',
+      dateField: missed === '1' ? 'due_date' : 'submitted_at',
+      dateFrom: dateFrom || '',
+      dateTo: dateTo || '',
+      type: type || 'all',
+      template: template || 'all',
+      inspector: inspector || 'all',
+      scheduled: missed === '1' ? 'scheduled' : (scheduled || 'all'),
+      grading: grading || 'all',
+      admin,
+      fallbackInspectorId: userEmail || null,
+    })
 
     const whereClause = asArray(whereConditions).length > 0
       ? sql`WHERE ${joinSqlAnd(asArray(whereConditions))}`
