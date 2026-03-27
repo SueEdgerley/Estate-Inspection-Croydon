@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { findQuestionInTemplate } from '@/lib/template-question-lookup'
+import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -66,6 +68,11 @@ export async function POST(request, { params }) {
     const { section_id, answers: answersRaw } = data
     const answers = answersRaw && typeof answersRaw === 'object' ? answersRaw : {}
 
+    const inspRow = await sql`
+      SELECT template_version FROM inspections WHERE id = ${id} LIMIT 1
+    `
+    const templateVersion = inspRow.rows[0]?.template_version ?? null
+
     // Save each answer
     const savedAnswers = []
     
@@ -85,13 +92,42 @@ export async function POST(request, { params }) {
       let answerNumber = null
       let answerBoolean = null
       let notes = null
-      let questionType = 'text' // Default, should come from question definition
-      
+      let questionType = 'text'
+
+      const qdef =
+        !isCommentField && !isPriorityField ? findQuestionInTemplate(templateVersion, baseQuestionId) : null
+
       if (isCommentField) {
-        // Store comment in notes field
         notes = String(answerValue)
         answerText = String(answerValue)
-        questionType = 'yesno' // Comments are for Yes/No questions
+        questionType = 'yesno'
+      } else if (isPriorityField) {
+        answerText = String(answerValue)
+        answerValueField = String(answerValue)
+        questionType = 'yesno'
+      } else if (qdef) {
+        questionType = resolveStoredQuestionType(qdef)
+        if (questionType === 'graded') {
+          answerText = String(answerValue)
+          answerValueField = String(answerValue)
+        } else if (questionType === 'yesno') {
+          if (typeof answerValue === 'boolean') {
+            answerBoolean = answerValue
+          } else {
+            const lower = String(answerValue).toLowerCase()
+            answerBoolean = lower === 'yes' ? true : lower === 'no' ? false : null
+          }
+        } else if (questionType === 'rating' && typeof answerValue === 'number') {
+          answerNumber = answerValue
+        } else if (typeof answerValue === 'boolean') {
+          answerBoolean = answerValue
+          questionType = 'yesno'
+        } else if (typeof answerValue === 'number') {
+          answerNumber = answerValue
+        } else {
+          answerText = String(answerValue)
+          answerValueField = String(answerValue)
+        }
       } else if (typeof answerValue === 'boolean') {
         answerBoolean = answerValue
         questionType = 'yesno'
@@ -114,6 +150,8 @@ export async function POST(request, { params }) {
         )
         ON CONFLICT (inspection_id, question_id) 
         DO UPDATE SET
+          section_id = EXCLUDED.section_id,
+          question_type = EXCLUDED.question_type,
           answer_value = EXCLUDED.answer_value,
           answer_text = EXCLUDED.answer_text,
           answer_number = EXCLUDED.answer_number,
