@@ -174,9 +174,8 @@ export default function InspectionsListPage() {
         lineHeight: 1.5,
         maxWidth: '48rem',
       }}>
-        Create and schedule new inspections here. View inspections in progress, edit series and manage
-        schedules. Completed work is listed on the Home page; use the list below for active work by default,
-        or switch to Completed / All when needed.
+        Work across inspections in one place: summaries, schedules, and the operational list for active and
+        scheduled work. Reporting totals stay on Home; use filters here to focus drafts, in-progress, and due work.
       </p>
 
       {/* Section tabs (Summary / Schedules / Manage Inspections) */}
@@ -221,47 +220,65 @@ export default function InspectionsListPage() {
         })}
       </div>
 
-      {/* Top action row: Show (scope) + Show/Hide filters — filters panel layout differs on Manage Inspections list */}
+      {activeTab === 'inspections' && (
+        <p
+          style={{
+            margin: '0 0 1rem 0',
+            fontSize: '0.875rem',
+            color: '#6b7280',
+            lineHeight: 1.55,
+            maxWidth: '42rem',
+          }}
+        >
+          Operational list for day-to-day work — open <strong style={{ color: '#374151', fontWeight: 600 }}>Show Filters</strong> to
+          choose what appears (active, completed, or all), then use the tabs to narrow by scope, type, location, or dates.
+        </p>
+      )}
+
+      {/* Summary / Schedules: quick scope + filters. Manage Inspections: filters only (scope lives in Users tab). */}
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'flex-end',
-          justifyContent: 'space-between',
+          justifyContent: activeTab === 'inspections' ? 'flex-end' : 'space-between',
           gap: '1rem',
           marginBottom: filtersOpen && activeTab === 'inspections' ? '1.25rem' : '1rem',
+          minHeight: activeTab === 'inspections' ? '2.75rem' : undefined,
         }}
       >
-        <label
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.35rem',
-            fontSize: '0.8125rem',
-            color: '#374151',
-            fontWeight: 500,
-            minWidth: 'min(100%, 14rem)',
-          }}
-        >
-          Show
-          <select
-            value={filters.completionScope}
-            onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+        {activeTab !== 'inspections' && (
+          <label
             style={{
-              padding: '0.55rem 0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '0.875rem',
-              backgroundColor: '#fff',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.35rem',
+              fontSize: '0.8125rem',
+              color: '#374151',
+              fontWeight: 500,
+              minWidth: 'min(100%, 14rem)',
             }}
-            aria-label="Show inspections"
           >
-            <option value="active">Active work (drafts and in progress)</option>
-            <option value="completed">Completed</option>
-            <option value="all">All</option>
-          </select>
-        </label>
-        <div style={{ marginLeft: 'auto' }}>
+            Show
+            <select
+              value={filters.completionScope}
+              onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+              style={{
+                padding: '0.55rem 0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                backgroundColor: '#fff',
+              }}
+              aria-label="Show inspections"
+            >
+              <option value="active">Active work (drafts and in progress)</option>
+              <option value="completed">Completed</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+        )}
+        <div style={activeTab === 'inspections' ? undefined : { marginLeft: 'auto' }}>
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
@@ -289,12 +306,12 @@ export default function InspectionsListPage() {
       {filtersOpen && activeTab === 'inspections' && (
         <div
           style={{
-            marginBottom: '1.5rem',
+            marginBottom: '1.75rem',
             border: '1px solid #e5e7eb',
             borderRadius: '0.5rem',
             overflow: 'hidden',
             backgroundColor: '#fff',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
           }}
         >
           <div
@@ -340,10 +357,40 @@ export default function InspectionsListPage() {
                 <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
                   Filter by Users or Groups
                 </h2>
-                <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55, maxWidth: '40rem' }}>
-                  Filter and view inspections by user or group. Use <strong>Show</strong> above to choose active, completed, or all inspections.
-                  Per-user and group pickers will plug in here later.
+                <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55, maxWidth: '42rem' }}>
+                  Choose which inspections appear in the list (active work, completed, or everything). Per-inspector and
+                  group pickers can be added here later.
                 </p>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '0.8125rem',
+                    marginBottom: '0.4rem',
+                    color: '#374151',
+                    fontWeight: 600,
+                  }}
+                >
+                  Which inspections to show
+                </label>
+                <select
+                  value={filters.completionScope}
+                  onChange={(e) => setFilters((f) => ({ ...f, completionScope: e.target.value }))}
+                  style={{
+                    maxWidth: '22rem',
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    backgroundColor: '#fff',
+                    marginBottom: '1.25rem',
+                  }}
+                  aria-label="Which inspections to show"
+                >
+                  <option value="active">Active work (drafts and in progress)</option>
+                  <option value="completed">Completed</option>
+                  <option value="all">All</option>
+                </select>
                 <label
                   style={{
                     display: 'flex',
