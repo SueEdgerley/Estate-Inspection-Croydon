@@ -15,7 +15,7 @@ export default function YesNoNaButtons({ id, value, onChange, disabled = false }
   const selected = OPTIONS.includes(normalized) ? normalized : ''
 
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+    <div className="nv-answer-group">
       {OPTIONS.map((opt, idx) => {
         const isSelected = selected === opt
         const isYes = opt === 'Yes'
@@ -30,19 +30,20 @@ export default function YesNoNaButtons({ id, value, onChange, disabled = false }
           <button
             key={opt}
             type="button"
+            className="nv-answer-option"
             id={idx === 0 && id ? id : undefined}
             disabled={disabled}
             onClick={() => onChange(opt)}
             style={{
-              padding: '0.5rem 1rem',
-              minHeight: 44,
+              padding: '0.75rem 1rem',
+              minHeight: 52,
               backgroundColor: bg,
               color,
               border: `2px solid ${border}`,
-              borderRadius: '0.5rem',
+              borderRadius: '0.625rem',
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontWeight: isSelected ? 600 : 500,
-              fontSize: '0.9375rem',
+              fontSize: '1rem',
               opacity: disabled ? 0.7 : 1,
             }}
           >
