@@ -20,12 +20,15 @@ const ALL_NAV_ITEMS = [
   { href: '/inspections/ad-hoc', label: 'Create Ad Hoc Inspection' },
   { href: '/actions', label: 'Manage Tasks' },
   { href: '/templates', label: 'Forms' },
-  { href: '/import', label: 'Import' },
+  { href: '/import', label: 'Data Import (Admin)' },
   { href: '/guides', label: 'Best Practice Guides' },
   { href: '/settings', label: 'Settings' },
   { href: '/downloads', label: 'Data Download' },
   { href: '/analytics', label: 'Analytics' },
 ]
+
+/** Shown only when /api/auth/me indicates app admin (owner | admin | Clerk isAdmin). */
+const ADMIN_ONLY_NAV_HREFS = new Set(['/settings', '/import'])
 
 /** Hrefs visible to app role `user` (non-admin); order matches ALL_NAV_ITEMS subset */
 const USER_ROLE_NAV_HREFS = new Set([
@@ -80,10 +83,16 @@ export default function AppLayout({ children }) {
   }, [authLoaded, isSignedIn])
 
   const navItems = useMemo(() => {
-    if (!isSignedIn) return ALL_NAV_ITEMS
+    if (!isSignedIn) {
+      return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
+    }
     const r = (appRole || '').toLowerCase().trim()
     const isRestrictedUser = r === 'user' && !clerkIsAdmin
-    if (!isRestrictedUser) return ALL_NAV_ITEMS
+    const isAppAdmin = clerkIsAdmin || r === 'owner' || r === 'admin'
+    if (!isRestrictedUser) {
+      if (isAppAdmin) return ALL_NAV_ITEMS
+      return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
+    }
     return ALL_NAV_ITEMS.filter((item) => USER_ROLE_NAV_HREFS.has(item.href))
   }, [isSignedIn, appRole, clerkIsAdmin])
 

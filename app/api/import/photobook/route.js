@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { parse } from 'csv-parse/sync'
 import { Pool } from 'pg'
 import { getConnectionString, ensureDatabase } from '@/lib/db'
+import { getAppAdminAccess } from '@/lib/app-admin-access'
 
 export const runtime = 'nodejs'
 
@@ -44,6 +45,12 @@ function parseDate(str) {
 
 export async function POST(req) {
   try {
+    const access = await getAppAdminAccess()
+    if (!access.ok) {
+      const status = !access.userId ? 401 : 403
+      return NextResponse.json({ error: access.reason === 'no_database' ? 'Database not configured' : 'Forbidden' }, { status })
+    }
+
     const url = new URL(req.url)
     const sourceStatus = url.searchParams.get('status') || 'completed'
     if (!['completed', 'missed', 'scheduled'].includes(sourceStatus)) {

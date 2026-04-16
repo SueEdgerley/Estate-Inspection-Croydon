@@ -6,7 +6,7 @@ import { getAppAdminAccess } from '@/lib/app-admin-access'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
+const CATEGORY = 'issue_recipient'
 
 async function requireAdmin() {
   const access = await getAppAdminAccess()
@@ -22,14 +22,14 @@ export async function GET() {
   try {
     await ensureDatabase()
     const result = await sql`
-      SELECT id, airtable_id, name, email, role, category, active, created_at
+      SELECT id, name, email, active, created_at
       FROM people
-      WHERE category IS DISTINCT FROM 'issue_recipient'
-      ORDER BY name
+      WHERE category = ${CATEGORY}
+      ORDER BY name ASC, email ASC
     `
     return NextResponse.json(result.rows)
   } catch (e) {
-    console.error('Admin users GET:', e)
+    console.error('issue-recipients GET:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
@@ -43,41 +43,33 @@ export async function POST(request) {
     const name = body.name && String(body.name).trim()
     const email = body.email && String(body.email).trim()
     if (!name || !email) return NextResponse.json({ error: 'name and email are required' }, { status: 400 })
-    const role = body.role && ROLES.includes(String(body.role).toLowerCase()) ? String(body.role).toLowerCase() : null
-    const id = body.id && String(body.id).trim() ? String(body.id).trim() : `person_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
     const existing = await sql`
       SELECT id, category FROM people WHERE lower(trim(email)) = lower(trim(${email})) LIMIT 1
     `
-    if (existing.rows[0]?.category === 'issue_recipient') {
+    if (existing.rows[0] && existing.rows[0].category !== CATEGORY) {
       return NextResponse.json(
-        { error: 'This email is already used as an Issue Recipient. Remove or change the recipient first.' },
+        { error: 'This email is already used for a team user. Use a different email for routing.' },
         { status: 409 }
       )
     }
-    try {
-      await sql`
-        INSERT INTO people (id, name, email, role, category, active)
-        VALUES (${id}, ${name}, ${email}, ${role}, 'staff', true)
-      `
-    } catch (e) {
-      if (e?.code === '23505') {
-        await sql`
-          UPDATE people SET
-            name = ${name},
-            role = COALESCE(${role}, role),
-            category = CASE WHEN category = 'issue_recipient' THEN category ELSE 'staff' END,
-            active = true,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE lower(trim(email)) = lower(trim(${email})) AND category IS DISTINCT FROM 'issue_recipient'
-        `
-      } else {
-        throw e
-      }
-    }
-    const row = (await sql`SELECT id, name, email, role, active FROM people WHERE email = ${email}`).rows[0]
+    const id =
+      body.id && String(body.id).trim()
+        ? String(body.id).trim()
+        : `recipient_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
+    await sql`
+      INSERT INTO people (id, name, email, role, category, active)
+      VALUES (${id}, ${name}, ${email}, null, ${CATEGORY}, true)
+      ON CONFLICT (email) DO UPDATE SET
+        name = EXCLUDED.name,
+        category = EXCLUDED.category,
+        role = null,
+        active = true,
+        updated_at = CURRENT_TIMESTAMP
+    `
+    const row = (await sql`SELECT id, name, email, active FROM people WHERE id = ${id}`).rows[0]
     return NextResponse.json(row)
   } catch (e) {
-    console.error('Admin users POST:', e)
+    console.error('issue-recipients POST:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

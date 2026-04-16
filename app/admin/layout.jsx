@@ -40,7 +40,7 @@ export default function AdminLayout({ children }) {
     <div style={{ padding: '1rem 2rem' }}>
       <nav style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem' }}>
         <Link href="/admin">Admin</Link>
-        <Link href="/admin/users">Users</Link>
+        <Link href="/settings">Settings</Link>
         <Link href="/admin/assignments">Assignments</Link>
         <Link href="/admin/estates">Estates</Link>
         <Link href="/admin/blocks">Blocks</Link>

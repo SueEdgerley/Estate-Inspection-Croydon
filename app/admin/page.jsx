@@ -7,7 +7,7 @@ export default function AdminPage() {
     <div>
       <h1>Admin</h1>
       <ul>
-        <li><Link href="/admin/users">User management</Link> – add user, deactivate, change role (caretaker, esm, housing officer, admin)</li>
+        <li><Link href="/settings">Settings</Link> – Manage Users and Issue Recipients (Phase 1)</li>
         <li><Link href="/admin/cost-codes">Cost codes</Link> – add and maintain active cost code options for inspection dropdowns</li>
         <li><Link href="/admin/assignments">Assignments</Link> – time-bounded assignments (starts_at, ends_at), temporary cover</li>
         <li><Link href="/admin/estates">Estates</Link> – create and manage estates</li>
