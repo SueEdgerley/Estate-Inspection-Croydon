@@ -101,3 +101,76 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
+
+/**
+ * Permanent removal of the `users` row. Inspections are unchanged (denormalized inspector fields).
+ * `user_estate_assignments` rows CASCADE. Cannot delete self or the last active owner.
+ */
+export async function DELETE(request, { params }) {
+  const access = await getAppAdminAccess()
+  if (!access.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
+
+  const id = params?.id
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  let body = {}
+  try {
+    body = await request.json()
+  } catch {
+    body = {}
+  }
+  if (body.confirm !== true) {
+    return NextResponse.json(
+      { error: 'Send JSON body { "confirm": true } after reviewing GET …/delete-impact.' },
+      { status: 400 }
+    )
+  }
+
+  try {
+    await ensureDatabase()
+
+    const me = await sql`SELECT id FROM users WHERE clerk_user_id = ${access.userId} LIMIT 1`
+    const myInternalId = me.rows[0]?.id ?? null
+    if (myInternalId && id === myInternalId) {
+      return NextResponse.json({ error: 'You cannot delete your own account.' }, { status: 400 })
+    }
+
+    const u = (
+      await sql`
+        SELECT id, role, COALESCE(is_active, true) AS is_active
+        FROM users WHERE id = ${id} LIMIT 1
+      `
+    ).rows[0]
+    if (!u) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const isOwner = String(u.role || '').toLowerCase().trim() === 'owner' && u.is_active !== false
+    if (isOwner) {
+      const ownerCount = (
+        await sql`
+          SELECT COUNT(*)::int AS c FROM users
+          WHERE lower(trim(role)) = 'owner' AND COALESCE(is_active, true) = true
+        `
+      ).rows[0]?.c ?? 0
+      if (ownerCount <= 1) {
+        return NextResponse.json(
+          { error: 'Cannot delete the only active owner. Promote another owner first.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    await sql`DELETE FROM users WHERE id = ${id}`
+
+    return NextResponse.json({
+      ok: true,
+      deletedId: id,
+      message:
+        'User login record removed. Past inspections still show stored inspector name/email. Estate/block assignment rows for this user were removed.',
+    })
+  } catch (e) {
+    console.error('Admin users DELETE:', e)
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}

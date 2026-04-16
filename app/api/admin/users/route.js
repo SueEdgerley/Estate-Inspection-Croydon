@@ -6,8 +6,6 @@ import { getAppAdminAccess } from '@/lib/app-admin-access'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const APP_ROLES = ['owner', 'admin', 'user']
-
 async function requireAdmin() {
   const access = await getAppAdminAccess()
   if (!access.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -44,14 +42,17 @@ export async function GET() {
   }
 }
 
-/** Manual row creation requires a Clerk user id; use sign-in to provision accounts. */
+/**
+ * App rows (`users`) are created when someone signs in with Clerk (or via webhook).
+ * To pre-register staff for assignments, use POST /api/admin/staff-people instead.
+ */
 export async function POST() {
   const err = await requireAdmin()
   if (err) return err
   return NextResponse.json(
     {
       error:
-        'Adding users from Settings is not supported. Accounts are created when someone signs in with Clerk; manage role and access here.',
+        'Use POST /api/admin/staff-people to add a staff directory row (name, email, role). Clerk accounts are created on first sign-in.',
     },
     { status: 405 }
   )

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 const APP_ACCESS_ROLES = ['owner', 'admin', 'user']
+const STAFF_ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
 
 const card = {
   backgroundColor: '#fff',
@@ -37,14 +38,26 @@ const btnReactivateAccount = {
   fontWeight: 600,
   cursor: 'pointer',
 }
+const btnDeletePermanent = {
+  padding: '0.4rem 0.85rem',
+  fontSize: '0.8125rem',
+  borderRadius: 6,
+  border: '1px solid #991b1b',
+  backgroundColor: '#fff',
+  color: '#991b1b',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
 
 export default function SettingsPage() {
   const [allowed, setAllowed] = useState(null)
   const [loadError, setLoadError] = useState(null)
 
   const [users, setUsers] = useState([])
+  const [staffDirectory, setStaffDirectory] = useState([])
   const [recipients, setRecipients] = useState([])
 
+  const [staffForm, setStaffForm] = useState({ name: '', email: '', role: '' })
   const [recipientForm, setRecipientForm] = useState({ name: '', email: '' })
   const [editingUserId, setEditingUserId] = useState(null)
   const [editUser, setEditUser] = useState({ email: '', role: '' })
@@ -66,6 +79,13 @@ export default function SettingsPage() {
     setUsers(Array.isArray(data) ? data : [])
   }, [])
 
+  const refreshStaffDirectory = useCallback(async () => {
+    const res = await fetch('/api/admin/staff-people', { credentials: 'include' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Failed to load staff directory')
+    setStaffDirectory(Array.isArray(data) ? data : [])
+  }, [])
+
   const refreshRecipients = useCallback(async () => {
     const res = await fetch('/api/admin/issue-recipients', { credentials: 'include' })
     const data = await res.json().catch(() => ({}))
@@ -83,7 +103,7 @@ export default function SettingsPage() {
       }
       if (!cancelled) setAllowed(true)
       try {
-        await Promise.all([refreshUsers(), refreshRecipients()])
+        await Promise.all([refreshUsers(), refreshStaffDirectory(), refreshRecipients()])
       } catch (e) {
         if (!cancelled) setLoadError(e.message)
       }
@@ -91,7 +111,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true
     }
-  }, [refreshUsers, refreshRecipients])
+  }, [refreshUsers, refreshStaffDirectory, refreshRecipients])
 
   const saveUserEdit = async (id) => {
     setSaving(true)
@@ -117,6 +137,33 @@ export default function SettingsPage() {
     }
   }
 
+  const addStaffMember = async (e) => {
+    e.preventDefault()
+    if (!staffForm.name.trim() || !staffForm.email.trim()) return
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const res = await fetch('/api/admin/staff-people', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: staffForm.name.trim(),
+          email: staffForm.email.trim(),
+          role: staffForm.role || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+      setStaffForm({ name: '', email: '', role: '' })
+      await refreshStaffDirectory()
+    } catch (err) {
+      setLoadError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleUserAccount = async (id, accountActive) => {
     setLoadError(null)
     try {
@@ -128,6 +175,48 @@ export default function SettingsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Update failed')
+      await refreshUsers()
+    } catch (err) {
+      setLoadError(err.message)
+    }
+  }
+
+  const deleteUserPermanent = async (u) => {
+    setLoadError(null)
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/delete-impact`, { credentials: 'include' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not check if delete is allowed')
+      if (!data.canDelete && Array.isArray(data.blockers) && data.blockers.length > 0) {
+        setLoadError(data.blockers.map((b) => b.message).join(' '))
+        return
+      }
+      if (!data.canDelete) {
+        setLoadError('Delete is not allowed for this user.')
+        return
+      }
+      const ic = data.counts?.inspectionsMatchingInspectorId ?? 0
+      const ac = data.counts?.estateAssignmentCount ?? 0
+      const label = data.user?.email || u.email || u.id
+      const lines = [
+        `Permanently delete the app login for ${label}?`,
+        '',
+        `• Past inspections stay in the database; inspector name/email on each row are unchanged (${ic} inspection(s) reference this user as inspector email/id).`,
+        `• ${ac} estate/block assignment row(s) for this login will be removed (CASCADE).`,
+        `• Linked staff directory (people) rows are not deleted — remove those separately if needed.`,
+        '',
+        'This cannot be undone.',
+      ]
+      if (!window.confirm(lines.join('\n'))) return
+      const del = await fetch(`/api/admin/users/${u.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ confirm: true }),
+      })
+      const delJson = await del.json().catch(() => ({}))
+      if (!del.ok) throw new Error(delJson.error || 'Delete failed')
+      setEditingUserId(null)
       await refreshUsers()
     } catch (err) {
       setLoadError(err.message)
@@ -228,8 +317,9 @@ export default function SettingsPage() {
     <div style={{ maxWidth: 960 }}>
       <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.75rem', fontWeight: 700, color: '#111827' }}>Settings</h1>
       <p style={{ margin: '0 0 1.5rem 0', color: '#6b7280', fontSize: '0.9375rem' }}>
-        <strong>Manage Users</strong> controls app accounts in Postgres <code style={{ fontSize: '0.85em' }}>users</code> (Clerk sign-ins).{' '}
-        <strong>Issue Recipients</strong> are routing contacts in <code style={{ fontSize: '0.85em' }}>people</code> only — separate from login accounts.
+        <strong>Manage Users</strong> lists Clerk-linked app accounts (<code style={{ fontSize: '0.85em' }}>users</code>).{' '}
+        <strong>Staff directory</strong> is for assignments (<code style={{ fontSize: '0.85em' }}>people</code>, staff rows — add before someone signs in if needed).{' '}
+        <strong>Issue Recipients</strong> are routing mailboxes only (<code style={{ fontSize: '0.85em' }}>people</code>, issue_recipient).
       </p>
 
       {loadError && (
@@ -254,7 +344,8 @@ export default function SettingsPage() {
           App access (dashboard, Settings): roles are {APP_ACCESS_ROLES.join(', ')}. New sign-ins appear here automatically when someone uses Clerk.
         </p>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
-          <strong>Access:</strong> use <strong>Deactivate</strong> to block sign-in. Rows stay for audit (no delete from this screen).
+          <strong>Deactivate</strong> blocks sign-in but keeps the <code style={{ fontSize: '0.85em' }}>users</code> row.{' '}
+          <strong>Delete user</strong> removes that row permanently when allowed (see confirmation). Past inspections keep their stored inspector name/email.
         </p>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -328,6 +419,9 @@ export default function SettingsPage() {
                               Deactivate
                             </button>
                           )}
+                          <button type="button" onClick={() => deleteUserPermanent(u)} style={btnDeletePermanent}>
+                            Delete user
+                          </button>
                         </div>
                       </td>
                     </>
@@ -371,6 +465,9 @@ export default function SettingsPage() {
                               Deactivate
                             </button>
                           )}
+                          <button type="button" onClick={() => deleteUserPermanent(u)} style={btnDeletePermanent}>
+                            Delete user
+                          </button>
                         </div>
                       </td>
                     </>
@@ -384,6 +481,90 @@ export default function SettingsPage() {
           )}
           {filteredUsers.length === 0 && users.length > 0 && (
             <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.5rem' }}>No rows match this filter.</p>
+          )}
+        </div>
+      </section>
+
+      <section id="staff-directory" style={card}>
+        <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Staff directory (assignments)</h2>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+          Staff roles for estate/block assignments: {STAFF_ROLES.join(', ')}. Rows live in <code style={{ fontSize: '0.85em' }}>people</code> only — not the same as app roles above.
+          When someone later signs in with Clerk using the same email, the app may link their account to this row (see provisioning in code).
+        </p>
+
+        <form onSubmit={addStaffMember} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: 4 }}>Name</label>
+            <input
+              value={staffForm.name}
+              onChange={(e) => setStaffForm((f) => ({ ...f, name: e.target.value }))}
+              style={{ padding: '0.5rem 0.65rem', borderRadius: 6, border: '1px solid #d1d5db', minWidth: 160 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: 4 }}>Email</label>
+            <input
+              type="email"
+              value={staffForm.email}
+              onChange={(e) => setStaffForm((f) => ({ ...f, email: e.target.value }))}
+              style={{ padding: '0.5rem 0.65rem', borderRadius: 6, border: '1px solid #d1d5db', minWidth: 200 }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: 4 }}>Role</label>
+            <select
+              value={staffForm.role}
+              onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}
+              style={{ padding: '0.5rem 0.65rem', borderRadius: 6, border: '1px solid #d1d5db' }}
+            >
+              <option value="">—</option>
+              {STAFF_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#1e3a8a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontWeight: 600,
+              cursor: saving ? 'wait' : 'pointer',
+            }}
+          >
+            Add staff
+          </button>
+        </form>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Name</th>
+                <th style={th}>Email</th>
+                <th style={th}>Role</th>
+                <th style={th}>Active</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffDirectory.map((s) => (
+                <tr key={s.id}>
+                  <td style={td}>{s.name || '—'}</td>
+                  <td style={td}>{s.email || '—'}</td>
+                  <td style={td}>{s.role || '—'}</td>
+                  <td style={td}>{s.active === false ? 'No' : 'Yes'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {staffDirectory.length === 0 && (
+            <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.5rem' }}>No staff rows yet. Use Add staff above (same flow as before Phase 1 split).</p>
           )}
         </div>
       </section>
