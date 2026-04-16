@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
+import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
@@ -13,6 +14,13 @@ const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic'
+
+function isUsersTableMissing(err) {
+  if (!err) return false
+  const code = err.code
+  const msg = (err.message || '').toLowerCase()
+  return code === '42P01' || msg.includes('does not exist') || msg.includes('relation "users"')
+}
 
 function logDashboardAuth(clerkUserId, email, internalUser, role, assignedEstateCount, statusCode, reason) {
   console.log('[Dashboard] auth:', {
@@ -52,6 +60,18 @@ export async function GET(request) {
     }
 
     await ensureDatabase()
+    try {
+      await ensureClerkUserProvisioned(clerkUserId, userEmail)
+    } catch (provErr) {
+      console.warn('[Dashboard] User provision failed:', provErr.message)
+      if (isUsersTableMissing(provErr)) {
+        logDashboardAuth(clerkUserId, userEmail, null, null, null, 500, 'DB not migrated')
+        return NextResponse.json(
+          { error: 'DB not migrated', code: 'DB_NOT_MIGRATED', message: 'Database migrations have not been run. Run: prisma migrate deploy' },
+          { status: 500 }
+        )
+      }
+    }
     const pgUrl = getPgUrl()
     if (!pgUrl) {
       logDashboardAuth(clerkUserId, userEmail, null, null, null, 503, 'Database not configured')
@@ -59,14 +79,6 @@ export async function GET(request) {
         { error: 'Database not configured. Please set up Postgres.' },
         { status: 503 }
       )
-    }
-
-    // Detect missing table so we return a clear 500 "DB not migrated" (not "unauthorised")
-    function isUsersTableMissing(err) {
-      if (!err) return false
-      const code = err.code
-      const msg = (err.message || '').toLowerCase()
-      return code === '42P01' || msg.includes('does not exist') || msg.includes('relation "users"')
     }
 
     // Match on users.clerk_user_id === Clerk user.id (exact string match, not email or internal UUID)
@@ -91,35 +103,6 @@ export async function GET(request) {
 
     let internalUser = userResult.rows[0] || null
     console.log('[Dashboard] debug internalUser after SELECT:', internalUser ? { ...internalUser } : null)
-
-    // If no internal user row: upsert. First user gets role = "owner", all others role = "user".
-    if (!internalUser) {
-      try {
-        const countResult = await sql`SELECT COUNT(*)::int AS c FROM users`
-        const userCount = countResult.rows[0]?.c ?? 0
-        const newRole = userCount === 0 ? 'owner' : 'user'
-        const newId = crypto.randomUUID()
-        await sql`
-          INSERT INTO users (id, clerk_user_id, email, role)
-          VALUES (${newId}, ${clerkUserId}, ${userEmail || null}, ${newRole})
-          ON CONFLICT (clerk_user_id) DO UPDATE SET
-            email = EXCLUDED.email,
-            role = COALESCE(users.role, EXCLUDED.role)
-        `
-        const refetch = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
-        internalUser = refetch.rows[0] || null
-        console.log('[Dashboard] debug internalUser after auto-create:', internalUser ? { ...internalUser } : null)
-      } catch (e) {
-        console.warn('[Dashboard] Auto-create user row failed:', e.message)
-        if (isUsersTableMissing(e)) {
-          logDashboardAuth(clerkUserId, userEmail, null, null, null, 500, 'DB not migrated')
-          return NextResponse.json(
-            { error: 'DB not migrated', code: 'DB_NOT_MIGRATED', message: 'Database migrations have not been run. Run: prisma migrate deploy' },
-            { status: 500 }
-          )
-        }
-      }
-    }
 
     if (!internalUser) {
       logDashboardAuth(clerkUserId, userEmail, null, null, null, 403, 'USER_NOT_PROVISIONED')

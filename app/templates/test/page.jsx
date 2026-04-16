@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
-export default function TemplatesTestPage() {
+export default function FormsApiTestPage() {
   const [json, setJson] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -20,14 +20,14 @@ export default function TemplatesTestPage() {
       })
   }, [])
 
-  if (loading) return <p>Loading /api/templates...</p>
+  if (loading) return <p>Loading forms…</p>
   if (error) return <p style={{ color: 'red' }}>Error: {error}</p>
 
   return (
     <div style={{ padding: '1rem', maxWidth: '100%', overflow: 'auto' }}>
-      <h1 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>Debug: /api/templates</h1>
+      <h1 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>Debug: forms API</h1>
       <p style={{ color: '#6b7280', marginBottom: '1rem', fontSize: '0.875rem' }}>
-        Temporary debug page – raw JSON from GET /api/templates
+        Temporary debug page – raw JSON from <code>GET /api/templates</code>
       </p>
       <pre
         style={{

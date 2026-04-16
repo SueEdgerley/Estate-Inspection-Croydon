@@ -1,6 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,15 @@ export async function GET() {
   try {
     if (getPgUrl()) {
       await ensureDatabase()
+      const email =
+        clerkUser?.primaryEmailAddress?.emailAddress ??
+        clerkUser?.emailAddresses?.[0]?.emailAddress ??
+        null
+      try {
+        await ensureClerkUserProvisioned(userId, email)
+      } catch (provErr) {
+        console.warn('[auth/me] user provision failed:', provErr?.message)
+      }
       const result = await sql`
         SELECT role FROM users WHERE clerk_user_id = ${userId} LIMIT 1
       `

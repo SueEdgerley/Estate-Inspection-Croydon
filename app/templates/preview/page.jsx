@@ -50,7 +50,7 @@ const MOCK_TEMPLATE = {
   ],
 }
 
-export default function TemplatesPreviewPage() {
+export default function FormsPreviewPage() {
   const [answers, setAnswers] = useState({})
   const [comments, setComments] = useState({})
   const [photos, setPhotos] = useState({})
@@ -81,13 +81,13 @@ export default function TemplatesPreviewPage() {
           href="/templates"
           style={{ display: 'inline-block', marginBottom: 16, color: '#1E3A8A', fontSize: 14, textDecoration: 'none' }}
         >
-          ← Back to templates
+          ← Back to forms
         </Link>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#111827', marginBottom: 4 }}>
-          Template preview
+          Form preview
         </h1>
         <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 24 }}>
-          Mock data · QuestionCard used by caretaker & NV templates
+          Mock data · QuestionCard used by caretaker & NV forms
         </p>
 
         {(MOCK_TEMPLATE.sections || []).map((sec) => (

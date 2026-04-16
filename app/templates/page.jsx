@@ -110,7 +110,7 @@ function QuestionPreview({ q }) {
   )
 }
 
-export default function TemplatesPage() {
+export default function FormsPage() {
   const [data, setData] = useState({ templates: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -125,7 +125,7 @@ export default function TemplatesPage() {
         if (!res.ok) {
           const msg = res.status === 503
             ? 'Airtable not configured'
-            : (body.details || body.error || 'Failed to load templates')
+            : (body.details || body.error || 'Failed to load forms')
           throw new Error(msg)
         }
         return body
@@ -164,10 +164,10 @@ export default function TemplatesPage() {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-          Templates
+          Forms
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', lineHeight: 1.5 }}>
-          Tap a template to start a new inspection — no second step.
+          Tap a form to start a new inspection — no second step.
           {isAdminViewer && (
             <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.875rem' }}>
               Admins can open <strong>Structure</strong> to preview questions without starting.
@@ -177,7 +177,7 @@ export default function TemplatesPage() {
       </div>
 
       {loading && (
-        <p style={{ color: '#6b7280' }}>Loading templates…</p>
+        <p style={{ color: '#6b7280' }}>Loading forms…</p>
       )}
 
       {error && (
@@ -200,7 +200,7 @@ export default function TemplatesPage() {
           )}
           {error && !error.toLowerCase().includes('airtable not configured') && (
             <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
-              Check: correct base ID, token has access to the base, and the base has tables named <strong>Templates</strong>, <strong>Template Sections</strong>, <strong>Template Questions</strong> (or set AIRTABLE_TEMPLATES_TABLE etc. in env).
+              Check: correct base ID, token has access to the base, and the base has Airtable tables for forms (often named <strong>Templates</strong>, <strong>Template Sections</strong>, <strong>Template Questions</strong>) or set AIRTABLE_TEMPLATES_TABLE etc. in env.
             </p>
           )}
         </div>
@@ -215,7 +215,7 @@ export default function TemplatesPage() {
           textAlign: 'center',
           color: '#6b7280',
         }}>
-          No templates available for your account. Contact an admin if you need access.
+          No forms available for your account. Contact an admin if you need access.
         </div>
       )}
 
@@ -233,7 +233,7 @@ export default function TemplatesPage() {
             const displayName = (t.name || t.template_key || '').trim()
             const nameToShow = displayName && !displayName.startsWith('rec')
               ? displayName
-              : `Template ${t.id?.slice(0, 12) || t.id}…`
+              : `Form ${t.id?.slice(0, 12) || t.id}…`
             const startHref = `/inspections/new?template_id=${encodeURIComponent(t.id)}`
 
             return (
@@ -349,7 +349,7 @@ export default function TemplatesPage() {
       {!loading && templates.length > 0 && (
         <p style={{ marginTop: '1.25rem', fontSize: '0.875rem', color: '#6b7280' }}>
           <Link href="/inspections/new" style={{ color: photobook.link, textDecoration: 'none', fontWeight: 500 }}>
-            New inspection without a preset template
+            New inspection without a preset form
           </Link>
           {isAdminViewer && (
             <>
