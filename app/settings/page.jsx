@@ -248,6 +248,9 @@ export default function SettingsPage() {
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
           People who use the app or appear in assignments. Roles: {STAFF_ROLES.join(', ')}.
         </p>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
+          Users must log in once before they appear here. After that, assign their role and activate them.
+        </p>
 
         <form onSubmit={addStaff} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>
           <div>
