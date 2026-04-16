@@ -16,16 +16,32 @@ async function requireAdmin() {
   return null
 }
 
+/**
+ * Manage Users list: one row per Clerk account (`users`), joined to staff directory (`people`) when linked.
+ * - `id` = users.id (for PATCH /api/admin/users/[id])
+ * - `person_id` = people.id when linked (for assignments and person-scoped APIs)
+ * - `name` = staff name, or email if staff name blank
+ */
 export async function GET() {
   const err = await requireAdmin()
   if (err) return err
   try {
     await ensureDatabase()
     const result = await sql`
-      SELECT id, airtable_id, name, email, role, category, active, created_at
-      FROM people
-      WHERE category IS DISTINCT FROM 'issue_recipient'
-      ORDER BY name
+      SELECT
+        u.id,
+        u.people_id,
+        p.id AS person_id,
+        TRIM(COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(u.email), ''), '—')) AS name,
+        COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(p.email), '')) AS email,
+        p.role AS role,
+        COALESCE(u.is_active, true) AS account_active,
+        CASE WHEN p.id IS NULL THEN NULL ELSE COALESCE(p.active, true) END AS staff_directory_active,
+        u.created_at
+      FROM users u
+      LEFT JOIN people p ON p.id = u.people_id
+        AND (p.category IS DISTINCT FROM 'issue_recipient' OR p.category IS NULL)
+      ORDER BY COALESCE(u.is_active, true) DESC, LOWER(COALESCE(u.email, ''))
     `
     return NextResponse.json(result.rows)
   } catch (e) {
@@ -74,8 +90,43 @@ export async function POST(request) {
         throw e
       }
     }
-    const row = (await sql`SELECT id, name, email, role, active FROM people WHERE email = ${email}`).rows[0]
-    return NextResponse.json(row)
+    const personRow = (await sql`SELECT id, name, email, role, active FROM people WHERE lower(trim(email)) = lower(trim(${email})) LIMIT 1`).rows[0]
+    if (personRow?.id) {
+      await sql`
+        UPDATE users SET people_id = ${personRow.id}, updated_at = CURRENT_TIMESTAMP
+        WHERE lower(trim(email)) = lower(trim(${email})) AND (people_id IS NULL OR people_id = ${personRow.id})
+      `
+    }
+    const merged = (
+      await sql`
+        SELECT u.id, u.people_id, p.id AS person_id,
+          TRIM(COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(u.email), ''), '—')) AS name,
+          COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(p.email), '')) AS email,
+          p.role AS role,
+          COALESCE(u.is_active, true) AS account_active,
+          CASE WHEN p.id IS NULL THEN NULL ELSE COALESCE(p.active, true) END AS staff_directory_active,
+          u.created_at
+        FROM users u
+        LEFT JOIN people p ON p.id = u.people_id
+        WHERE u.id = (SELECT id FROM users WHERE lower(trim(email)) = lower(trim(${email})) LIMIT 1)
+        LIMIT 1
+      `
+    ).rows[0]
+    if (merged) return NextResponse.json(merged)
+    if (personRow) {
+      return NextResponse.json({
+        id: personRow.id,
+        person_id: personRow.id,
+        people_id: personRow.id,
+        name: personRow.name,
+        email: personRow.email,
+        role: personRow.role,
+        account_active: true,
+        staff_directory_active: personRow.active !== false,
+        created_at: null,
+      })
+    }
+    return NextResponse.json({ error: 'Person row not found' }, { status: 500 })
   } catch (e) {
     console.error('Admin users POST:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })

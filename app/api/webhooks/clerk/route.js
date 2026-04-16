@@ -58,7 +58,10 @@ export async function POST(request) {
     const email = primaryEmailFromClerkUser(data)
     if (id) {
       try {
-        await ensureClerkUserProvisioned(id, email)
+        const fn = typeof data?.first_name === 'string' ? data.first_name : ''
+        const ln = typeof data?.last_name === 'string' ? data.last_name : ''
+        const displayName = [fn, ln].filter(Boolean).join(' ').trim() || null
+        await ensureClerkUserProvisioned(id, email, { displayName })
       } catch (e) {
         console.error('[webhooks/clerk] provision failed:', e?.message || e)
         return NextResponse.json({ error: 'Provision failed', details: e?.message }, { status: 500 })

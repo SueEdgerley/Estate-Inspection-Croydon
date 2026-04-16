@@ -97,9 +97,13 @@ export default function AdminAssignmentsPage() {
         <h2>Add assignment</h2>
         <select value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required>
           <option value="">Select user</option>
-          {users.filter((u) => u.active !== false).map((u) => (
-            <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-          ))}
+          {users
+            .filter((u) => u.person_id && u.account_active !== false)
+            .map((u) => (
+              <option key={u.person_id} value={u.person_id}>
+                {u.name} ({u.email})
+              </option>
+            ))}
         </select>
         <select value={form.estate_id} onChange={(e) => setForm((f) => ({ ...f, estate_id: e.target.value }))}>
           <option value="">No estate</option>

@@ -27,7 +27,8 @@ export async function GET() {
         clerkUser?.emailAddresses?.[0]?.emailAddress ??
         null
       try {
-        await ensureClerkUserProvisioned(userId, email)
+        const displayName = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ').trim() || null
+        await ensureClerkUserProvisioned(userId, email, { displayName })
       } catch (provErr) {
         console.warn('[auth/me] user provision failed:', provErr?.message)
       }

@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 const STAFF_ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
+const APP_ACCESS_ROLES = ['owner', 'admin', 'user']
 
 const card = {
   backgroundColor: '#fff',
@@ -17,11 +18,33 @@ const card = {
 const th = { textAlign: 'left', borderBottom: '1px solid #e5e7eb', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', color: '#6b7280' }
 const td = { borderBottom: '1px solid #f3f4f6', padding: '0.65rem 0.75rem', fontSize: '0.9375rem' }
 
+const btnDeactivateAccount = {
+  padding: '0.4rem 0.85rem',
+  fontSize: '0.8125rem',
+  borderRadius: 6,
+  border: '1px solid #dc2626',
+  backgroundColor: '#fef2f2',
+  color: '#b91c1c',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+const btnReactivateAccount = {
+  padding: '0.4rem 0.85rem',
+  fontSize: '0.8125rem',
+  borderRadius: 6,
+  border: '1px solid #16a34a',
+  backgroundColor: '#f0fdf4',
+  color: '#15803d',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
 export default function SettingsPage() {
   const [allowed, setAllowed] = useState(null)
   const [loadError, setLoadError] = useState(null)
 
   const [staff, setStaff] = useState([])
+  const [appAccounts, setAppAccounts] = useState([])
   const [recipients, setRecipients] = useState([])
 
   const [staffForm, setStaffForm] = useState({ name: '', email: '', role: '' })
@@ -31,6 +54,14 @@ export default function SettingsPage() {
   const [editingRecipientId, setEditingRecipientId] = useState(null)
   const [editRecipient, setEditRecipient] = useState({ name: '', email: '' })
   const [saving, setSaving] = useState(false)
+  /** Manage Users: filter rows by Clerk account active flag */
+  const [staffAccountFilter, setStaffAccountFilter] = useState('all')
+
+  const filteredStaff = useMemo(() => {
+    if (staffAccountFilter === 'active') return staff.filter((u) => u.account_active !== false)
+    if (staffAccountFilter === 'inactive') return staff.filter((u) => u.account_active === false)
+    return staff
+  }, [staff, staffAccountFilter])
 
   const refreshStaff = useCallback(async () => {
     const res = await fetch('/api/admin/users', { credentials: 'include' })
@@ -46,6 +77,13 @@ export default function SettingsPage() {
     setRecipients(Array.isArray(data) ? data : [])
   }, [])
 
+  const refreshAppAccounts = useCallback(async () => {
+    const res = await fetch('/api/admin/app-users', { credentials: 'include' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Failed to load app accounts')
+    setAppAccounts(Array.isArray(data) ? data : [])
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -56,7 +94,7 @@ export default function SettingsPage() {
       }
       if (!cancelled) setAllowed(true)
       try {
-        await Promise.all([refreshStaff(), refreshRecipients()])
+        await Promise.all([refreshAppAccounts(), refreshStaff(), refreshRecipients()])
       } catch (e) {
         if (!cancelled) setLoadError(e.message)
       }
@@ -64,7 +102,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true
     }
-  }, [refreshStaff, refreshRecipients])
+  }, [refreshAppAccounts, refreshStaff, refreshRecipients])
 
   const addStaff = async (e) => {
     e.preventDefault()
@@ -86,6 +124,7 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setStaffForm({ name: '', email: '', role: '' })
       await refreshStaff()
+      await refreshAppAccounts()
     } catch (err) {
       setLoadError(err.message)
     } finally {
@@ -111,6 +150,7 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(data.error || 'Update failed')
       setEditingStaffId(null)
       await refreshStaff()
+      await refreshAppAccounts()
     } catch (err) {
       setLoadError(err.message)
     } finally {
@@ -118,18 +158,56 @@ export default function SettingsPage() {
     }
   }
 
-  const toggleStaffActive = async (id, active) => {
+  const patchAppAccount = async (id, body) => {
+    setLoadError(null)
+    try {
+      const res = await fetch(`/api/admin/app-users/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Update failed')
+      await refreshAppAccounts()
+      await refreshStaff()
+    } catch (err) {
+      setLoadError(err.message)
+    }
+  }
+
+  const syncStaffFromAppAccount = async (id) => {
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const res = await fetch(`/api/admin/app-users/${id}/sync-staff`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Sync failed')
+      await refreshAppAccounts()
+      await refreshStaff()
+    } catch (err) {
+      setLoadError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleManageUserAccount = async (id, accountActive) => {
     setLoadError(null)
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ active: !active }),
+        body: JSON.stringify({ account_active: !accountActive }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Update failed')
       await refreshStaff()
+      await refreshAppAccounts()
     } catch (err) {
       setLoadError(err.message)
     }
@@ -224,7 +302,7 @@ export default function SettingsPage() {
     <div style={{ maxWidth: 960 }}>
       <h1 style={{ margin: '0 0 0.25rem 0', fontSize: '1.75rem', fontWeight: 700, color: '#111827' }}>Settings</h1>
       <p style={{ margin: '0 0 1.5rem 0', color: '#6b7280', fontSize: '0.9375rem' }}>
-        Manage team users and issue email routing. Data lives in Postgres only (not Airtable).
+        App sign-ins (<code style={{ fontSize: '0.85em' }}>users</code>), staff directory (<code style={{ fontSize: '0.85em' }}>people</code>), and issue email routing — all in Postgres (not Airtable).
       </p>
 
       {loadError && (
@@ -243,14 +321,113 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <section id="manage-users" style={card}>
-        <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Manage Users</h2>
+      <section id="app-accounts" style={card}>
+        <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>App accounts (Clerk)</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
-          People who use the app or appear in assignments. Roles: {STAFF_ROLES.join(', ')}.
+          Everyone who signs in via Clerk. <strong>App access role</strong> (owner / admin / user) controls dashboard and Settings; new accounts default to <code style={{ fontSize: '0.85em' }}>user</code>.
         </p>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
-          Users must log in once before they appear here. After that, assign their role and activate them.
+          New sign-ins are created automatically. Use <strong>Link staff directory</strong> to add the same email under Manage Users (for assignments and staff roles).
         </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Email</th>
+                <th style={th}>Clerk ID</th>
+                <th style={th}>App role</th>
+                <th style={th}>Active</th>
+                <th style={th}>Staff list</th>
+                <th style={th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appAccounts.map((u) => (
+                <tr key={u.id}>
+                  <td style={td}>{u.email || '—'}</td>
+                  <td style={{ ...td, fontFamily: 'ui-monospace, monospace', fontSize: '0.8125rem', color: '#6b7280' }}>
+                    {u.clerk_user_id ? `${u.clerk_user_id.slice(0, 14)}…` : '—'}
+                  </td>
+                  <td style={td}>
+                    <select
+                      value={(u.role || 'user').toLowerCase()}
+                      onChange={(e) => patchAppAccount(u.id, { role: e.target.value })}
+                      style={{ padding: '0.35rem 0.5rem', borderRadius: 6, border: '1px solid #d1d5db' }}
+                    >
+                      {APP_ACCESS_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td style={td}>{u.is_active === false ? 'No' : 'Yes'}</td>
+                  <td style={td}>{u.staff_directory_name || '—'}</td>
+                  <td style={td}>
+                    <button
+                      type="button"
+                      disabled={saving || !u.email}
+                      onClick={() => syncStaffFromAppAccount(u.id)}
+                      style={{
+                        padding: '0.35rem 0.65rem',
+                        fontSize: '0.8125rem',
+                        borderRadius: 6,
+                        border: '1px solid #d1d5db',
+                        background: '#fff',
+                        cursor: saving || !u.email ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      Link staff directory
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => patchAppAccount(u.id, { is_active: u.is_active === false })}
+                      style={{
+                        marginLeft: 8,
+                        fontSize: '0.8125rem',
+                        color: '#b45309',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {u.is_active === false ? 'Activate' : 'Deactivate'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {appAccounts.length === 0 && (
+            <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.5rem' }}>No Clerk accounts in the database yet.</p>
+          )}
+        </div>
+      </section>
+
+      <section id="manage-users" style={card}>
+        <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Manage Users (staff directory)</h2>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
+          Staff for assignments and forms. Roles: {STAFF_ROLES.join(', ')}. Linked automatically when someone signs in (same email) unless you add them here first.
+        </p>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
+          Use <strong>Link staff directory</strong> under App accounts if a sign-in exists but they do not appear here yet.
+        </p>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
+          <strong>Access:</strong> use <strong>Deactivate account</strong> to block sign-in and directory use. Accounts stay in the database for audit — there is no permanent delete from this screen.
+        </p>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <span style={{ fontSize: '0.8125rem', color: '#6b7280', fontWeight: 600 }}>Show:</span>
+          <select
+            value={staffAccountFilter}
+            onChange={(e) => setStaffAccountFilter(e.target.value)}
+            style={{ padding: '0.35rem 0.65rem', borderRadius: 6, border: '1px solid #d1d5db', fontSize: '0.875rem' }}
+          >
+            <option value="all">All ({staff.length})</option>
+            <option value="active">Active only ({staff.filter((u) => u.account_active !== false).length})</option>
+            <option value="inactive">Inactive only ({staff.filter((u) => u.account_active === false).length})</option>
+          </select>
+        </div>
 
         <form onSubmit={addStaff} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>
           <div>
@@ -309,12 +486,12 @@ export default function SettingsPage() {
                 <th style={th}>Name</th>
                 <th style={th}>Email</th>
                 <th style={th}>Role</th>
-                <th style={th}>Active</th>
+                <th style={th}>Account active</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {staff.map((u) => (
+              {filteredStaff.map((u) => (
                 <tr key={u.id}>
                   {editingStaffId === u.id ? (
                     <>
@@ -347,14 +524,33 @@ export default function SettingsPage() {
                           ))}
                         </select>
                       </td>
-                      <td style={td}>{u.active ? 'Yes' : 'No'}</td>
-                      <td style={td}>
-                        <button type="button" onClick={() => saveStaffEdit(u.id)} disabled={saving} style={{ marginRight: 8 }}>
-                          Save
-                        </button>
-                        <button type="button" onClick={() => setEditingStaffId(null)}>
-                          Cancel
-                        </button>
+                      <td style={td}>{u.account_active === false ? 'No' : 'Yes'}</td>
+                      <td style={{ ...td, whiteSpace: 'normal' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
+                          <button type="button" onClick={() => saveStaffEdit(u.id)} disabled={saving} style={{ marginRight: 4 }}>
+                            Save
+                          </button>
+                          <button type="button" onClick={() => setEditingStaffId(null)}>
+                            Cancel
+                          </button>
+                          {u.account_active === false ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleManageUserAccount(u.id, false)}
+                              style={btnReactivateAccount}
+                            >
+                              Reactivate account
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => toggleManageUserAccount(u.id, true)}
+                              style={btnDeactivateAccount}
+                            >
+                              Deactivate account
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </>
                   ) : (
@@ -362,29 +558,48 @@ export default function SettingsPage() {
                       <td style={td}>{u.name}</td>
                       <td style={td}>{u.email}</td>
                       <td style={td}>{u.role || '—'}</td>
-                      <td style={td}>{u.active ? 'Yes' : 'No'}</td>
-                      <td style={td}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingStaffId(u.id)
-                            setEditStaff({
-                              name: u.name || '',
-                              email: u.email || '',
-                              role: u.role || '',
-                            })
-                          }}
-                          style={{ marginRight: 8, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer' }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleStaffActive(u.id, u.active)}
-                          style={{ color: '#b45309', background: 'none', border: 'none', cursor: 'pointer' }}
-                        >
-                          {u.active ? 'Deactivate' : 'Activate'}
-                        </button>
+                      <td style={td}>{u.account_active === false ? 'No' : 'Yes'}</td>
+                      <td style={{ ...td, whiteSpace: 'normal' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStaffId(u.id)
+                              setEditStaff({
+                                name: u.name || '',
+                                email: u.email || '',
+                                role: u.role || '',
+                              })
+                            }}
+                            style={{
+                              padding: '0.35rem 0.65rem',
+                              fontSize: '0.8125rem',
+                              borderRadius: 6,
+                              border: '1px solid #d1d5db',
+                              background: '#fff',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Edit
+                          </button>
+                          {u.account_active === false ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleManageUserAccount(u.id, false)}
+                              style={btnReactivateAccount}
+                            >
+                              Reactivate account
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => toggleManageUserAccount(u.id, true)}
+                              style={btnDeactivateAccount}
+                            >
+                              Deactivate account
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </>
                   )}
@@ -392,6 +607,9 @@ export default function SettingsPage() {
               ))}
             </tbody>
           </table>
+          {filteredStaff.length === 0 && staff.length > 0 && (
+            <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.5rem' }}>No rows match this filter.</p>
+          )}
         </div>
       </section>
 

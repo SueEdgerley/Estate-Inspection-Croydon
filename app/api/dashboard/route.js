@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
-import { getCurrentUserEmail } from '@/lib/auth'
+import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
 // Dashboard access: use Users.role (owner | admin) for access control. Do not use People for auth.
@@ -61,7 +61,13 @@ export async function GET(request) {
 
     await ensureDatabase()
     try {
-      await ensureClerkUserProvisioned(clerkUserId, userEmail)
+      let displayName = null
+      try {
+        displayName = await getCurrentUserName()
+      } catch {
+        displayName = null
+      }
+      await ensureClerkUserProvisioned(clerkUserId, userEmail, { displayName })
     } catch (provErr) {
       console.warn('[Dashboard] User provision failed:', provErr.message)
       if (isUsersTableMissing(provErr)) {
