@@ -66,7 +66,9 @@ export async function POST(request) {
         active = true,
         updated_at = CURRENT_TIMESTAMP
     `
-    const row = (await sql`SELECT id, name, email, active FROM people WHERE id = ${id}`).rows[0]
+    const row = (
+      await sql`SELECT id, name, email, active FROM people WHERE lower(trim(email)) = lower(trim(${email})) LIMIT 1`
+    ).rows[0]
     return NextResponse.json(row)
   } catch (e) {
     console.error('issue-recipients POST:', e)
