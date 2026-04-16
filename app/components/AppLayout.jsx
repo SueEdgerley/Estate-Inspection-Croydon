@@ -17,11 +17,11 @@ import { photobook } from '@/lib/photobook-theme'
 const ALL_NAV_ITEMS = [
   { href: '/', label: 'Home' },
   { href: '/inspections', label: 'Manage Inspections' },
-  { href: '/inspections/ad-hoc', label: 'Create Ad Hoc Inspection' },
+  { href: '/inspections/ad-hoc', label: 'Create Inspections' },
   { href: '/actions', label: 'Manage Tasks' },
   { href: '/templates', label: 'Forms' },
-  { href: '/import', label: 'Data Import (Admin)' },
-  { href: '/guides', label: 'Best Practice Guides' },
+  { href: '/import', label: 'Import' },
+  { href: '/guides', label: 'Guides' },
   { href: '/settings', label: 'Settings' },
   { href: '/downloads', label: 'Data Download' },
   { href: '/analytics', label: 'Analytics' },
@@ -120,7 +120,7 @@ export default function AppLayout({ children }) {
       <header style={{
         backgroundColor: photobook.soft,
         borderBottom: `1px solid ${photobook.softBorder}`,
-        padding: '0.75rem 1rem 0.75rem 1rem',
+        padding: '0.65rem 0.85rem',
         position: 'sticky',
         top: 0,
         zIndex: 100,
@@ -128,72 +128,55 @@ export default function AppLayout({ children }) {
       }}>
         <div style={{
           display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.75rem',
-          minHeight: '56px',
-          rowGap: '0.5rem',
+          flexDirection: 'column',
+          gap: '0.45rem',
+          minHeight: '52px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 0' }}>
-            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Housing and Croydon Council – Home">
-              <span style={logoBannerWrap}>
-                <img
-                  src={LOGO_SRC}
-                  alt="Croydon Housing and Croydon Council"
-                  fetchPriority="high"
-                  decoding="async"
-                  style={{
-                    height: 'clamp(34px, 5.5vw, 48px)',
-                    width: 'auto',
-                    maxWidth: 'min(440px, 92vw)',
-                    objectFit: 'contain',
-                  }}
-                />
-              </span>
-            </Link>
-            <h1 style={{
-              margin: 0,
-              fontSize: 'clamp(1rem, 2.5vw, 1.25rem)',
-              fontWeight: 'bold',
-              color: photobook.heading,
-              marginRight: '0.5rem',
-              whiteSpace: 'nowrap',
-            }}>
-              Estate Inspection
-            </h1>
-            <nav style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  style={{
-                    padding: '0.5rem 0.65rem',
-                    color: isActive(item.href) ? photobook.primary : colours.neutral.muted,
-                    textDecoration: 'none',
-                    fontWeight: isActive(item.href) ? '600' : '500',
-                    borderBottom: isActive(item.href) ? `2px solid ${photobook.primary}` : '2px solid transparent',
-                    marginBottom: '-1px',
-                    transition: 'all 0.2s',
-                    fontSize: 'clamp(0.8125rem, 1.5vw, 0.9375rem)',
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '0.65rem',
-              flexShrink: 0,
-              flexWrap: 'wrap',
-              marginLeft: 'auto',
-            }}
-          >
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.5rem',
+            rowGap: '0.35rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', minWidth: 0, flex: '1 1 auto' }}>
+              <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="Croydon Housing and Croydon Council – Home">
+                <span style={logoBannerWrap}>
+                  <img
+                    src={LOGO_SRC}
+                    alt="Croydon Housing and Croydon Council"
+                    fetchPriority="high"
+                    decoding="async"
+                    style={{
+                      height: 'clamp(34px, 5.5vw, 48px)',
+                      width: 'auto',
+                      maxWidth: 'min(440px, 92vw)',
+                      objectFit: 'contain',
+                    }}
+                  />
+                </span>
+              </Link>
+              <h1 style={{
+                margin: 0,
+                fontSize: 'clamp(0.9375rem, 2.2vw, 1.2rem)',
+                fontWeight: 'bold',
+                color: photobook.heading,
+                whiteSpace: 'nowrap',
+              }}>
+                Estate Inspection
+              </h1>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: '0.5rem',
+                flexShrink: 0,
+                flexWrap: 'wrap',
+              }}
+            >
             <SignedOut>
               <SignInButton mode="modal">
                 <button
@@ -234,7 +217,42 @@ export default function AppLayout({ children }) {
             <SignedIn>
               <UserButton afterSignOutUrl="/login" />
             </SignedIn>
+            </div>
           </div>
+          <nav
+            aria-label="Main"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '0.15rem',
+              rowGap: '0.25rem',
+              width: '100%',
+              minWidth: 0,
+              paddingTop: '0.05rem',
+              borderTop: `1px solid ${photobook.softBorder}`,
+            }}
+          >
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                style={{
+                  padding: '0.38rem 0.48rem',
+                  color: isActive(item.href) ? photobook.primary : colours.neutral.muted,
+                  textDecoration: 'none',
+                  fontWeight: isActive(item.href) ? '600' : '500',
+                  borderBottom: isActive(item.href) ? `2px solid ${photobook.primary}` : '2px solid transparent',
+                  marginBottom: '-1px',
+                  transition: 'all 0.2s',
+                  fontSize: 'clamp(0.75rem, 1.25vw, 0.875rem)',
+                  lineHeight: 1.25,
+                }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
         </div>
       </header>
       <main style={{

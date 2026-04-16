@@ -5,7 +5,7 @@ export default function GuidesPage() {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-          Best Practice Guides
+          Guides
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
           Guidance and best practices for estate inspections
@@ -20,7 +20,7 @@ export default function GuidesPage() {
         textAlign: 'center'
       }}>
         <p style={{ fontSize: '1.125rem', color: '#6b7280', marginBottom: '1rem' }}>
-          Best Practice Guides coming soon
+          Guides coming soon
         </p>
         <p style={{ fontSize: '0.875rem', color: '#9ca3af' }}>
           This page will contain best practice guides and documentation for estate inspections.
