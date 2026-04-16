@@ -17,7 +17,7 @@ export default function AdminAssignmentsPage() {
   useEffect(() => {
     Promise.all([
       fetch('/api/admin/assignments', { credentials: 'include' }).then((r) => r.json()),
-      fetch('/api/admin/users', { credentials: 'include' }).then((r) => r.json()),
+      fetch('/api/admin/staff-people', { credentials: 'include' }).then((r) => r.json()),
       fetch('/api/admin/estates', { credentials: 'include' }).then((r) => r.json()),
       fetch('/api/admin/blocks', { credentials: 'include' }).then((r) => r.json()),
     ]).then(([a, u, e, b]) => {
@@ -98,10 +98,10 @@ export default function AdminAssignmentsPage() {
         <select value={form.person_id} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} required>
           <option value="">Select user</option>
           {users
-            .filter((u) => u.person_id && u.account_active !== false)
-            .map((u) => (
-              <option key={u.person_id} value={u.person_id}>
-                {u.name} ({u.email})
+            .filter((p) => p.id && p.active !== false)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name || p.email} ({p.email})
               </option>
             ))}
         </select>

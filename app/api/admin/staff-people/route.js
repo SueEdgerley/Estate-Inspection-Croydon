@@ -6,7 +6,10 @@ import { getAppAdminAccess } from '@/lib/app-admin-access'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-/** Clerk-linked accounts (`users` table only; same data as GET /api/admin/users). */
+/**
+ * People rows usable for estate/block assignments (excludes issue_recipient mailboxes).
+ * Separate from `/api/admin/users` (Clerk app accounts).
+ */
 export async function GET() {
   const access = await getAppAdminAccess()
   if (!access.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,20 +18,14 @@ export async function GET() {
   try {
     await ensureDatabase()
     const result = await sql`
-      SELECT
-        id,
-        clerk_user_id,
-        COALESCE(NULLIF(TRIM(email), ''), '') AS email,
-        COALESCE(role, 'user') AS role,
-        COALESCE(is_active, true) AS is_active,
-        created_at,
-        updated_at
-      FROM users
-      ORDER BY created_at DESC
+      SELECT id, name, email, role, COALESCE(active, true) AS active
+      FROM people
+      WHERE category IS DISTINCT FROM 'issue_recipient'
+      ORDER BY LOWER(name), LOWER(email)
     `
     return NextResponse.json(result.rows)
   } catch (e) {
-    console.error('[admin/app-users] GET:', e)
+    console.error('[admin/staff-people] GET:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
