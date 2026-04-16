@@ -1,7 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
+import { NV_Q24_INSTRUCTION_ROWS } from '../../../lib/neighbourhood-voice-template-patch'
 
 const YN_OPTIONS = ['Yes', 'No', 'NA']
 
@@ -49,12 +51,165 @@ export default function WizardQuestionFields({
   maxPhotos = 3,
   commentFocusRef,
   isMobile,
+  prefillResidentName = '',
 }) {
   const kind = getEffectiveQuestionKind(q)
   const rawVal = answers[q.id]
   const ext = extras[q.id] || {}
 
   const btnMinH = isMobile ? nv.btnMinHeightMobile : nv.btnMinHeight
+  const [geoError, setGeoError] = useState(null)
+
+  useEffect(() => {
+    if (kind !== 'nv_q25' || !prefillResidentName?.trim()) return
+    const cur = extras[q.id]?.resident_display_name
+    if (cur !== undefined && cur !== null) return
+    handleExtras(q.id, sec.id, { resident_display_name: prefillResidentName.trim() })
+  }, [kind, q.id, sec.id, prefillResidentName, extras, handleExtras])
+
+  // --- Q24: five instruction rows (Airtable 188–192) + optional geo ---
+  if (kind === 'nv_q24') {
+    const rows = Array.isArray(q.nv_q24_instruction_rows) && q.nv_q24_instruction_rows.length
+      ? q.nv_q24_instruction_rows
+      : NV_Q24_INSTRUCTION_ROWS
+    const geo = ext.geolocation || null
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+        <ol style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.baseSize, color: nv.text, lineHeight: 1.5 }}>
+          {rows.map((line, i) => (
+            <li key={i} style={{ marginBottom: 8 }}>
+              {line}
+            </li>
+          ))}
+        </ol>
+        <label htmlFor={`nv24-extra-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
+          Anything to add? (optional)
+        </label>
+        <textarea
+          id={`nv24-extra-${q.id}`}
+          value={ext.comment || ''}
+          onChange={(e) => {
+            handleExtras(q.id, sec.id, { comment: e.target.value })
+            if (!answers[q.id]) handleAnswer(q.id, 'completed', sec.id)
+          }}
+          rows={3}
+          style={{
+            width: '100%',
+            padding: 10,
+            border: nv.cardBorder,
+            borderRadius: nv.btnRadius,
+            fontSize: nv.baseSize,
+            fontFamily: nv.font,
+          }}
+        />
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              setGeoError(null)
+              if (!navigator.geolocation) {
+                setGeoError('Location is not available in this browser.')
+                return
+              }
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  handleExtras(q.id, sec.id, {
+                    geolocation: {
+                      lat: pos.coords.latitude,
+                      lng: pos.coords.longitude,
+                      accuracy: pos.coords.accuracy,
+                    },
+                    geo_captured_at: new Date().toISOString(),
+                  })
+                  handleAnswer(q.id, 'completed', sec.id)
+                },
+                (err) => setGeoError(err?.message || 'Could not read location'),
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+              )
+            }}
+            style={{
+              minHeight: btnMinH,
+              padding: `12px ${nv.btnPx}px`,
+              fontSize: nv.baseSize,
+              fontWeight: nv.btnFontWeight,
+              backgroundColor: nv.primaryLight,
+              color: nv.primary,
+              border: `1px solid ${nv.primary}`,
+              borderRadius: nv.btnRadius,
+              cursor: 'pointer',
+              width: '100%',
+            }}
+          >
+            Share approximate location (optional)
+          </button>
+          {geo && (
+            <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>
+              Saved: {geo.lat?.toFixed?.(5) ?? geo.lat}, {geo.lng?.toFixed?.(5) ?? geo.lng}
+              {geo.accuracy != null ? ` (±${Math.round(geo.accuracy)}m)` : ''}
+            </p>
+          )}
+          {geoError && <p style={{ fontSize: nv.metaSize, color: nv.error, marginTop: 6 }}>{geoError}</p>}
+        </div>
+      </div>
+    )
+  }
+
+  // --- Q25: visit date + resident name (prefill hint from Clerk) ---
+  if (kind === 'nv_q25') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+        <label htmlFor={`nv25-date-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
+          Date
+        </label>
+        <input
+          id={`nv25-date-${q.id}`}
+          type="date"
+          value={ext.visit_date || ''}
+          onChange={(e) => {
+            handleExtras(q.id, sec.id, { visit_date: e.target.value })
+            handleAnswer(q.id, 'completed', sec.id)
+          }}
+          style={{
+            width: '100%',
+            minHeight: btnMinH,
+            padding: `12px ${nv.btnPx}px`,
+            fontSize: nv.baseSize,
+            border: nv.cardBorder,
+            borderRadius: nv.btnRadius,
+            fontFamily: nv.font,
+          }}
+        />
+        <label htmlFor={`nv25-name-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
+          Name as it should appear on the report
+        </label>
+        <input
+          id={`nv25-name-${q.id}`}
+          type="text"
+          value={ext.resident_display_name != null ? ext.resident_display_name : ''}
+          placeholder={prefillResidentName || 'e.g. your name'}
+          onChange={(e) => handleExtras(q.id, sec.id, { resident_display_name: e.target.value })}
+          onBlur={(e) => {
+            const v = e.target.value.trim()
+            if (v) handleAnswer(q.id, 'completed', sec.id)
+          }}
+          style={{
+            width: '100%',
+            minHeight: btnMinH,
+            padding: `12px ${nv.btnPx}px`,
+            fontSize: nv.baseSize,
+            border: nv.cardBorder,
+            borderRadius: nv.btnRadius,
+            fontFamily: nv.font,
+          }}
+        />
+        {prefillResidentName ? (
+          <p style={{ fontSize: nv.metaSize, color: nv.muted, margin: 0 }}>
+            Suggested from your account — you can change it if someone else is completing this on your behalf.
+          </p>
+        ) : null}
+      </div>
+    )
+  }
 
   if (kind === 'graded') {
     const opts =
@@ -62,6 +217,7 @@ export default function WizardQuestionFields({
       (q.options && Array.isArray(q.options) && q.options.length ? q.options : null) ||
       ['A', 'B', 'C', 'D', 'NA']
     const selected = rawVal != null && rawVal !== '' ? String(rawVal) : ''
+    const needExtra = !!q.nv_graded_require_comment_photo
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
         {q.grading_scheme_name && (
@@ -95,6 +251,38 @@ export default function WizardQuestionFields({
             )
           })}
         </div>
+        {needExtra && selected && (
+          <div style={{ marginTop: 8, padding: nv.issuePad, backgroundColor: '#F9FAFB', borderRadius: nv.issueRadius, border: nv.cardBorder }}>
+            <p style={{ fontSize: nv.helperSize, fontWeight: 600, marginBottom: 8, color: nv.text }}>Comment and photo</p>
+            <label htmlFor={`g-comment-${q.id}`} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4 }}>
+              Comment
+            </label>
+            <textarea
+              id={`g-comment-${q.id}`}
+              value={ext.comment || ''}
+              onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+              rows={2}
+              style={{
+                width: '100%',
+                padding: 10,
+                border: nv.cardBorder,
+                borderRadius: 8,
+                fontSize: nv.baseSize,
+                marginBottom: 12,
+                fontFamily: nv.font,
+                minHeight: 56,
+              }}
+            />
+            <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to {maxPhotos})</p>
+            <PhotoUploadControl
+              id={`g-photo-${q.id}`}
+              value={(ext.photo_urls || []).slice(0, maxPhotos)}
+              onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+              label="Add photo"
+              multiple
+            />
+          </div>
+        )}
       </div>
     )
   }
@@ -236,10 +424,32 @@ export default function WizardQuestionFields({
     )
   }
 
-  // yes_no: Y / N / NA + issue flow (unchanged layout)
   const value = normalizeYesNoNaDisplay(rawVal)
   const isNo = value === 'No'
-  const raiseIssue = ext.raise_issue || isNo
+  const isYes = value === 'Yes'
+  const cw = q.comment_required_when
+  const pw = q.photo_required_when
+
+  const showAlwaysComment = cw === 'always' && !!value
+  const followUpRaw =
+    !!value &&
+    (ext.raise_issue ||
+      (isYes && (pw === 'on_yes' || cw === 'on_yes')) ||
+      (isNo && (pw === 'on_no' || cw === 'on_no')) ||
+      pw === 'always')
+  const followUp =
+    followUpRaw &&
+    !(cw === 'always' && isYes && pw === 'on_yes' && !ext.raise_issue)
+
+  const showPhotoInFollowUp =
+    followUp &&
+    (pw === 'always' ||
+      (isYes && pw === 'on_yes') ||
+      (isNo && pw === 'on_no') ||
+      ext.raise_issue)
+
+  const showCommentInFollowUp = followUp && cw !== 'always'
+
   const commentId = `comment-${q.id}`
   const severityId = `severity-${q.id}`
 
@@ -248,10 +458,9 @@ export default function WizardQuestionFields({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
         {YN_OPTIONS.map((opt) => {
           const isSelected = value === opt
-          const isYes = opt === 'Yes'
+          const isYesOpt = opt === 'Yes'
           const isNoOpt = opt === 'No'
-          const fillColor = isYes ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
-          // Mobile: match QuestionCard (template preview) — outlined when unselected, solid fill when selected
+          const fillColor = isYesOpt ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
           const bg = isSelected ? fillColor : nv.cardBg
           const border = isSelected
             ? `2px solid ${fillColor}`
@@ -286,38 +495,83 @@ export default function WizardQuestionFields({
         })}
       </div>
 
-      {value === 'Yes' && (
+      {showAlwaysComment && (
+        <div style={{ marginTop: 16 }}>
+          <label htmlFor={`always-${commentId}`} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 6, color: nv.text }}>
+            Comment
+          </label>
+          <textarea
+            id={`always-${commentId}`}
+            value={ext.comment || ''}
+            onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+            rows={3}
+            style={{
+              width: '100%',
+              padding: 10,
+              border: nv.cardBorder,
+              borderRadius: 8,
+              fontSize: nv.baseSize,
+              fontFamily: nv.font,
+              minHeight: 72,
+            }}
+          />
+          {isYes && pw === 'on_yes' && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: nv.helperSize, marginBottom: 6, color: nv.text }}>Photo (required when you answer Yes)</p>
+              <PhotoUploadControl
+                id={`photo-always-${q.id}`}
+                value={(ext.photo_urls || []).slice(0, maxPhotos)}
+                onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+                label="Add photo"
+                multiple
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {isYes && (
         <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
           <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
           Raise an issue anyway (e.g. still a concern)
         </label>
       )}
 
-      {raiseIssue && (
+      {followUp && (
         <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
-          <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
-          <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details (required for issues)</p>
-          <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
-          <textarea
-            ref={commentFocusRef}
-            id={commentId}
-            name={commentId}
-            placeholder="e.g. Please ensure the area is kept clear."
-            value={ext.comment || ''}
-            onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
-            rows={2}
-            style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
-          />
-          <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to {maxPhotos})</p>
-          <div style={{ width: '100%', minHeight: 52 }}>
-            <PhotoUploadControl
-              id={`photo-${q.id}`}
-              value={(ext.photo_urls || []).slice(0, maxPhotos)}
-              onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
-              label="Add photo"
-              multiple={true}
-            />
-          </div>
+          <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>
+            {isYes && (pw === 'on_yes' || cw === 'on_yes') ? 'Details (Yes)' : 'Issue raised'}
+          </span>
+          <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details</p>
+          {showCommentInFollowUp && (
+            <>
+              <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
+              <textarea
+                ref={commentFocusRef}
+                id={commentId}
+                name={commentId}
+                placeholder="e.g. Please ensure the area is kept clear."
+                value={ext.comment || ''}
+                onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+                rows={2}
+                style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
+              />
+            </>
+          )}
+          {showPhotoInFollowUp && !(cw === 'always' && isYes && pw === 'on_yes') && (
+            <>
+              <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to {maxPhotos})</p>
+              <div style={{ width: '100%', minHeight: 52 }}>
+                <PhotoUploadControl
+                  id={`photo-${q.id}`}
+                  value={(ext.photo_urls || []).slice(0, maxPhotos)}
+                  onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+                  label="Add photo"
+                  multiple={true}
+                />
+              </div>
+            </>
+          )}
           <label htmlFor={severityId} style={{ display: 'block', fontSize: nv.helperSize, marginTop: 12, marginBottom: 4, color: nv.text }}>Severity (optional)</label>
           <select
             id={severityId}

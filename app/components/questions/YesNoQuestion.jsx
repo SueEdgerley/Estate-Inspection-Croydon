@@ -18,21 +18,28 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
   }, [value])
 
   const handleAnswerChange = async (newAnswer) => {
+    const wasNo = answer === false || answer === 'no' || answer === 'No'
+    const wasYes = answer === true || answer === 'yes' || answer === 'Yes'
+    const willYes = newAnswer === true || newAnswer === 'yes' || newAnswer === 'Yes'
+    const willNo = newAnswer === false || newAnswer === 'no' || newAnswer === 'No'
+
     setAnswer(newAnswer)
     onChange(question.id, newAnswer)
-    
-      // If changing from No to Yes, clear comment/photos
-      if ((answer === false || answer === 'no' || answer === 'No') && 
-          (newAnswer === true || newAnswer === 'yes' || newAnswer === 'Yes')) {
-        setComment('')
-        setPhotos([])
-        setPhotoFiles([])
-        setActionCreated(false)
-        setPriority('')
-        // Clear comment and priority from answers
-        onChange(`${question.id}_comment`, '')
-        onChange(`${question.id}_priority`, '')
-      }
+
+    const clearDetails = () => {
+      setComment('')
+      setPhotos([])
+      setPhotoFiles([])
+      setActionCreated(false)
+      setPriority('')
+      onChange(`${question.id}_comment`, '')
+      onChange(`${question.id}_priority`, '')
+    }
+
+    // No → Yes: clear issue-style details (legacy on_no flow)
+    if (wasNo && willYes) clearDetails()
+    // Yes → No: clear yes-branch details (on_yes / photo-on-yes)
+    if (wasYes && willNo) clearDetails()
   }
 
   const handlePhotoUpload = async (e) => {
@@ -63,23 +70,38 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
   const hasExplicitPhotoRule =
     question.photo_required_when === 'always' ||
     question.photo_required_when === 'on_no' ||
+    question.photo_required_when === 'on_yes' ||
     question.require_photo_on_no !== undefined ||
     question.type_includes_photo === true
   const hasExplicitCommentRule =
     question.comment_required_when === 'always' ||
     question.comment_required_when === 'on_no' ||
+    question.comment_required_when === 'on_yes' ||
     question.require_comment_on_no !== undefined
 
-  const requiresPhoto =
-    question.photo_required_when === 'always' ||
-    (question.photo_required_when === 'on_no' && (answer === false || answer === 'no' || answer === 'No')) ||
-    (!question.photo_required_when && hasExplicitPhotoRule && requiresPhotoOnNo(question))
-  const requiresComment =
-    question.comment_required_when === 'always' ||
-    (question.comment_required_when === 'on_no' && (answer === false || answer === 'no' || answer === 'No')) ||
-    (!question.comment_required_when && hasExplicitCommentRule && requiresCommentOnNo(question))
-  const shouldCreateAction = shouldCreateActionOnNo(question)
   const isNo = answer === false || answer === 'no' || answer === 'No'
+  const isYes = answer === true || answer === 'yes' || answer === 'Yes'
+  const pw = question.photo_required_when
+  const cw = question.comment_required_when
+
+  const requiresPhoto =
+    pw === 'always' ||
+    (pw === 'on_no' && isNo) ||
+    (pw === 'on_yes' && isYes) ||
+    (!pw && hasExplicitPhotoRule && requiresPhotoOnNo(question))
+  const requiresComment =
+    cw === 'always' ||
+    (cw === 'on_no' && isNo) ||
+    (cw === 'on_yes' && isYes) ||
+    (!cw && hasExplicitCommentRule && requiresCommentOnNo(question))
+  const shouldCreateAction = shouldCreateActionOnNo(question)
+
+  const needsDetailSection =
+    answer != null &&
+    ((isNo && shouldCreateAction) ||
+      (isYes && (pw === 'on_yes' || cw === 'on_yes')) ||
+      pw === 'always' ||
+      cw === 'always')
 
   return (
     <div style={{ marginBottom: '1.5rem' }}>
@@ -139,18 +161,25 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
         </button>
       </div>
 
-      {/* Show requirements when No is selected */}
-      {isNo && shouldCreateAction && (
+      {/* Follow-up: action on No, or comment/photo on Yes / always (e.g. Neighbourhood Voice) */}
+      {needsDetailSection && (
         <div style={{
           padding: '1rem',
-          backgroundColor: '#fef3c7',
-          border: '1px solid #f59e0b',
+          backgroundColor: isNo && shouldCreateAction ? '#fef3c7' : '#eff6ff',
+          border: `1px solid ${isNo && shouldCreateAction ? '#f59e0b' : '#93c5fd'}`,
           borderRadius: '0.375rem',
           marginTop: '1rem'
         }}>
-          <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#92400e' }}>
-            Action will be created automatically
-          </p>
+          {isNo && shouldCreateAction && (
+            <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#92400e' }}>
+              Action will be created automatically
+            </p>
+          )}
+          {isYes && (pw === 'on_yes' || cw === 'on_yes') && (
+            <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
+              Please add the details or photo requested for your Yes answer.
+            </p>
+          )}
 
           {/* Comment (required) */}
           {requiresComment && (
@@ -274,8 +303,8 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
             </div>
           )}
 
-          {/* Priority (optional) */}
-          {question.action_priority && (
+          {/* Priority / category only when automatic action-on-No applies */}
+          {isNo && shouldCreateAction && question.action_priority && (
             <div style={{ marginBottom: '1rem' }}>
               <label style={{
                 display: 'block',
@@ -290,7 +319,6 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                 onChange={(e) => {
                   const newPriority = e.target.value
                   setPriority(newPriority)
-                  // Store priority in answers with _priority suffix
                   onChange(`${question.id}_priority`, newPriority)
                 }}
                 style={{
@@ -309,8 +337,7 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
             </div>
           )}
 
-          {/* Action Category Info */}
-          {question.action_category && (
+          {isNo && shouldCreateAction && question.action_category && (
             <p style={{
               fontSize: '0.875rem',
               color: '#6b7280',

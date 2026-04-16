@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
 
 // NV design system (wizard only): calm, modern, resident-friendly
@@ -84,6 +85,15 @@ function getSectionIcon(title) {
 export default function InspectionWizardPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useUser()
+  const prefillResidentName = useMemo(() => {
+    if (!user) return ''
+    const fn = user.firstName?.trim() || ''
+    const ln = user.lastName?.trim() || ''
+    const combined = [fn, ln].filter(Boolean).join(' ')
+    if (combined) return combined
+    return (user.fullName || user.username || '').trim()
+  }, [user])
   const [id, setId] = useState(null)
   const [inspection, setInspection] = useState(null)
   const [template, setTemplate] = useState(null)
@@ -366,9 +376,12 @@ export default function InspectionWizardPage() {
   // Review step: Issues first, then Unanswered, then Completed (collapsed), confirm before submit
   if (isReview) {
     const issues = flatSteps.filter((s) => {
-      const v = normalizeVal(answers[s.question?.id])
-      const ext = extras[s.question?.id] || {}
-      return v === 'No' || ext.raise_issue
+      const q = s.question
+      const v = normalizeVal(answers[q?.id])
+      const ext = extras[q?.id] || {}
+      if (v === 'No' || ext.raise_issue) return true
+      if (v === 'Yes' && (q?.photo_required_when === 'on_yes' || q?.comment_required_when === 'on_yes')) return true
+      return false
     })
     const unanswered = flatSteps.filter((s) => {
       const v = answers[s.question?.id]
@@ -542,6 +555,7 @@ export default function InspectionWizardPage() {
               maxPhotos={MAX_PHOTOS_PER_QUESTION}
               commentFocusRef={commentFocusRef}
               isMobile
+              prefillResidentName={prefillResidentName}
             />
           </div>
 
@@ -614,6 +628,7 @@ export default function InspectionWizardPage() {
               handleExtras={handleExtras}
               maxPhotos={MAX_PHOTOS_PER_QUESTION}
               isMobile={false}
+              prefillResidentName={prefillResidentName}
             />
           </div>
         ))}
