@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
+import { NV_Q24_INSTRUCTION_ROWS, NV_Q24_GEO_HELPER } from '@/lib/neighbourhood-voice-template-patch'
 
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
@@ -38,8 +39,16 @@ function normalizeQuestionType(v) {
 }
 
 function getQuestionType(question) {
+  if (question.nv_render_kind) return question.nv_render_kind
   const raw = question.question_type
-  const hasYesNoBehavior = (question.comment_required_when === 'on_no' || question.photo_required_when === 'on_no') && !raw
+  const rs = String(raw || '').toLowerCase()
+  if (rs.includes('grad')) return 'graded'
+  const hasYesNoBehavior =
+    (question.comment_required_when === 'on_no' ||
+      question.photo_required_when === 'on_no' ||
+      question.comment_required_when === 'on_yes' ||
+      question.photo_required_when === 'on_yes') &&
+    !raw
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
@@ -50,11 +59,14 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   const isRequired = question.is_required
   const yesNoNaValue = normalizeYesNoNaValue(value)
   const isNo = yesNoNaValue === 'No'
+  const isYes = yesNoNaValue === 'Yes'
   const commentWhen = question.comment_required_when
   const photoWhen = question.photo_required_when
   const typeIncludesPhoto = !!question.type_includes_photo
-  const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
-  const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
+  const showComment =
+    (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
+  const photoRequired =
+    (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const showCommentPhotoBlock = (showComment || showActionBlock) || isExpanded
@@ -196,6 +208,10 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
 
   if (qType === 'graded') {
     const gradingOpts = question.grading_options || ['A', 'B', 'C', 'D', 'NA']
+    const needPhoto = !!question.nv_graded_require_comment_photo
+    const needComment = needPhoto || !!question.nv_graded_require_comment_only
+    const hasGrade = value != null && String(value).trim() !== ''
+    const nvGradedExtras = isNvTemplate && needComment && hasGrade
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
@@ -206,7 +222,43 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {buttonGroup(gradingOpts, id)}
-        {photoBlock}
+        {nvGradedExtras && (
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
+            <p style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.875rem', color: '#374151' }}>
+              {needPhoto ? 'Comment and photo' : 'Comment'}
+            </p>
+            <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Comment {isRequired && hasGrade ? <span style={{ color: '#ef4444' }}>*</span> : null}
+            </label>
+            <textarea
+              id={`comment-${question.id}`}
+              name={`comment-${question.id}`}
+              value={extras.comment || ''}
+              onChange={(e) => setExtras({ comment: e.target.value })}
+              rows={2}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: needPhoto ? '0.75rem' : 0,
+              }}
+            />
+            {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+            {needPhoto && (
+              <PhotoUploadControl
+                id={`g-photo-${question.id}`}
+                value={extras.photo_urls || []}
+                onChange={(urls) => setExtras({ photo_urls: urls })}
+                label="Add photo"
+                error={errorPhotos}
+              />
+            )}
+          </div>
+        )}
+        {!isNvTemplate && photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -276,6 +328,122 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
         </div>
         {photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'long_text') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        <textarea
+          id={id}
+          name={id}
+          value={value ?? ''}
+          onChange={(e) => handleChange(e.target.value)}
+          rows={4}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+            minHeight: 100,
+          }}
+        />
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'nv_q24') {
+    const rows = Array.isArray(question.nv_q24_instruction_rows) && question.nv_q24_instruction_rows.length
+      ? question.nv_q24_instruction_rows
+      : NV_Q24_INSTRUCTION_ROWS
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+        </label>
+        <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.75rem' }}>{NV_Q24_GEO_HELPER}</p>
+        <ol style={{ margin: '0 0 0.75rem 1rem', fontSize: '0.9375rem', color: '#374151' }}>
+          {rows.map((line, i) => (
+            <li key={i} style={{ marginBottom: 6 }}>{line}</li>
+          ))}
+        </ol>
+        <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+          Anything to add? (optional)
+        </label>
+        <textarea
+          id={`comment-${question.id}`}
+          value={extras.comment || ''}
+          onChange={(e) => setExtras({ comment: e.target.value })}
+          rows={3}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+          }}
+        />
+      </div>
+    )
+  }
+
+  if (qType === 'nv_q25') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#374151' }}>Sign-off</p>
+        <label htmlFor={`nv25-date-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+          Date of this visit
+        </label>
+        <input
+          id={`nv25-date-${question.id}`}
+          type="date"
+          value={extras.visit_date || ''}
+          onChange={(e) => setExtras({ visit_date: e.target.value })}
+          style={{
+            width: '100%',
+            maxWidth: 280,
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            marginBottom: '0.75rem',
+          }}
+        />
+        <label htmlFor={`nv25-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+          Name as it should appear on the report
+        </label>
+        <input
+          id={`nv25-name-${question.id}`}
+          type="text"
+          value={extras.resident_display_name != null ? extras.resident_display_name : ''}
+          onChange={(e) => setExtras({ resident_display_name: e.target.value })}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            marginBottom: '0.75rem',
+          }}
+        />
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.875rem', color: '#374151', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={!!extras.nv_signoff_confirmed}
+            onChange={(e) => setExtras({ nv_signoff_confirmed: e.target.checked })}
+            style={{ marginTop: 3 }}
+          />
+          <span>I confirm this feedback is accurate to the best of my knowledge.</span>
+        </label>
       </div>
     )
   }
@@ -493,10 +661,15 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           const commentWhen = q.comment_required_when
           const photoWhen = q.photo_required_when
           const isNo = normalized === 'No'
-          const showComment = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
-          const showPhoto = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
-          const commentRequired = (commentWhen === 'on_no' && isNo) || commentWhen === 'always'
-          const photoRequired = (photoWhen === 'on_no' && isNo) || photoWhen === 'always'
+          const isYes = normalized === 'Yes'
+          const showComment =
+            (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
+          const showPhoto =
+            (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
+          const commentRequired =
+            (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
+          const photoRequired =
+            (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
           const extras = answerExtras[q.id] || {}
           if (showComment && commentRequired && !(extras.comment || '').trim()) {
             errs[`${q.id}_comment`] = 'Comment is required'
@@ -504,6 +677,56 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
           if (photoRequired && photoUrls.length === 0) {
             errs[`${q.id}_photos`] = 'At least one photo is required'
+          }
+          return
+        }
+
+        if (qType === 'graded') {
+          const extras = answerExtras[q.id] || {}
+          const needPhoto = !!q.nv_graded_require_comment_photo
+          const needComment = needPhoto || !!q.nv_graded_require_comment_only
+          if (!needComment) {
+            if (q.is_required && (v === undefined || v === null || (typeof v === 'string' && !v.trim()))) {
+              errs[q.id] = 'Required'
+            }
+            return
+          }
+          const grade = v != null && String(v).trim() !== ''
+          if (q.is_required && !grade) {
+            errs[q.id] = 'Please select a grade'
+            return
+          }
+          if (grade) {
+            if (!(extras.comment || '').trim()) {
+              errs[`${q.id}_comment`] = 'Comment is required'
+            }
+            if (needPhoto) {
+              const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
+              if (photoUrls.length === 0) {
+                errs[`${q.id}_photos`] = 'At least one photo is required'
+              }
+            }
+          }
+          return
+        }
+
+        if (qType === 'long_text') {
+          if (q.is_required && (v === undefined || v === null || !String(v).trim())) {
+            errs[q.id] = 'Required'
+          }
+          return
+        }
+
+        if (qType === 'nv_q24') {
+          return
+        }
+
+        if (qType === 'nv_q25') {
+          const ex = answerExtras[q.id] || {}
+          if (q.is_required) {
+            if (!(ex.visit_date || '').trim() || !(ex.resident_display_name || '').trim()) {
+              errs[q.id] = 'Please add the visit date and your display name'
+            }
           }
           return
         }

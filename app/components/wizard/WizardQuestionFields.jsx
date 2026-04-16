@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
-import { NV_Q24_INSTRUCTION_ROWS } from '../../../lib/neighbourhood-voice-template-patch'
+import { NV_Q24_INSTRUCTION_ROWS, NV_Q24_GEO_HELPER } from '../../../lib/neighbourhood-voice-template-patch'
 
 const YN_OPTIONS = ['Yes', 'No', 'NA']
 
@@ -75,6 +75,7 @@ export default function WizardQuestionFields({
     const geo = ext.geolocation || null
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+        <p style={{ margin: 0, fontSize: nv.helperSize, color: nv.muted, lineHeight: 1.5 }}>{NV_Q24_GEO_HELPER}</p>
         <ol style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.baseSize, color: nv.text, lineHeight: 1.5 }}>
           {rows.map((line, i) => (
             <li key={i} style={{ marginBottom: 8 }}>
@@ -140,7 +141,7 @@ export default function WizardQuestionFields({
               width: '100%',
             }}
           >
-            Share approximate location (optional)
+            Share approximate location (optional — e.g. abandoned vehicles, pin on estate)
           </button>
           {geo && (
             <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>
@@ -154,12 +155,13 @@ export default function WizardQuestionFields({
     )
   }
 
-  // --- Q25: visit date + resident name (prefill hint from Clerk) ---
+  // --- Q25: sign-off — visit date + display name + confirmation ---
   if (kind === 'nv_q25') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+        <p style={{ margin: 0, fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>Sign-off</p>
         <label htmlFor={`nv25-date-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
-          Date
+          Date of this visit
         </label>
         <input
           id={`nv25-date-${q.id}`}
@@ -207,6 +209,22 @@ export default function WizardQuestionFields({
             Suggested from your account — you can change it if someone else is completing this on your behalf.
           </p>
         ) : null}
+        <label
+          htmlFor={`nv25-signoff-${q.id}`}
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: nv.helperSize, color: nv.text, cursor: 'pointer', marginTop: 4 }}
+        >
+          <input
+            id={`nv25-signoff-${q.id}`}
+            type="checkbox"
+            checked={!!ext.nv_signoff_confirmed}
+            onChange={(e) => {
+              handleExtras(q.id, sec.id, { nv_signoff_confirmed: e.target.checked })
+              handleAnswer(q.id, 'completed', sec.id)
+            }}
+            style={{ marginTop: 3, flexShrink: 0 }}
+          />
+          <span>I confirm this feedback is accurate to the best of my knowledge.</span>
+        </label>
       </div>
     )
   }
@@ -217,7 +235,10 @@ export default function WizardQuestionFields({
       (q.options && Array.isArray(q.options) && q.options.length ? q.options : null) ||
       ['A', 'B', 'C', 'D', 'NA']
     const selected = rawVal != null && rawVal !== '' ? String(rawVal) : ''
-    const needExtra = !!q.nv_graded_require_comment_photo
+    const needPhoto = !!q.nv_graded_require_comment_photo
+    const needCommentOnly = !!q.nv_graded_require_comment_only
+    const showGradedFollowUp = (needPhoto || needCommentOnly) && selected
+    const showPhoto = needPhoto && selected
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
         {q.grading_scheme_name && (
@@ -251,9 +272,11 @@ export default function WizardQuestionFields({
             )
           })}
         </div>
-        {needExtra && selected && (
+        {showGradedFollowUp && (
           <div style={{ marginTop: 8, padding: nv.issuePad, backgroundColor: '#F9FAFB', borderRadius: nv.issueRadius, border: nv.cardBorder }}>
-            <p style={{ fontSize: nv.helperSize, fontWeight: 600, marginBottom: 8, color: nv.text }}>Comment and photo</p>
+            <p style={{ fontSize: nv.helperSize, fontWeight: 600, marginBottom: 8, color: nv.text }}>
+              {showPhoto ? 'Comment and photo' : 'Comment'}
+            </p>
             <label htmlFor={`g-comment-${q.id}`} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4 }}>
               Comment
             </label>
@@ -268,19 +291,23 @@ export default function WizardQuestionFields({
                 border: nv.cardBorder,
                 borderRadius: 8,
                 fontSize: nv.baseSize,
-                marginBottom: 12,
+                marginBottom: showPhoto ? 12 : 0,
                 fontFamily: nv.font,
                 minHeight: 56,
               }}
             />
-            <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to {maxPhotos})</p>
-            <PhotoUploadControl
-              id={`g-photo-${q.id}`}
-              value={(ext.photo_urls || []).slice(0, maxPhotos)}
-              onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
-              label="Add photo"
-              multiple
-            />
+            {showPhoto && (
+              <>
+                <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text, marginTop: 8 }}>Photo (up to {maxPhotos})</p>
+                <PhotoUploadControl
+                  id={`g-photo-${q.id}`}
+                  value={(ext.photo_urls || []).slice(0, maxPhotos)}
+                  onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+                  label="Add photo"
+                  multiple
+                />
+              </>
+            )}
           </div>
         )}
       </div>

@@ -286,6 +286,42 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
           />
         )
 
+      case 'nv_q24':
+        return (
+          <textarea
+            value={localValue ?? ''}
+            onChange={(e) => handleChange(e.target.value)}
+            rows={4}
+            placeholder="Additional comments (optional)"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              fontFamily: 'inherit',
+            }}
+          />
+        )
+
+      case 'nv_q25':
+        return (
+          <textarea
+            value={localValue ?? ''}
+            onChange={(e) => handleChange(e.target.value)}
+            rows={2}
+            placeholder="Sign-off (date and name if editing outside the wizard)"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              fontFamily: 'inherit',
+            }}
+          />
+        )
+
       case 'instruction':
         return (
           <p style={{ fontSize: '0.9375rem', color: '#4b5563', margin: 0 }}>
