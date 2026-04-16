@@ -27,7 +27,7 @@ const ALL_NAV_ITEMS = [
   { href: '/analytics', label: 'Analytics' },
 ]
 
-/** Shown only when /api/auth/me indicates app admin (owner | admin | Clerk isAdmin). */
+/** Hidden when signed out (admin pages require login). */
 const ADMIN_ONLY_NAV_HREFS = new Set(['/settings', '/import'])
 
 /** Hrefs visible to app role `user` (non-admin); order matches ALL_NAV_ITEMS subset */
@@ -87,13 +87,14 @@ export default function AppLayout({ children }) {
       return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
     }
     const r = (appRole || '').toLowerCase().trim()
+    // Only hide Settings / full nav for the standard app "user" role without Clerk admin.
+    // Do not treat null/empty role as non-admin here — many accounts have no users.role yet
+    // and would incorrectly lose Settings (see nav regression).
     const isRestrictedUser = r === 'user' && !clerkIsAdmin
-    const isAppAdmin = clerkIsAdmin || r === 'owner' || r === 'admin'
-    if (!isRestrictedUser) {
-      if (isAppAdmin) return ALL_NAV_ITEMS
-      return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
+    if (isRestrictedUser) {
+      return ALL_NAV_ITEMS.filter((item) => USER_ROLE_NAV_HREFS.has(item.href))
     }
-    return ALL_NAV_ITEMS.filter((item) => USER_ROLE_NAV_HREFS.has(item.href))
+    return ALL_NAV_ITEMS
   }, [isSignedIn, appRole, clerkIsAdmin])
 
   const isActive = (href) => {
