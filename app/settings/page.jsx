@@ -167,11 +167,12 @@ export default function SettingsPage() {
   const toggleUserAccount = async (id, accountActive) => {
     setLoadError(null)
     try {
+      const nextActive = accountActive !== true
       const res = await fetch(`/api/admin/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ account_active: !accountActive }),
+        body: JSON.stringify({ account_active: Boolean(nextActive) }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Update failed')
@@ -201,22 +202,23 @@ export default function SettingsPage() {
       const lines = [
         `Permanently delete the app login for ${label}?`,
         '',
+        `• Removes only the row in this app’s database (Neon users table) — not Clerk, not the staff directory.`,
+        `• Clerk: the person may still exist in Clerk until you delete or block them in the Clerk Dashboard.`,
         `• Past inspections stay in the database; inspector name/email on each row are unchanged (${ic} inspection(s) reference this user as inspector email/id).`,
         `• ${ac} estate/block assignment row(s) for this login will be removed (CASCADE).`,
-        `• Linked staff directory (people) rows are not deleted — remove those separately if needed.`,
+        `• Staff directory (people) rows are not deleted — remove those separately if needed.`,
         '',
         'This cannot be undone.',
       ]
       if (!window.confirm(lines.join('\n'))) return
       const del = await fetch(`/api/admin/users/${u.id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ confirm: true }),
       })
       const delJson = await del.json().catch(() => ({}))
       if (!del.ok) throw new Error(delJson.error || 'Delete failed')
       setEditingUserId(null)
+      setUsers((prev) => prev.filter((row) => row.id !== u.id))
       await refreshUsers()
     } catch (err) {
       setLoadError(err.message)
@@ -344,8 +346,8 @@ export default function SettingsPage() {
           App access (dashboard, Settings): roles are {APP_ACCESS_ROLES.join(', ')}. New sign-ins appear here automatically when someone uses Clerk.
         </p>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
-          <strong>Deactivate</strong> blocks sign-in but keeps the <code style={{ fontSize: '0.85em' }}>users</code> row.{' '}
-          <strong>Delete user</strong> removes that row permanently when allowed (see confirmation). Past inspections keep their stored inspector name/email.
+          <strong>Deactivate</strong> sets <code style={{ fontSize: '0.85em' }}>is_active = false</code> on the row (blocks app access when enforced).{' '}
+          <strong>Delete user</strong> runs <code style={{ fontSize: '0.85em' }}>DELETE FROM users</code> — it does <strong>not</strong> remove the Clerk user; remove leavers in Clerk separately if you need their identity login gone. Past inspections keep their stored inspector name/email.
         </p>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>

@@ -44,12 +44,9 @@ export async function PATCH(request, { params }) {
     const existing = await selectUserRow(id)
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    const coerceBool = (v) => (typeof v === 'boolean' ? v : null)
     const nextAccountActive =
-      typeof body.account_active === 'boolean'
-        ? body.account_active
-        : typeof body.active === 'boolean'
-          ? body.active
-          : null
+      coerceBool(body.account_active) ?? coerceBool(body.active)
 
     const emailTouched = body.email !== undefined
     const roleTouched = body.role !== undefined
@@ -103,10 +100,13 @@ export async function PATCH(request, { params }) {
 }
 
 /**
- * Permanent removal of the `users` row. Inspections are unchanged (denormalized inspector fields).
- * `user_estate_assignments` rows CASCADE. Cannot delete self or the last active owner.
+ * Permanent removal of the `users` row only (Neon/Postgres). No Clerk API call.
+ * Inspections are unchanged (denormalized inspector fields). `user_estate_assignments` CASCADE.
+ * Cannot delete self or the last active owner.
+ *
+ * No JSON body required (DELETE bodies are often stripped by proxies); confirm in the UI instead.
  */
-export async function DELETE(request, { params }) {
+export async function DELETE(_request, { params }) {
   const access = await getAppAdminAccess()
   if (!access.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!access.ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -114,19 +114,6 @@ export async function DELETE(request, { params }) {
 
   const id = params?.id
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-
-  let body = {}
-  try {
-    body = await request.json()
-  } catch {
-    body = {}
-  }
-  if (body.confirm !== true) {
-    return NextResponse.json(
-      { error: 'Send JSON body { "confirm": true } after reviewing GET …/delete-impact.' },
-      { status: 400 }
-    )
-  }
 
   try {
     await ensureDatabase()
@@ -166,8 +153,12 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({
       ok: true,
       deletedId: id,
+      deletedFromAppDatabase: true,
+      clerkUserDeleted: false,
       message:
-        'User login record removed. Past inspections still show stored inspector name/email. Estate/block assignment rows for this user were removed.',
+        'Removed this row from the app database (users). Past inspections still show stored inspector name/email. Estate/block assignment rows for this user were removed (CASCADE).',
+      clerkNotice:
+        'The Clerk user account was not changed. They may still be able to sign in at Clerk until you delete or block that user in the Clerk Dashboard (or they remain unused).',
     })
   } catch (e) {
     console.error('Admin users DELETE:', e)

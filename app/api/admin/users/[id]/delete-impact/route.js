@@ -39,14 +39,17 @@ export async function GET(request, { params }) {
     const email = (u.email && String(u.email).trim().toLowerCase()) || ''
     const clerkId = u.clerk_user_id ? String(u.clerk_user_id).trim() : ''
 
+    const emailMatch = email || null
+    const clerkMatch = clerkId || null
+
     const inspectionCount = (
       await sql`
         SELECT COUNT(*)::int AS c FROM inspections
         WHERE inspector_id IS NOT NULL
           AND (
-            ${email ? sql`lower(trim(inspector_id)) = ${email}` : sql`FALSE`}
-            OR ${clerkId ? sql`trim(inspector_id) = ${clerkId}` : sql`FALSE`}
-            OR ${sql`trim(inspector_id) = ${id}`}
+            (${emailMatch}::text IS NOT NULL AND lower(trim(inspector_id)) = lower(${emailMatch}))
+            OR (${clerkMatch}::text IS NOT NULL AND trim(inspector_id) = ${clerkMatch})
+            OR trim(inspector_id) = ${id}
           )
       `
     ).rows[0]?.c ?? 0
@@ -91,9 +94,10 @@ export async function GET(request, { params }) {
         estateAssignmentCount: assignmentCount,
       },
       notes: [
+        'DELETE /api/admin/users/:id removes only the Neon users row (no Clerk API call). Revoke Clerk access separately if needed.',
         'Inspections store inspector name and email on each row — they are not foreign-keyed to users, so deleting this login does not remove past inspection records.',
         'Estate/block assignment rows for this user will be removed automatically.',
-        'Staff directory rows (people) are not deleted; unlink is implicit when the login row is removed.',
+        'Staff directory rows (people) are not deleted.',
       ],
       canDelete: blockers.length === 0,
       blockers,
