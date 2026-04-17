@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
-import { NV_ESTATE_FEEDBACK_PROMPTS, NV_Q24_GEO_HELPER } from '../../../lib/neighbourhood-voice-template-patch'
+import { NV_ESTATE_FEEDBACK_PROMPTS, NV_Q24_AIRTABLE_ROWS_188_192 } from '../../../lib/neighbourhood-voice-template-patch'
 import InspectionQuestion from './InspectionQuestion'
 import TextFeedbackSection from './TextFeedbackSection'
 import IssuesReportSection from './IssuesReportSection'
@@ -127,10 +127,9 @@ export default function WizardQuestionFields({
   if (kind === 'nv_q24') {
     const rows = Array.isArray(q.nv_q24_instruction_rows) && q.nv_q24_instruction_rows.length
       ? q.nv_q24_instruction_rows
-      : NV_ESTATE_FEEDBACK_PROMPTS
+      : NV_Q24_AIRTABLE_ROWS_188_192
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-        <p style={{ margin: 0, fontSize: nv.helperSize, color: nv.muted }}>{NV_Q24_GEO_HELPER}</p>
         <ol style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.baseSize, color: nv.text }}>
           {rows.map((line, i) => (
             <li key={i} style={{ marginBottom: 8 }}>{line}</li>

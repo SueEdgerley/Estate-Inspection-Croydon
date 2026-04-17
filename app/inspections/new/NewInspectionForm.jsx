@@ -7,7 +7,7 @@ import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 import {
   NV_ESTATE_FEEDBACK_PROMPTS,
-  NV_Q24_GEO_HELPER,
+  NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
 } from '@/lib/neighbourhood-voice-template-patch'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
@@ -451,13 +451,12 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   if (qType === 'nv_q24') {
     const rows = Array.isArray(question.nv_q24_instruction_rows) && question.nv_q24_instruction_rows.length
       ? question.nv_q24_instruction_rows
-      : NV_ESTATE_FEEDBACK_PROMPTS
+      : NV_Q24_AIRTABLE_ROWS_188_192
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
         </label>
-        <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.75rem' }}>{NV_Q24_GEO_HELPER}</p>
         <ol style={{ margin: '0 0 0.75rem 1rem', fontSize: '0.9375rem', color: '#374151' }}>
           {rows.map((line, i) => (
             <li key={i} style={{ marginBottom: 6 }}>{line}</li>
@@ -791,6 +790,18 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
           if (photoRequired && photoUrls.length === 0) {
             errs[`${q.id}_photos`] = 'At least one photo is required'
+          }
+          return
+        }
+
+        if (qType === 'nv_issues_report') {
+          const ex = answerExtras[q.id] || {}
+          const yn = (x) => String(x || '').trim().toLowerCase() === 'yes'
+          if (yn(ex.issues_abandoned_properties) || yn(ex.issues_abandoned_vehicles)) {
+            const photoUrls = Array.isArray(ex.photo_urls) ? ex.photo_urls.filter((u) => typeof u === 'string' && u) : []
+            if (photoUrls.length === 0) {
+              errs[`${q.id}_photos`] = 'Please add at least one photo when you answer Yes'
+            }
           }
           return
         }

@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { normalizeYesNoNaDisplay } from '../../../lib/question-types'
+import { NV_Q24_AIRTABLE_ROWS_188_192 } from '../../../lib/neighbourhood-voice-template-patch'
 
 const YN = ['Yes', 'No', 'NA']
 
 /**
- * Q24 — Issues to report: abandoned properties & vehicles (Y/N/NA + details), comment, photo, optional geo.
+ * Q24 — Issues to report only (Airtable rows 188–192 order).
+ * Photo + location appear when the resident answers Yes to either Y/N line.
  */
 export default function IssuesReportSection({
   q,
@@ -19,8 +21,15 @@ export default function IssuesReportSection({
   maxPhotos,
 }) {
   const [geoError, setGeoError] = useState(null)
+  const rows =
+    Array.isArray(q.nv_q24_airtable_rows) && q.nv_q24_airtable_rows.length >= 5
+      ? q.nv_q24_airtable_rows
+      : NV_Q24_AIRTABLE_ROWS_188_192
+  const [intro, labelProps, labelVeh, commentPrompt, photoLocationPrompt] = rows
+
   const propsVal = normalizeYesNoNaDisplay(ext?.issues_abandoned_properties)
   const vehVal = normalizeYesNoNaDisplay(ext?.issues_abandoned_vehicles)
+  const anyYes = propsVal === 'Yes' || vehVal === 'Yes'
 
   const ynBlock = (label, value, fieldBase) => (
     <div style={{ marginBottom: 16 }}>
@@ -80,12 +89,14 @@ export default function IssuesReportSection({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-      {ynBlock('Abandoned properties', propsVal, 'issues_abandoned_properties')}
-      {ynBlock('Abandoned vehicles', vehVal, 'issues_abandoned_vehicles')}
+      <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: 1.5, color: nv.text }}>{intro}</p>
+
+      {ynBlock(labelProps, propsVal, 'issues_abandoned_properties')}
+      {ynBlock(labelVeh, vehVal, 'issues_abandoned_vehicles')}
 
       <div>
         <label htmlFor={`iss-comment-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, display: 'block', marginBottom: 6, color: nv.text }}>
-          Comment
+          {commentPrompt}
         </label>
         <textarea
           id={`iss-comment-${q.id}`}
@@ -106,65 +117,70 @@ export default function IssuesReportSection({
         />
       </div>
 
-      <div>
-        <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '0 0 8px', color: nv.text }}>Photo</p>
-        <PhotoUploadControl
-          id={`iss-photo-${q.id}`}
-          value={(ext?.photo_urls || []).slice(0, maxPhotos)}
-          onChange={(urls) => onExtras({ photo_urls: urls.slice(0, maxPhotos) })}
-          label="Add photo"
-          multiple={maxPhotos > 1}
-        />
-      </div>
+      {anyYes ? (
+        <div>
+          <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '0 0 8px', color: nv.text }}>Photo</p>
+          <p style={{ fontSize: nv.metaSize, color: nv.muted, margin: '0 0 8px' }}>{photoLocationPrompt}</p>
+          <PhotoUploadControl
+            id={`iss-photo-${q.id}`}
+            value={(ext?.photo_urls || []).slice(0, maxPhotos)}
+            onChange={(urls) => onExtras({ photo_urls: urls.slice(0, maxPhotos) })}
+            label="Add photo"
+            multiple={maxPhotos > 1}
+          />
+        </div>
+      ) : null}
 
-      <div>
-        <button
-          type="button"
-          onClick={() => {
-            setGeoError(null)
-            if (!navigator.geolocation) {
-              setGeoError('Location is not available in this browser.')
-              return
-            }
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                onExtras({
-                  geolocation: {
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    accuracy: pos.coords.accuracy,
-                  },
-                  geo_captured_at: new Date().toISOString(),
-                })
-                onAnswer('completed')
-              },
-              (err) => setGeoError(err?.message || 'Could not read location'),
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-            )
-          }}
-          style={{
-            minHeight: btnMinH,
-            padding: `12px ${nv.btnPx}px`,
-            fontSize: nv.baseSize,
-            fontWeight: nv.btnFontWeight,
-            backgroundColor: nv.primaryLight,
-            color: nv.primary,
-            border: `1px solid ${nv.primary}`,
-            borderRadius: nv.btnRadius,
-            cursor: 'pointer',
-            width: '100%',
-          }}
-        >
-          Share approximate location (optional)
-        </button>
-        {ext?.geolocation && (
-          <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>
-            Saved: {ext.geolocation.lat?.toFixed?.(5) ?? ext.geolocation.lat},{' '}
-            {ext.geolocation.lng?.toFixed?.(5) ?? ext.geolocation.lng}
-          </p>
-        )}
-        {geoError && <p style={{ fontSize: nv.metaSize, color: nv.error, marginTop: 6 }}>{geoError}</p>}
-      </div>
+      {anyYes ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              setGeoError(null)
+              if (!navigator.geolocation) {
+                setGeoError('Location is not available in this browser.')
+                return
+              }
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  onExtras({
+                    geolocation: {
+                      lat: pos.coords.latitude,
+                      lng: pos.coords.longitude,
+                      accuracy: pos.coords.accuracy,
+                    },
+                    geo_captured_at: new Date().toISOString(),
+                  })
+                  onAnswer('completed')
+                },
+                (err) => setGeoError(err?.message || 'Could not read location'),
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+              )
+            }}
+            style={{
+              minHeight: btnMinH,
+              padding: `12px ${nv.btnPx}px`,
+              fontSize: nv.baseSize,
+              fontWeight: nv.btnFontWeight,
+              backgroundColor: nv.primaryLight,
+              color: nv.primary,
+              border: `1px solid ${nv.primary}`,
+              borderRadius: nv.btnRadius,
+              cursor: 'pointer',
+              width: '100%',
+            }}
+          >
+            Share approximate location (optional)
+          </button>
+          {ext?.geolocation && (
+            <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>
+              Saved: {ext.geolocation.lat?.toFixed?.(5) ?? ext.geolocation.lat},{' '}
+              {ext.geolocation.lng?.toFixed?.(5) ?? ext.geolocation.lng}
+            </p>
+          )}
+          {geoError && <p style={{ fontSize: nv.metaSize, color: nv.error, marginTop: 6 }}>{geoError}</p>}
+        </div>
+      ) : null}
     </div>
   )
 }
