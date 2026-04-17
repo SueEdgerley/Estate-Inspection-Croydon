@@ -9,6 +9,7 @@ import {
   NV_ESTATE_FEEDBACK_PROMPTS,
   NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
+  isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
@@ -761,6 +762,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
     selectedTemplate.sections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
         if (q.nv_hidden) return
+        if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
         if (!shouldShowQuestion(q, answers)) return
         const qType = getQuestionType(q)
         const v = answers[q.id]
@@ -1194,6 +1196,8 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                   <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
                 )}
                 {(section.questions || []).map((q) => {
+                  if (q.nv_hidden) return null
+                  if (!isNeighbourhoodVoiceQuestionRenderable(q)) return null
                   if (!shouldShowQuestion(q, answers)) return null
                   return (
                     <InspectionQuestion

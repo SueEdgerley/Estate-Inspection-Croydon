@@ -7,7 +7,10 @@ import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspection
 import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '../../../../../lib/blob/uploadPdf'
 import { sendEmails } from '@/lib/email-sender'
-import { applyNeighbourhoodVoiceTemplatePatch } from '@/lib/neighbourhood-voice-template-patch'
+import {
+  applyNeighbourhoodVoiceTemplatePatch,
+  isNeighbourhoodVoiceQuestionRenderable,
+} from '@/lib/neighbourhood-voice-template-patch'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
 import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-submit-actions'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
@@ -188,6 +191,7 @@ export async function POST(request, { params }) {
         const sectionQuestions = []
         for (const question of section.questions || []) {
           if (question.nv_hidden) continue
+          if (!isNeighbourhoodVoiceQuestionRenderable(question)) continue
           const qid = question.id
           const answerVal = answerByQuestionId[qid] ?? ''
           const answerRow = answersResult.rows.find((r) => r.question_id === qid)
@@ -199,7 +203,7 @@ export async function POST(request, { params }) {
 
           sectionQuestions.push({
             id: qid,
-            text: question.question_text || question.label || '',
+            text: question.resident_wording || question.question_text || question.label || '',
             answer: String(answerVal),
             comment: comment || undefined,
             grade: question.grading_scheme_name ? String(answerVal) : undefined,

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
-import { applyNeighbourhoodVoiceTemplatePatch } from '@/lib/neighbourhood-voice-template-patch'
+import { applyNeighbourhoodVoiceTemplatePatch, isNeighbourhoodVoiceQuestionRenderable } from '@/lib/neighbourhood-voice-template-patch'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 
 // NV design system (wizard only): calm, modern, resident-friendly
@@ -90,6 +90,7 @@ function groupNvSectionSaveBatches(sec, answers, extras) {
   const m = new Map()
   for (const q of sec.questions || []) {
     if (q.nv_hidden) continue
+    if (!isNeighbourhoodVoiceQuestionRenderable(q)) continue
     const sid = q._nv_answer_section_id || sec.id
     if (!sid) continue
     if (!m.has(sid)) m.set(sid, { answers: {}, extras: {} })
@@ -200,6 +201,7 @@ export default function InspectionWizardPage() {
           secs.forEach((sec, si) => {
             (sec.questions || []).forEach((q, qi) => {
               if (q.nv_hidden) return
+              if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
               steps.push({ type: 'question', sectionIndex: si, questionIndex: qi, section: sec, question: q })
             })
           })
@@ -274,29 +276,23 @@ export default function InspectionWizardPage() {
     if (!sec?.questions?.length) return
     setSaving(true)
     try {
-      const ans = {}
-      const extrasPayload = {}
-      sec.questions.forEach((q) => {
-        if (q.nv_hidden) return
-        const v = answers[q.id]
-        if (v !== undefined && v !== null) ans[q.id] = v
-        const comment = extras[q.id]?.comment
-        if (comment != null) ans[`${q.id}_comment`] = comment
-        if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
-          extrasPayload[q.id] = extras[q.id]
-        }
-      })
-      const res = await fetch(`/api/inspections/${id}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          section_id: sec.id,
-          answers: ans,
-          ...(Object.keys(extrasPayload).length ? { extras: extrasPayload } : {}),
-        }),
-      })
-      if (!res.ok) setError('Save failed')
+      const batches = groupNvSectionSaveBatches(sec, answers, extras)
+      for (const batch of batches) {
+        const hasAns = Object.keys(batch.answers).length > 0
+        const hasEx = Object.keys(batch.extras).length > 0
+        if (!hasAns && !hasEx) continue
+        const res = await fetch(`/api/inspections/${id}/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            section_id: batch.section_id,
+            answers: batch.answers,
+            ...(hasEx ? { extras: batch.extras } : {}),
+          }),
+        })
+        if (!res.ok) setError('Save failed')
+      }
     } catch {
       setError('Save failed')
     } finally {
@@ -457,6 +453,7 @@ export default function InspectionWizardPage() {
       index: idx,
       questions: (sec.questions || []).filter((q) => {
         if (q.nv_hidden) return false
+        if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
         const v = answers[q.id]
         return v !== undefined && v !== null && String(v).trim() !== ''
       }),
@@ -649,7 +646,9 @@ export default function InspectionWizardPage() {
   const sec = currentSection
   const sectionNum = currentSectionIndex + 1
   const totalSections = sections.length
-  const sectionQuestions = (sec.questions || []).filter((q) => !q.nv_hidden)
+  const sectionQuestions = (sec.questions || []).filter(
+    (q) => !q.nv_hidden && isNeighbourhoodVoiceQuestionRenderable(q)
+  )
 
   return (
     <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '5.5rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
