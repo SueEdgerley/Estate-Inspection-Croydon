@@ -4,7 +4,13 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import SectionQuestions from '../../../../components/questions/SectionQuestions'
-import { validateCaretakerTemplate } from '../../../../../lib/caretaker-template'
+import {
+  validateCaretakerTemplate,
+  findTriggerQuestion,
+  findPhotoCommentQuestion,
+  isCaretakerTriggerActive,
+} from '../../../../../lib/caretaker-template'
+import { isSpecialSection } from '../../../../../lib/template-rules'
 import { validateRequiredQuestions } from '../../../../../lib/airtable'
 import { handleYesAnswer, handleNoAnswer } from '../../../../../lib/yesno-action-handler'
 
@@ -89,6 +95,24 @@ export default function InspectionSection() {
   const isYesNoQuestion = (q) => {
     const t = (q.question_type || '').toString().toLowerCase().replace(/[\s\-/]+/g, '_').replace(/_+$/g, '')
     return t === 'yes_no' || t === 'yesno'
+  }
+
+  async function validateCaretakerTriggerYesPhotos(questions, answers) {
+    const errors = {}
+    if (!id || !section || !isSpecialSection(section)) return errors
+    const trigger = findTriggerQuestion(questions, section)
+    if (!trigger || !isCaretakerTriggerActive(answers, trigger)) return errors
+    if (findPhotoCommentQuestion(questions)) return errors
+    try {
+      const res = await fetch(`/api/photos?inspection_id=${id}&question_id=${trigger.id}`, { credentials: 'include' })
+      const data = res.ok ? await res.json() : []
+      if (!Array.isArray(data) || data.length === 0) {
+        errors[`${trigger.id}_photos`] = 'At least one photo is required when trigger is "Yes"'
+      }
+    } catch {
+      errors[`${trigger.id}_photos`] = 'Could not verify photos for this question'
+    }
+    return errors
   }
 
   const validateNoAnswers = async (questions, answers) => {
@@ -184,8 +208,9 @@ await fetch(`/api/inspections/${id}/answers`, {
     try {
       const requiredErrors = validateRequiredQuestions(questions, answers)
       const caretakerErrors = validateCaretakerTemplate(answers, questions, section)
+      const triggerPhotoErrors = await validateCaretakerTriggerYesPhotos(questions, answers)
       const noAnswerErrors = await validateNoAnswers(questions, answers)
-      const allErrors = { ...requiredErrors, ...caretakerErrors, ...noAnswerErrors }
+      const allErrors = { ...requiredErrors, ...caretakerErrors, ...triggerPhotoErrors, ...noAnswerErrors }
       if (Object.keys(allErrors).length > 0) {
         setErrors(allErrors)
         alert('Please complete all required fields (comments and photos for "No" answers)')
@@ -214,8 +239,9 @@ await fetch(`/api/inspections/${id}/answers`, {
     try {
       const requiredErrors = validateRequiredQuestions(questions, answers)
       const caretakerErrors = validateCaretakerTemplate(answers, questions, section)
+      const triggerPhotoErrors = await validateCaretakerTriggerYesPhotos(questions, answers)
       const noAnswerErrors = await validateNoAnswers(questions, answers)
-      const allErrors = { ...requiredErrors, ...caretakerErrors, ...noAnswerErrors }
+      const allErrors = { ...requiredErrors, ...caretakerErrors, ...triggerPhotoErrors, ...noAnswerErrors }
       if (Object.keys(allErrors).length > 0) {
         setErrors(allErrors)
         alert('Please complete all required fields before continuing')

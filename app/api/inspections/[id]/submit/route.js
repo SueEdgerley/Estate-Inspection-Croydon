@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspectionReportPdf'
@@ -21,6 +23,11 @@ export const dynamic = 'force-dynamic'
 // POST - Submit inspection (generate PDF and send emails)
 export async function POST(request, { params }) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -30,6 +37,8 @@ export async function POST(request, { params }) {
       )
     }
     const { id } = await params
+    const inspectorEmail = await getCurrentUserEmail()
+    const inspectorName = await getCurrentUserName()
 
     // Get inspection
     const inspectionResult = await sql`
@@ -131,7 +140,9 @@ export async function POST(request, { params }) {
       SET status = 'submitted',
           submitted_at = CURRENT_TIMESTAMP,
           pdf_generation_error = NULL,
-          grading = COALESCE(${gradingValue}, grading)
+          grading = COALESCE(${gradingValue}, grading),
+          inspector_id = COALESCE(NULLIF(TRIM(inspector_id), ''), ${inspectorEmail}),
+          inspector_name = COALESCE(NULLIF(TRIM(inspector_name), ''), ${inspectorName})
       WHERE id = ${id}
     `
 

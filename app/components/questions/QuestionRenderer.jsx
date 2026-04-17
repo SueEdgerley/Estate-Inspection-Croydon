@@ -7,7 +7,17 @@ import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import YesNoQuestion from './YesNoQuestion'
 
-export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
+export default function QuestionRenderer({
+  question,
+  sectionName,
+  inspectionId,
+  value,
+  onChange,
+  errors = {},
+  section = null,
+  sectionQuestions = [],
+  allAnswers = {},
+}) {
   const [localValue, setLocalValue] = useState(value ?? '')
   const [recipientOptions, setRecipientOptions] = useState([])
   const [costCodeOptions, setCostCodeOptions] = useState([])
@@ -16,9 +26,15 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
     setLocalValue(value ?? '')
   }, [value])
 
-  const handleChange = (newValue) => {
-    setLocalValue(newValue)
-    onChange(question.id, newValue)
+  /** Single-arg: main answer for this question. Two-arg: any key (e.g. _comment, sibling recipient id). */
+  const handleChange = (first, second) => {
+    if (second !== undefined) {
+      onChange(first, second)
+      if (first === question.id) setLocalValue(second)
+      return
+    }
+    setLocalValue(first)
+    onChange(question.id, first)
   }
 
   const handlePhotoUpload = async (e) => {
@@ -128,6 +144,9 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
             value={localValue}
             onChange={handleChange}
             errors={errors}
+            section={section}
+            sectionQuestions={sectionQuestions}
+            allAnswers={allAnswers}
           />
         )
 

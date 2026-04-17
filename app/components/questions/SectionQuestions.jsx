@@ -45,6 +45,9 @@ export default function SectionQuestions({ sectionId, inspectionId, section, sec
           value={localAnswers[question.id]}
           onChange={handleAnswerChange}
           errors={errors}
+          section={section}
+          sectionQuestions={questions}
+          allAnswers={localAnswers}
         />
       ))}
       

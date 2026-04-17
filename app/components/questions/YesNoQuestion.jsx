@@ -1,21 +1,83 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { shouldCreateActionOnNo, requiresPhotoOnNo, requiresCommentOnNo } from '../../../lib/yesno-action-handler'
+import { useState, useEffect, useMemo } from 'react'
+import { shouldCreateActionOnNo } from '../../../lib/yesno-action-handler'
 import { uploadPhoto } from '@/lib/blob-storage'
+import {
+  normalizeWhenToken,
+  computeCaretakerRequiresComment,
+  computeCaretakerRequiresPhoto,
+} from '@/lib/caretaker-yesno-display'
+import { isSpecialSection, isTriggerQuestion } from '@/lib/template-rules'
+import { findRecipientQuestion } from '@/lib/caretaker-template'
 
-export default function YesNoQuestion({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
+export default function YesNoQuestion({
+  question,
+  sectionName,
+  inspectionId,
+  value,
+  onChange,
+  errors = {},
+  section = null,
+  sectionQuestions = [],
+  allAnswers = {},
+}) {
   const [answer, setAnswer] = useState(value)
   const [comment, setComment] = useState('')
   const [photos, setPhotos] = useState([])
   const [photoFiles, setPhotoFiles] = useState([])
   const [priority, setPriority] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [actionCreated, setActionCreated] = useState(false)
+  const [recipientOptions, setRecipientOptions] = useState([])
 
   useEffect(() => {
     setAnswer(value)
   }, [value])
+
+  useEffect(() => {
+    const c = allAnswers?.[`${question.id}_comment`]
+    if (c !== undefined && c !== null && c !== '') setComment(String(c))
+  }, [question.id, allAnswers])
+
+  const recipientQ = useMemo(() => {
+    if (!sectionQuestions?.length) return null
+    return findRecipientQuestion(sectionQuestions)
+  }, [sectionQuestions])
+
+  const isThisQuestionTrigger =
+    section && isSpecialSection(section) && isTriggerQuestion(question, section)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isThisQuestionTrigger || !recipientQ) {
+      setRecipientOptions([])
+      return () => {
+        cancelled = true
+      }
+    }
+    async function load() {
+      try {
+        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
+        if (!res.ok) return
+        const rows = await res.json()
+        if (cancelled || !Array.isArray(rows)) return
+        setRecipientOptions(
+          rows
+            .map((p) => ({
+              value: p.id != null ? String(p.id) : '',
+              label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
+            }))
+            .filter((x) => x.value && x.label)
+        )
+      } catch {
+        /* keep empty */
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [isThisQuestionTrigger, recipientQ])
 
   const handleAnswerChange = async (newAnswer) => {
     const wasNo = answer === false || answer === 'no' || answer === 'No'
@@ -30,22 +92,20 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
       setComment('')
       setPhotos([])
       setPhotoFiles([])
-      setActionCreated(false)
       setPriority('')
       onChange(`${question.id}_comment`, '')
       onChange(`${question.id}_priority`, '')
+      if (recipientQ) onChange(recipientQ.id, '')
     }
 
-    // No → Yes: clear issue-style details (legacy on_no flow)
     if (wasNo && willYes) clearDetails()
-    // Yes → No: clear yes-branch details (on_yes / photo-on-yes)
     if (wasYes && willNo) clearDetails()
   }
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files)
-    setPhotoFiles(prev => [...prev, ...files])
-    
+    setPhotoFiles((prev) => [...prev, ...files])
+
     setUploading(true)
     try {
       const uploadedPhotos = []
@@ -53,7 +113,7 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
         const photoUrl = await uploadPhoto(file, inspectionId, question.id)
         uploadedPhotos.push(photoUrl)
       }
-      setPhotos(prev => [...prev, ...uploadedPhotos])
+      setPhotos((prev) => [...prev, ...uploadedPhotos])
     } catch (error) {
       console.error('Error uploading photos:', error)
       alert('Failed to upload photos')
@@ -63,83 +123,89 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
   }
 
   const removePhoto = (index) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index))
-    setPhotoFiles(prev => prev.filter((_, i) => i !== index))
+    setPhotos((prev) => prev.filter((_, i) => i !== index))
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
   }
-
-  const hasExplicitPhotoRule =
-    question.photo_required_when === 'always' ||
-    question.photo_required_when === 'on_no' ||
-    question.photo_required_when === 'on_yes' ||
-    question.require_photo_on_no !== undefined ||
-    question.type_includes_photo === true
-  const hasExplicitCommentRule =
-    question.comment_required_when === 'always' ||
-    question.comment_required_when === 'on_no' ||
-    question.comment_required_when === 'on_yes' ||
-    question.require_comment_on_no !== undefined
 
   const isNo = answer === false || answer === 'no' || answer === 'No'
   const isYes = answer === true || answer === 'yes' || answer === 'Yes'
-  const pw = question.photo_required_when
-  const cw = question.comment_required_when
-
-  const requiresPhoto =
-    pw === 'always' ||
-    (pw === 'on_no' && isNo) ||
-    (pw === 'on_yes' && isYes) ||
-    (!pw && hasExplicitPhotoRule && requiresPhotoOnNo(question))
-  const requiresComment =
-    cw === 'always' ||
-    (cw === 'on_no' && isNo) ||
-    (cw === 'on_yes' && isYes) ||
-    (!cw && hasExplicitCommentRule && requiresCommentOnNo(question))
+  const nCw = normalizeWhenToken(question.comment_required_when)
+  const nPw = normalizeWhenToken(question.photo_required_when)
   const shouldCreateAction = shouldCreateActionOnNo(question)
+
+  const isTriggerYesDetail = isThisQuestionTrigger && isYes
+
+  const requiresComment = isTriggerYesDetail
+    ? true
+    : computeCaretakerRequiresComment({
+        isNo,
+        isYes,
+        shouldCreateAction,
+        nCw,
+        question,
+        answer,
+      })
+
+  const requiresPhoto = isTriggerYesDetail
+    ? true
+    : computeCaretakerRequiresPhoto({
+        isNo,
+        isYes,
+        shouldCreateAction,
+        nPw,
+        question,
+        answer,
+      })
 
   const needsDetailSection =
     answer != null &&
     ((isNo && shouldCreateAction) ||
-      (isYes && (pw === 'on_yes' || cw === 'on_yes')) ||
-      pw === 'always' ||
-      cw === 'always')
+      (isYes && (nPw === 'on_yes' || nCw === 'on_yes')) ||
+      nPw === 'always' ||
+      nCw === 'always' ||
+      isTriggerYesDetail)
+
+  const recipientValue = recipientQ ? allAnswers[recipientQ.id] ?? '' : ''
 
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      <label style={{
-        display: 'block',
-        marginBottom: '0.5rem',
-        fontWeight: '500',
-        color: '#111827'
-      }}>
+      <label
+        style={{
+          display: 'block',
+          marginBottom: '0.5rem',
+          fontWeight: '500',
+          color: '#111827',
+        }}
+      >
         {question.label || question.id}
-        {question.is_required && (
-          <span style={{ color: '#ef4444', marginLeft: '0.25rem' }}>*</span>
-        )}
+        {question.is_required && <span style={{ color: '#ef4444', marginLeft: '0.25rem' }}>*</span>}
       </label>
-      
+
       {question.description && (
-        <p style={{
-          fontSize: '0.875rem',
-          color: '#6b7280',
-          marginBottom: '0.75rem'
-        }}>
+        <p
+          style={{
+            fontSize: '0.875rem',
+            color: '#6b7280',
+            marginBottom: '0.75rem',
+          }}
+        >
           {question.description}
         </p>
       )}
-      
-      {/* Yes/No Buttons */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <button
           type="button"
           onClick={() => handleAnswerChange(true)}
           style={{
             padding: '0.75rem 1.5rem',
+            minHeight: 44,
             backgroundColor: answer === true ? '#10b981' : 'white',
             color: answer === true ? 'white' : '#374151',
             border: '1px solid #d1d5db',
             borderRadius: '0.375rem',
             cursor: 'pointer',
-            fontWeight: answer === true ? '600' : '500'
+            fontWeight: answer === true ? '600' : '500',
           }}
         >
           Yes
@@ -149,47 +215,55 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
           onClick={() => handleAnswerChange(false)}
           style={{
             padding: '0.75rem 1.5rem',
+            minHeight: 44,
             backgroundColor: answer === false ? '#ef4444' : 'white',
             color: answer === false ? 'white' : '#374151',
             border: '1px solid #d1d5db',
             borderRadius: '0.375rem',
             cursor: 'pointer',
-            fontWeight: answer === false ? '600' : '500'
+            fontWeight: answer === false ? '600' : '500',
           }}
         >
           No
         </button>
       </div>
 
-      {/* Follow-up: action on No, or comment/photo on Yes / always (e.g. Neighbourhood Voice) */}
       {needsDetailSection && (
-        <div style={{
-          padding: '1rem',
-          backgroundColor: isNo && shouldCreateAction ? '#fef3c7' : '#eff6ff',
-          border: `1px solid ${isNo && shouldCreateAction ? '#f59e0b' : '#93c5fd'}`,
-          borderRadius: '0.375rem',
-          marginTop: '1rem'
-        }}>
+        <div
+          style={{
+            padding: '1rem',
+            backgroundColor: isNo && shouldCreateAction ? '#fef3c7' : '#eff6ff',
+            border: `1px solid ${isNo && shouldCreateAction ? '#f59e0b' : '#93c5fd'}`,
+            borderRadius: '0.375rem',
+            marginTop: '1rem',
+          }}
+        >
           {isNo && shouldCreateAction && (
             <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#92400e' }}>
               Action will be created automatically
             </p>
           )}
-          {isYes && (pw === 'on_yes' || cw === 'on_yes') && (
+          {isTriggerYesDetail && (
+            <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
+              Add a comment, at least one photo, and choose who this should be sent to.
+            </p>
+          )}
+          {!isTriggerYesDetail && isYes && (nPw === 'on_yes' || nCw === 'on_yes') && (
             <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
               Please add the details or photo requested for your Yes answer.
             </p>
           )}
 
-          {/* Comment (required) */}
           {requiresComment && (
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                fontSize: '0.875rem'
-              }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  fontSize: '0.875rem',
+                }}
+              >
                 Comment <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <textarea
@@ -197,7 +271,6 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                 onChange={(e) => {
                   const newComment = e.target.value
                   setComment(newComment)
-                  // Store comment in answers with _comment suffix
                   onChange(`${question.id}_comment`, newComment)
                 }}
                 placeholder="Please provide details about this issue..."
@@ -210,7 +283,7 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                   fontSize: '0.875rem',
                   fontFamily: 'inherit',
                   minHeight: '80px',
-                  resize: 'vertical'
+                  resize: 'vertical',
                 }}
               />
               {errors[`${question.id}_comment`] && (
@@ -221,15 +294,16 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
             </div>
           )}
 
-          {/* Photo Upload (required) */}
           {requiresPhoto && (
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                fontSize: '0.875rem'
-              }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  fontSize: '0.875rem',
+                }}
+              >
                 Photo(s) <span style={{ color: '#ef4444' }}>*</span>
                 {photos.length > 0 && (
                   <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontWeight: 'normal' }}>
@@ -244,26 +318,25 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                 onChange={handlePhotoUpload}
                 disabled={uploading}
                 style={{
-                  marginBottom: '0.5rem'
+                  marginBottom: '0.5rem',
                 }}
               />
-              {uploading && (
-                <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Uploading...</p>
-              )}
+              {uploading && <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>Uploading…</p>}
               {errors[`${question.id}_photos`] && (
                 <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#ef4444' }}>
                   {errors[`${question.id}_photos`]}
                 </p>
               )}
-              
-              {/* Photo Preview */}
+
               {photos.length > 0 && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                  gap: '0.5rem',
-                  marginTop: '0.5rem'
-                }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                    gap: '0.5rem',
+                    marginTop: '0.5rem',
+                  }}
+                >
                   {photos.map((photoUrl, idx) => (
                     <div key={idx} style={{ position: 'relative' }}>
                       <img
@@ -274,7 +347,7 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                           height: '150px',
                           objectFit: 'cover',
                           borderRadius: '0.375rem',
-                          border: '1px solid #e5e7eb'
+                          border: '1px solid #e5e7eb',
                         }}
                       />
                       <button
@@ -291,7 +364,7 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                           width: '24px',
                           height: '24px',
                           cursor: 'pointer',
-                          fontSize: '0.75rem'
+                          fontSize: '0.75rem',
                         }}
                       >
                         ×
@@ -303,15 +376,55 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
             </div>
           )}
 
-          {/* Priority / category only when automatic action-on-No applies */}
+          {isTriggerYesDetail && recipientQ && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label
+                htmlFor={`recipient-${recipientQ.id}`}
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  fontSize: '0.875rem',
+                }}
+              >
+                Who does this need to be sent to? <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                id={`recipient-${recipientQ.id}`}
+                value={recipientValue}
+                onChange={(e) => onChange(recipientQ.id, e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: errors[recipientQ.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '1rem',
+                  backgroundColor: 'white',
+                }}
+              >
+                <option value="">Select a recipient…</option>
+                {recipientOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {errors[recipientQ.id] && (
+                <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#ef4444' }}>{errors[recipientQ.id]}</p>
+              )}
+            </div>
+          )}
+
           {isNo && shouldCreateAction && question.action_priority && (
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '0.5rem',
-                fontWeight: '500',
-                fontSize: '0.875rem'
-              }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  fontWeight: '500',
+                  fontSize: '0.875rem',
+                }}
+              >
                 Priority
               </label>
               <select
@@ -326,7 +439,7 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
                   padding: '0.5rem',
                   border: '1px solid #d1d5db',
                   borderRadius: '0.375rem',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
                 }}
               >
                 <option value="">Select priority...</option>
@@ -338,12 +451,14 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
           )}
 
           {isNo && shouldCreateAction && question.action_category && (
-            <p style={{
-              fontSize: '0.875rem',
-              color: '#6b7280',
-              marginTop: '0.5rem',
-              fontStyle: 'italic'
-            }}>
+            <p
+              style={{
+                fontSize: '0.875rem',
+                color: '#6b7280',
+                marginTop: '0.5rem',
+                fontStyle: 'italic',
+              }}
+            >
               Action category: {question.action_category}
             </p>
           )}
@@ -351,11 +466,13 @@ export default function YesNoQuestion({ question, sectionName, inspectionId, val
       )}
 
       {errors[question.id] && (
-        <p style={{
-          marginTop: '0.5rem',
-          fontSize: '0.875rem',
-          color: '#ef4444'
-        }}>
+        <p
+          style={{
+            marginTop: '0.5rem',
+            fontSize: '0.875rem',
+            color: '#ef4444',
+          }}
+        >
           {errors[question.id]}
         </p>
       )}
