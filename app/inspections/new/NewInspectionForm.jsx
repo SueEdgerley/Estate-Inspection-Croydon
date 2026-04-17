@@ -5,7 +5,33 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
-import { NV_Q24_INSTRUCTION_ROWS, NV_Q24_GEO_HELPER } from '@/lib/neighbourhood-voice-template-patch'
+import {
+  NV_ESTATE_FEEDBACK_PROMPTS,
+  NV_Q24_GEO_HELPER,
+  applyNeighbourhoodVoicePatchesToList,
+} from '@/lib/neighbourhood-voice-template-patch'
+import InspectionQuestion from '@/app/components/wizard/InspectionQuestion'
+import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
+import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
+
+/** Minimal design tokens for NV reusable blocks outside the wizard page. */
+const NV_INLINE = {
+  helperSize: '0.875rem',
+  helperColor: '#6b7280',
+  primary: '#1E3A8A',
+  cardBg: '#fff',
+  text: '#111827',
+  btnUnselectedBorder: '1px solid #d1d5db',
+  btnRadius: 8,
+  btnFontWeight: 600,
+  btnMinHeight: 48,
+  yesColor: '#16A34A',
+  noColor: '#DC2626',
+  naColor: '#6B7280',
+  primaryLight: '#EFF6FF',
+  muted: '#6B7280',
+  error: '#DC2626',
+}
 
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
@@ -360,10 +386,72 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     )
   }
 
+  if (qType === 'nv_standard') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        <InspectionQuestion
+          q={question}
+          nv={NV_INLINE}
+          gradeValue={value}
+          ext={extras}
+          btnMinH={NV_INLINE.btnMinHeight}
+          maxPhotos={1}
+          onSelectGrade={(label) => onChange(question.id, label)}
+          onComment={(text) => setExtras({ comment: text })}
+          onPhotos={(urls) => setExtras({ photo_urls: urls })}
+        />
+        {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+        {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'nv_estate_feedback') {
+    const prompts =
+      Array.isArray(question.nv_estate_feedback_prompts) && question.nv_estate_feedback_prompts.length
+        ? question.nv_estate_feedback_prompts
+        : NV_ESTATE_FEEDBACK_PROMPTS
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <TextFeedbackSection
+          q={question}
+          nv={NV_INLINE}
+          ext={extras}
+          prompts={prompts}
+          maxPhotos={3}
+          onExtras={(updates) => setExtras({ ...extras, ...updates })}
+        />
+      </div>
+    )
+  }
+
+  if (qType === 'nv_issues_report') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {question.question_text}
+        </label>
+        <IssuesReportSection
+          q={question}
+          nv={NV_INLINE}
+          ext={extras}
+          btnMinH={NV_INLINE.btnMinHeight}
+          maxPhotos={3}
+          onAnswer={(val) => onChange(question.id, val)}
+          onExtras={(updates) => setExtras({ ...extras, ...updates })}
+        />
+      </div>
+    )
+  }
+
   if (qType === 'nv_q24') {
     const rows = Array.isArray(question.nv_q24_instruction_rows) && question.nv_q24_instruction_rows.length
       ? question.nv_q24_instruction_rows
-      : NV_Q24_INSTRUCTION_ROWS
+      : NV_ESTATE_FEEDBACK_PROMPTS
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
@@ -444,6 +532,30 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           />
           <span>I confirm this feedback is accurate to the best of my knowledge.</span>
         </label>
+        <label htmlFor={`nv25-sig-comment-${question.id}`} style={{ display: 'block', marginTop: 12, marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+          Comment
+        </label>
+        <textarea
+          id={`nv25-sig-comment-${question.id}`}
+          value={extras.signoff_comment || ''}
+          onChange={(e) => setExtras({ signoff_comment: e.target.value })}
+          rows={2}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+          }}
+        />
+        <p style={{ fontSize: '0.875rem', fontWeight: 600, marginTop: 12, marginBottom: 8, color: '#374151' }}>Photo</p>
+        <PhotoUploadControl
+          id={`nv25-sig-photo-${question.id}`}
+          value={extras.signoff_photo_urls || []}
+          onChange={(urls) => setExtras({ signoff_photo_urls: urls })}
+          label="Add photo"
+        />
       </div>
     )
   }
@@ -593,6 +705,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         }
 
         const templatesData = await templatesRes.json()
+        applyNeighbourhoodVoicePatchesToList(templatesData.templates || [])
 
         if (!cancelled) {
           setApiPayload(templatesData)
@@ -648,6 +761,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
 
     selectedTemplate.sections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
+        if (q.nv_hidden) return
         if (!shouldShowQuestion(q, answers)) return
         const qType = getQuestionType(q)
         const v = answers[q.id]
@@ -681,11 +795,12 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           return
         }
 
-        if (qType === 'graded') {
+        if (qType === 'graded' || qType === 'nv_standard') {
           const extras = answerExtras[q.id] || {}
-          const needPhoto = !!q.nv_graded_require_comment_photo
-          const needComment = needPhoto || !!q.nv_graded_require_comment_only
-          if (!needComment) {
+          const isStd = qType === 'nv_standard'
+          const needPhoto = isStd || !!q.nv_graded_require_comment_photo
+          const needComment = isStd || needPhoto || !!q.nv_graded_require_comment_only
+          if (!needComment && !isStd) {
             if (q.is_required && (v === undefined || v === null || (typeof v === 'string' && !v.trim()))) {
               errs[q.id] = 'Required'
             }
@@ -697,13 +812,13 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             return
           }
           if (grade) {
-            if (!(extras.comment || '').trim()) {
+            if (needComment && !(extras.comment || '').trim()) {
               errs[`${q.id}_comment`] = 'Comment is required'
             }
             if (needPhoto) {
               const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
               if (photoUrls.length === 0) {
-                errs[`${q.id}_photos`] = 'At least one photo is required'
+                errs[`${q.id}_photos`] = 'A photo is required'
               }
             }
           }

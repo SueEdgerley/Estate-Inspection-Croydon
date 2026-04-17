@@ -121,6 +121,7 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
           />
         )
 
+      case 'nv_standard':
       case QUESTION_TYPES.GRADED:
       case 'graded': {
         const opts =
@@ -284,6 +285,14 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
               fontFamily: 'inherit',
             }}
           />
+        )
+
+      case 'nv_estate_feedback':
+      case 'nv_issues_report':
+        return (
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>
+            This step is designed for the Neighbourhood Voice wizard. Open the inspection wizard to complete it.
+          </p>
         )
 
       case 'nv_q24':

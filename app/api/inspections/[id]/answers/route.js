@@ -3,6 +3,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { findQuestionInTemplate } from '@/lib/template-question-lookup'
 import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
+import { mergeNvNotes } from '@/lib/nv-notes-pack'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -65,8 +66,9 @@ export async function POST(request, { params }) {
     }
     const { id } = await params
     const data = await request.json()
-    const { section_id, answers: answersRaw } = data
+    const { section_id, answers: answersRaw, extras: extrasRaw } = data
     const answers = answersRaw && typeof answersRaw === 'object' ? answersRaw : {}
+    const extras = extrasRaw && typeof extrasRaw === 'object' ? extrasRaw : {}
 
     const inspRow = await sql`
       SELECT template_version FROM inspections WHERE id = ${id} LIMIT 1
@@ -161,6 +163,39 @@ export async function POST(request, { params }) {
       `
       
       savedAnswers.push({ question_id: questionId, answer: answerValue })
+    }
+
+    for (const [questionId, patch] of Object.entries(extras)) {
+      if (!patch || typeof patch !== 'object') continue
+      const prevRes = await sql`
+        SELECT id, notes, answer_value, answer_text, question_type, section_id
+        FROM inspection_answers
+        WHERE inspection_id = ${id} AND question_id = ${questionId}
+        LIMIT 1
+      `
+      const prev = prevRes.rows[0]
+      const mergedNotes = mergeNvNotes(prev?.notes, patch)
+      if (prev) {
+        await sql`
+          UPDATE inspection_answers
+          SET notes = ${mergedNotes}, updated_at = CURRENT_TIMESTAMP
+          WHERE inspection_id = ${id} AND question_id = ${questionId}
+        `
+      } else {
+        const qdef = findQuestionInTemplate(templateVersion, questionId)
+        const qt = qdef ? resolveStoredQuestionType(qdef) : 'text'
+        const insId = `answer_${id}_${section_id}_${questionId}_${Date.now()}`
+        await sql`
+          INSERT INTO inspection_answers (
+            id, inspection_id, section_id, question_id, question_type,
+            answer_value, answer_text, answer_number, answer_boolean, notes
+          ) VALUES (
+            ${insId}, ${id}, ${section_id}, ${questionId}, ${qt},
+            null, ${'completed'}, null, null, ${mergedNotes}
+          )
+        `
+      }
+      savedAnswers.push({ question_id: `${questionId}_extras`, answer: 'saved' })
     }
 
     return NextResponse.json({ 

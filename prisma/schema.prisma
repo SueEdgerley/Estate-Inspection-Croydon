@@ -201,6 +201,22 @@ model Person {
   @@map("people")
 }
 
+/// Routes NV (and other) issue categories to people.role or a specific person.
+model IssueRoutingRule {
+  id                 String   @id @db.VarChar(255)
+  issueCategory      String   @map("issue_category") @db.VarChar(100)
+  issueType          String?  @map("issue_type") @db.VarChar(100)
+  estateId           String?  @map("estate_id") @db.VarChar(255)
+  assignToRole       String?  @map("assign_to_role") @db.VarChar(100)
+  assignToPersonId   String?  @map("assign_to_person_id") @db.VarChar(255)
+  emailRequired      Boolean  @default(true) @map("email_required")
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([issueCategory, active])
+  @@map("issue_routing_rules")
+}
+
 model InspectionPhoto {
   id            String   @id @db.VarChar(255)
   inspectionId  String   @map("inspection_id") @db.VarChar(255)

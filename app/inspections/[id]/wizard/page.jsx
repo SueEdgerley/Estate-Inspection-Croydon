@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
+import { applyNeighbourhoodVoiceTemplatePatch } from '../../../lib/neighbourhood-voice-template-patch'
+import { unpackNvWizardNotes } from '../../../lib/nv-notes-pack'
 
 // NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3
@@ -68,6 +70,18 @@ function normalizeVal(v) {
   if (s === 'no') return 'No'
   if (s === 'na') return 'NA'
   return ''
+}
+
+function findQuestionInSections(sectionsList, questionId) {
+  for (const sec of sectionsList || []) {
+    const q = (sec.questions || []).find((x) => x.id === questionId)
+    if (q) return q
+  }
+  return null
+}
+
+function questionUsesNvPackedNotes(q) {
+  return q && ['nv_standard', 'nv_estate_feedback', 'nv_issues_report', 'nv_q25'].includes(q.nv_render_kind)
 }
 
 function getSectionIcon(title) {
@@ -158,11 +172,13 @@ export default function InspectionWizardPage() {
           }
         }
         if (version && typeof version === 'object') {
+          applyNeighbourhoodVoiceTemplatePatch(version)
           const secs = version.sections || []
           if (!cancelled) setTemplate(version)
           const steps = []
           secs.forEach((sec, si) => {
             (sec.questions || []).forEach((q, qi) => {
+              if (q.nv_hidden) return
               steps.push({ type: 'question', sectionIndex: si, questionIndex: qi, section: sec, question: q })
             })
           })
@@ -179,7 +195,11 @@ export default function InspectionWizardPage() {
           ansList.forEach((row) => {
             const qId = row.question_id
             a[qId] = row.answer_value ?? row.answer_text ?? (row.answer_boolean == null ? null : row.answer_boolean ? 'Yes' : 'No')
-            if (row.notes) e[qId] = { ...(e[qId] || {}), comment: row.notes }
+            const { structured, plainComment } = unpackNvWizardNotes(row.notes)
+            const merged = { ...(structured && typeof structured === 'object' ? structured : {}) }
+            if (plainComment && (merged.comment === undefined || merged.comment === '')) merged.comment = plainComment
+            const hasExtra = Object.keys(merged).some((k) => merged[k] !== '' && merged[k] != null)
+            if (hasExtra) e[qId] = { ...(e[qId] || {}), ...merged }
           })
           if (!cancelled) {
             setAnswers((prev) => ({ ...prev, ...a }))
@@ -196,12 +216,22 @@ export default function InspectionWizardPage() {
     return () => { cancelled = true }
   }, [id])
 
-  const saveAnswer = useCallback(async (sectionId, questionId, value, comment) => {
+  const saveAnswer = useCallback(async (sectionId, questionId, value, comment, extrasSnapshot) => {
     if (!id || !sectionId) return
     setSaving(true)
     try {
+      const q = findQuestionInSections(sections, questionId)
       const payload = { section_id: sectionId, answers: { [questionId]: value } }
       if (comment != null) payload.answers[`${questionId}_comment`] = comment
+      if (
+        q &&
+        questionUsesNvPackedNotes(q) &&
+        extrasSnapshot &&
+        typeof extrasSnapshot === 'object' &&
+        Object.keys(extrasSnapshot).length > 0
+      ) {
+        payload.extras = { [questionId]: extrasSnapshot }
+      }
       const res = await fetch(`/api/inspections/${id}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -214,7 +244,7 @@ export default function InspectionWizardPage() {
     } finally {
       setSaving(false)
     }
-  }, [id])
+  }, [id, sections])
 
   const saveCurrentSection = useCallback(async () => {
     if (step < 1 || step > sections.length || !id) return
@@ -223,17 +253,26 @@ export default function InspectionWizardPage() {
     setSaving(true)
     try {
       const ans = {}
+      const extrasPayload = {}
       sec.questions.forEach((q) => {
+        if (q.nv_hidden) return
         const v = answers[q.id]
         if (v !== undefined && v !== null) ans[q.id] = v
         const comment = extras[q.id]?.comment
         if (comment != null) ans[`${q.id}_comment`] = comment
+        if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
+          extrasPayload[q.id] = extras[q.id]
+        }
       })
       const res = await fetch(`/api/inspections/${id}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ section_id: sec.id, answers: ans }),
+        body: JSON.stringify({
+          section_id: sec.id,
+          answers: ans,
+          ...(Object.keys(extrasPayload).length ? { extras: extrasPayload } : {}),
+        }),
       })
       if (!res.ok) setError('Save failed')
     } catch {
@@ -248,17 +287,26 @@ export default function InspectionWizardPage() {
     setSaving(true)
     try {
       const ans = {}
+      const extrasPayload = {}
       sec.questions.forEach((q) => {
+        if (q.nv_hidden) return
         const v = answers[q.id]
         if (v !== undefined && v !== null) ans[q.id] = v
         const comment = extras[q.id]?.comment
         if (comment != null) ans[`${q.id}_comment`] = comment
+        if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
+          extrasPayload[q.id] = extras[q.id]
+        }
       })
       const res = await fetch(`/api/inspections/${id}/answers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ section_id: sec.id, answers: ans }),
+        body: JSON.stringify({
+          section_id: sec.id,
+          answers: ans,
+          ...(Object.keys(extrasPayload).length ? { extras: extrasPayload } : {}),
+        }),
       })
       if (!res.ok) setError('Save failed')
     } catch {
@@ -288,8 +336,9 @@ export default function InspectionWizardPage() {
   const handleAnswer = (questionId, value, sectionId, comment) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
     const ext = extras[questionId] || {}
+    const merged = comment !== undefined ? { ...ext, comment } : ext
     if (comment !== undefined) setExtras((prev) => ({ ...prev, [questionId]: { ...ext, comment } }))
-    saveAnswer(sectionId, questionId, value, comment !== undefined ? comment : ext.comment)
+    saveAnswer(sectionId, questionId, value, comment !== undefined ? comment : ext.comment, merged)
   }
 
   const handleExtras = (questionId, sectionId, updates) => {
@@ -298,8 +347,8 @@ export default function InspectionWizardPage() {
       if (updates.photo_urls && Array.isArray(updates.photo_urls) && updates.photo_urls.length > MAX_PHOTOS_PER_QUESTION) {
         next[questionId].photo_urls = updates.photo_urls.slice(0, MAX_PHOTOS_PER_QUESTION)
       }
-      const comment = updates.comment !== undefined ? updates.comment : next[questionId]?.comment
-      saveAnswer(sectionId, questionId, answers[questionId], comment)
+      const merged = next[questionId] || {}
+      saveAnswer(sectionId, questionId, answers[questionId], merged.comment, merged)
       return next
     })
   }
@@ -391,6 +440,7 @@ export default function InspectionWizardPage() {
       section: sec,
       index: idx,
       questions: (sec.questions || []).filter((q) => {
+        if (q.nv_hidden) return false
         const v = answers[q.id]
         return v !== undefined && v !== null && String(v).trim() !== ''
       }),
@@ -583,7 +633,7 @@ export default function InspectionWizardPage() {
   const sec = currentSection
   const sectionNum = currentSectionIndex + 1
   const totalSections = sections.length
-  const sectionQuestions = sec.questions || []
+  const sectionQuestions = (sec.questions || []).filter((q) => !q.nv_hidden)
 
   return (
     <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '5.5rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>

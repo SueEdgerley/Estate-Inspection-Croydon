@@ -1,9 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
-import { NV_Q24_INSTRUCTION_ROWS, NV_Q24_GEO_HELPER } from '../../../lib/neighbourhood-voice-template-patch'
+import { NV_ESTATE_FEEDBACK_PROMPTS, NV_Q24_GEO_HELPER } from '../../../lib/neighbourhood-voice-template-patch'
+import InspectionQuestion from './InspectionQuestion'
+import TextFeedbackSection from './TextFeedbackSection'
+import IssuesReportSection from './IssuesReportSection'
+import SignOffSection from './SignOffSection'
 
 const YN_OPTIONS = ['Yes', 'No', 'NA']
 
@@ -58,7 +62,6 @@ export default function WizardQuestionFields({
   const ext = extras[q.id] || {}
 
   const btnMinH = isMobile ? nv.btnMinHeightMobile : nv.btnMinHeight
-  const [geoError, setGeoError] = useState(null)
 
   useEffect(() => {
     if (kind !== 'nv_q25' || !prefillResidentName?.trim()) return
@@ -67,165 +70,98 @@ export default function WizardQuestionFields({
     handleExtras(q.id, sec.id, { resident_display_name: prefillResidentName.trim() })
   }, [kind, q.id, sec.id, prefillResidentName, extras, handleExtras])
 
-  // --- Q24: five instruction rows (Airtable 188–192) + optional geo ---
+  if (kind === 'nv_standard') {
+    return (
+      <InspectionQuestion
+        q={q}
+        nv={nv}
+        gradeValue={rawVal}
+        ext={ext}
+        btnMinH={btnMinH}
+        maxPhotos={1}
+        commentFocusRef={commentFocusRef}
+        onSelectGrade={(label) => handleAnswer(q.id, label, sec.id)}
+        onComment={(text) => handleExtras(q.id, sec.id, { comment: text })}
+        onPhotos={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls })}
+      />
+    )
+  }
+
+  if (kind === 'nv_estate_feedback') {
+    const prompts = Array.isArray(q.nv_estate_feedback_prompts) && q.nv_estate_feedback_prompts.length
+      ? q.nv_estate_feedback_prompts
+      : NV_ESTATE_FEEDBACK_PROMPTS
+    return (
+      <TextFeedbackSection
+        q={q}
+        nv={nv}
+        ext={ext}
+        prompts={prompts}
+        maxPhotos={maxPhotos}
+        onExtras={(updates) => {
+          handleExtras(q.id, sec.id, updates)
+          handleAnswer(q.id, 'completed', sec.id)
+        }}
+      />
+    )
+  }
+
+  if (kind === 'nv_issues_report') {
+    return (
+      <IssuesReportSection
+        q={q}
+        nv={nv}
+        ext={ext}
+        btnMinH={btnMinH}
+        maxPhotos={maxPhotos}
+        onAnswer={(val) => handleAnswer(q.id, val, sec.id)}
+        onExtras={(updates) => {
+          handleExtras(q.id, sec.id, updates)
+          handleAnswer(q.id, 'completed', sec.id)
+        }}
+      />
+    )
+  }
+
+  // Legacy snapshot: old nv_q24 long-form (keep minimal)
   if (kind === 'nv_q24') {
     const rows = Array.isArray(q.nv_q24_instruction_rows) && q.nv_q24_instruction_rows.length
       ? q.nv_q24_instruction_rows
-      : NV_Q24_INSTRUCTION_ROWS
-    const geo = ext.geolocation || null
+      : NV_ESTATE_FEEDBACK_PROMPTS
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-        <p style={{ margin: 0, fontSize: nv.helperSize, color: nv.muted, lineHeight: 1.5 }}>{NV_Q24_GEO_HELPER}</p>
-        <ol style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.baseSize, color: nv.text, lineHeight: 1.5 }}>
+        <p style={{ margin: 0, fontSize: nv.helperSize, color: nv.muted }}>{NV_Q24_GEO_HELPER}</p>
+        <ol style={{ margin: 0, paddingLeft: '1.25rem', fontSize: nv.baseSize, color: nv.text }}>
           {rows.map((line, i) => (
-            <li key={i} style={{ marginBottom: 8 }}>
-              {line}
-            </li>
+            <li key={i} style={{ marginBottom: 8 }}>{line}</li>
           ))}
         </ol>
-        <label htmlFor={`nv24-extra-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
-          Anything to add? (optional)
-        </label>
         <textarea
-          id={`nv24-extra-${q.id}`}
           value={ext.comment || ''}
           onChange={(e) => {
             handleExtras(q.id, sec.id, { comment: e.target.value })
-            if (!answers[q.id]) handleAnswer(q.id, 'completed', sec.id)
+            handleAnswer(q.id, 'completed', sec.id)
           }}
           rows={3}
-          style={{
-            width: '100%',
-            padding: 10,
-            border: nv.cardBorder,
-            borderRadius: nv.btnRadius,
-            fontSize: nv.baseSize,
-            fontFamily: nv.font,
-          }}
+          style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: nv.btnRadius, fontFamily: nv.font }}
         />
-        <div>
-          <button
-            type="button"
-            onClick={() => {
-              setGeoError(null)
-              if (!navigator.geolocation) {
-                setGeoError('Location is not available in this browser.')
-                return
-              }
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  handleExtras(q.id, sec.id, {
-                    geolocation: {
-                      lat: pos.coords.latitude,
-                      lng: pos.coords.longitude,
-                      accuracy: pos.coords.accuracy,
-                    },
-                    geo_captured_at: new Date().toISOString(),
-                  })
-                  handleAnswer(q.id, 'completed', sec.id)
-                },
-                (err) => setGeoError(err?.message || 'Could not read location'),
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-              )
-            }}
-            style={{
-              minHeight: btnMinH,
-              padding: `12px ${nv.btnPx}px`,
-              fontSize: nv.baseSize,
-              fontWeight: nv.btnFontWeight,
-              backgroundColor: nv.primaryLight,
-              color: nv.primary,
-              border: `1px solid ${nv.primary}`,
-              borderRadius: nv.btnRadius,
-              cursor: 'pointer',
-              width: '100%',
-            }}
-          >
-            Share approximate location (optional — e.g. abandoned vehicles, pin on estate)
-          </button>
-          {geo && (
-            <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>
-              Saved: {geo.lat?.toFixed?.(5) ?? geo.lat}, {geo.lng?.toFixed?.(5) ?? geo.lng}
-              {geo.accuracy != null ? ` (±${Math.round(geo.accuracy)}m)` : ''}
-            </p>
-          )}
-          {geoError && <p style={{ fontSize: nv.metaSize, color: nv.error, marginTop: 6 }}>{geoError}</p>}
-        </div>
       </div>
     )
   }
 
-  // --- Q25: sign-off — visit date + display name + confirmation ---
   if (kind === 'nv_q25') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-        <p style={{ margin: 0, fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>Sign-off</p>
-        <label htmlFor={`nv25-date-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
-          Date of this visit
-        </label>
-        <input
-          id={`nv25-date-${q.id}`}
-          type="date"
-          value={ext.visit_date || ''}
-          onChange={(e) => {
-            handleExtras(q.id, sec.id, { visit_date: e.target.value })
-            handleAnswer(q.id, 'completed', sec.id)
-          }}
-          style={{
-            width: '100%',
-            minHeight: btnMinH,
-            padding: `12px ${nv.btnPx}px`,
-            fontSize: nv.baseSize,
-            border: nv.cardBorder,
-            borderRadius: nv.btnRadius,
-            fontFamily: nv.font,
-          }}
-        />
-        <label htmlFor={`nv25-name-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
-          Name as it should appear on the report
-        </label>
-        <input
-          id={`nv25-name-${q.id}`}
-          type="text"
-          value={ext.resident_display_name != null ? ext.resident_display_name : ''}
-          placeholder={prefillResidentName || 'e.g. your name'}
-          onChange={(e) => handleExtras(q.id, sec.id, { resident_display_name: e.target.value })}
-          onBlur={(e) => {
-            const v = e.target.value.trim()
-            if (v) handleAnswer(q.id, 'completed', sec.id)
-          }}
-          style={{
-            width: '100%',
-            minHeight: btnMinH,
-            padding: `12px ${nv.btnPx}px`,
-            fontSize: nv.baseSize,
-            border: nv.cardBorder,
-            borderRadius: nv.btnRadius,
-            fontFamily: nv.font,
-          }}
-        />
-        {prefillResidentName ? (
-          <p style={{ fontSize: nv.metaSize, color: nv.muted, margin: 0 }}>
-            Suggested from your account — you can change it if someone else is completing this on your behalf.
-          </p>
-        ) : null}
-        <label
-          htmlFor={`nv25-signoff-${q.id}`}
-          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: nv.helperSize, color: nv.text, cursor: 'pointer', marginTop: 4 }}
-        >
-          <input
-            id={`nv25-signoff-${q.id}`}
-            type="checkbox"
-            checked={!!ext.nv_signoff_confirmed}
-            onChange={(e) => {
-              handleExtras(q.id, sec.id, { nv_signoff_confirmed: e.target.checked })
-              handleAnswer(q.id, 'completed', sec.id)
-            }}
-            style={{ marginTop: 3, flexShrink: 0 }}
-          />
-          <span>I confirm this feedback is accurate to the best of my knowledge.</span>
-        </label>
-      </div>
+      <SignOffSection
+        q={q}
+        nv={nv}
+        ext={ext}
+        sec={sec}
+        btnMinH={btnMinH}
+        maxPhotos={maxPhotos}
+        prefillResidentName={prefillResidentName}
+        handleExtras={handleExtras}
+        handleAnswer={handleAnswer}
+      />
     )
   }
 

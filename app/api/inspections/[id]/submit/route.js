@@ -7,6 +7,10 @@ import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspection
 import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '../../../../../lib/blob/uploadPdf'
 import { sendEmails } from '@/lib/email-sender'
+import { applyNeighbourhoodVoiceTemplatePatch } from '@/lib/neighbourhood-voice-template-patch'
+import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
+import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-submit-actions'
+import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,35 +53,57 @@ export async function POST(request, { params }) {
       answers[row.question_id] = row.answer_value || row.answer_text || (row.answer_boolean != null ? (row.answer_boolean ? 'Yes' : 'No') : row.answer_number)
     })
 
-    const gradingValue = deriveInspectionGrading(inspection.template_version, answers)
+    let templateVersion = inspection.template_version
+    if (typeof templateVersion === 'string') {
+      try {
+        templateVersion = JSON.parse(templateVersion)
+      } catch {
+        templateVersion = null
+      }
+    }
+    if (templateVersion && typeof templateVersion === 'object') {
+      applyNeighbourhoodVoiceTemplatePatch(templateVersion)
+    }
 
-    // If draft, create actions (and optionally tasks/emails) from answers so PDF and emails have data
+    const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)
+    const isNv = isNeighbourhoodVoiceTemplateVersion(templateVersion)
+
+    // If draft, create actions from answers so PDF and emails have data
     if (inspection.status === 'draft') {
-      const version = inspection.template_version
-      const sections = (version && version.sections) || []
-      for (const sec of sections) {
-        for (const q of sec.questions || []) {
-          const val = answers[q.id]
-          const normalized = val != null ? String(val).toLowerCase().trim() : ''
-          const isNo = normalized === 'no'
-          const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
-          const comment = (answerRow && answerRow.notes) || ''
-          const category = q.action_category || q.category || 'Follow-up'
-          const residentMessage = comment || q.question_text || 'Issue raised from inspection'
-          if (isNo && q.create_action_on_no !== false) {
-            const actionId = `action_${id}_${q.id}_${Date.now()}`
-            await sql`
-              INSERT INTO actions (
-                id, inspection_id, section_id, section_name, question_id,
-                category, priority, title, description, location, status,
-                comment, auto_created, photo_urls
-              )
-              VALUES (
-                ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
-                ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
-                ${comment || null}, true, '[]'::jsonb
-              )
-            `
+      if (isNv) {
+        await createNeighbourhoodVoiceAutoActions(sql, {
+          inspectionId: id,
+          inspection,
+          templateVersion,
+          answersRows: answersResult.rows,
+        })
+      } else {
+        const version = templateVersion
+        const sections = (version && version.sections) || []
+        for (const sec of sections) {
+          for (const q of sec.questions || []) {
+            const val = answers[q.id]
+            const normalized = val != null ? String(val).toLowerCase().trim() : ''
+            const isNo = normalized === 'no'
+            const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
+            const comment = (answerRow && answerRow.notes) || ''
+            const category = q.action_category || q.category || 'Follow-up'
+            const residentMessage = comment || q.question_text || 'Issue raised from inspection'
+            if (isNo && q.create_action_on_no !== false) {
+              const actionId = `action_${id}_${q.id}_${Date.now()}`
+              await sql`
+                INSERT INTO actions (
+                  id, inspection_id, section_id, section_name, question_id,
+                  category, priority, title, description, location, status,
+                  comment, auto_created, photo_urls
+                )
+                VALUES (
+                  ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
+                  ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
+                  ${comment || null}, true, '[]'::jsonb
+                )
+              `
+            }
           }
         }
       }
@@ -143,18 +169,33 @@ export async function POST(request, { params }) {
       const openActionQuestionIds = new Set(
         allActions.map((a) => a.question_id).filter(Boolean)
       )
-      const version = inspectionLive.template_version || {}
-      const sections = Array.isArray(version.sections) ? version.sections : []
+      let pdfVersion = inspectionLive.template_version || {}
+      if (typeof pdfVersion === 'string') {
+        try {
+          pdfVersion = JSON.parse(pdfVersion)
+        } catch {
+          pdfVersion = {}
+        }
+      }
+      if (pdfVersion && typeof pdfVersion === 'object') {
+        applyNeighbourhoodVoiceTemplatePatch(pdfVersion)
+      }
+      const sections = Array.isArray(pdfVersion.sections) ? pdfVersion.sections : []
       const pdfSections = []
       const pdfPhotos = []
 
       for (const section of sections) {
         const sectionQuestions = []
         for (const question of section.questions || []) {
+          if (question.nv_hidden) continue
           const qid = question.id
           const answerVal = answerByQuestionId[qid] ?? ''
           const answerRow = answersResult.rows.find((r) => r.question_id === qid)
-          const comment = (answerRow && answerRow.notes) || ''
+          const unpacked = unpackNvWizardNotes(answerRow?.notes)
+          const comment =
+            (unpacked.structured && typeof unpacked.structured.comment === 'string'
+              ? unpacked.structured.comment
+              : '') || unpacked.plainComment || ''
 
           sectionQuestions.push({
             id: qid,
@@ -178,7 +219,7 @@ export async function POST(request, { params }) {
 
       const fullPdfBytes = await buildInspectionReportPdf({
         inspectionId: id,
-        templateName: inspectionLive.template_name || version.name || 'Template',
+        templateName: inspectionLive.template_name || pdfVersion.name || 'Template',
         blockName: inspectionLive.title || inspectionLive.location_label || 'Block',
         completedAt: inspectionLive.submitted_at || new Date().toISOString(),
         officerName: inspectionLive.inspector_name || 'Officer',
@@ -221,8 +262,18 @@ export async function POST(request, { params }) {
 
     // Extract recipients from persisted template snapshot (no live Airtable dependency)
     let recipients = []
-    const version = inspectionLive.template_version
-    const versionSections = (version && version.sections) || []
+    let emailVersion = inspectionLive.template_version
+    if (typeof emailVersion === 'string') {
+      try {
+        emailVersion = JSON.parse(emailVersion)
+      } catch {
+        emailVersion = null
+      }
+    }
+    if (emailVersion && typeof emailVersion === 'object') {
+      applyNeighbourhoodVoiceTemplatePatch(emailVersion)
+    }
+    const versionSections = (emailVersion && emailVersion.sections) || []
     const allQuestions = versionSections.flatMap((sec) => sec.questions || [])
     if (allQuestions.length > 0) {
       recipients = extractCaretakerRecipients(answers, allQuestions)
