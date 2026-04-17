@@ -277,10 +277,15 @@ await fetch(`/api/inspections/${id}/answers`, {
 
   const urlSectionNum = parseInt(String(sectionId), 10)
   const isCaretakerInspection = inspectionIsCaretaker(inspection)
-  const alwaysShowCaretakerCommentPhoto =
+  const alwaysShowCaretakerComment =
     isCaretakerInspection &&
     !Number.isNaN(urlSectionNum) &&
     urlSectionNum >= 1 &&
+    urlSectionNum <= 2
+  const alwaysShowCaretakerCommentPhoto =
+    isCaretakerInspection &&
+    !Number.isNaN(urlSectionNum) &&
+    urlSectionNum >= 3 &&
     urlSectionNum <= 5
   const alwaysShowCaretakerRecipient =
     isCaretakerInspection &&
@@ -333,6 +338,7 @@ await fetch(`/api/inspections/${id}/answers`, {
             onAnswersChange={handleAnswersChange}
             errors={errors}
             onQuestionsLoaded={handleQuestionsLoaded}
+            alwaysShowCaretakerComment={alwaysShowCaretakerComment}
             alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
             alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
           />

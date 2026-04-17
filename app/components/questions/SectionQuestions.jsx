@@ -13,6 +13,7 @@ export default function SectionQuestions({
   onAnswersChange,
   errors = {},
   onQuestionsLoaded,
+  alwaysShowCaretakerComment = false,
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
 }) {
@@ -59,6 +60,7 @@ export default function SectionQuestions({
           section={section}
           sectionQuestions={questions}
           allAnswers={localAnswers}
+          alwaysShowCaretakerComment={alwaysShowCaretakerComment}
           alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
           alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
         />

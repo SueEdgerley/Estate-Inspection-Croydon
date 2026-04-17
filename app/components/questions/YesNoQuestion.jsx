@@ -21,6 +21,7 @@ export default function YesNoQuestion({
   section = null,
   sectionQuestions = [],
   allAnswers = {},
+  alwaysShowCaretakerComment = false,
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
 }) {
@@ -100,7 +101,7 @@ export default function YesNoQuestion({
       if (recipientQ) onChange(recipientQ.id, '')
     }
 
-    if (!alwaysShowCaretakerCommentPhoto) {
+    if (!alwaysShowCaretakerComment && !alwaysShowCaretakerCommentPhoto) {
       if (wasNo && willYes) clearDetails()
       if (wasYes && willNo) clearDetails()
     }
@@ -170,9 +171,10 @@ export default function YesNoQuestion({
       isTriggerYesDetail)
 
   const needsDetailSection =
-    alwaysShowCaretakerCommentPhoto || legacyNeedsDetailSection
+    alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || legacyNeedsDetailSection
 
-  const showCommentField = alwaysShowCaretakerCommentPhoto || requiresComment
+  const showCommentField =
+    alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || requiresComment
   const showPhotoField = alwaysShowCaretakerCommentPhoto || requiresPhoto
 
   const requiresRecipient = isTriggerYesDetail

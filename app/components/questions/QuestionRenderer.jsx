@@ -17,6 +17,7 @@ export default function QuestionRenderer({
   section = null,
   sectionQuestions = [],
   allAnswers = {},
+  alwaysShowCaretakerComment = false,
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
 }) {
@@ -149,6 +150,7 @@ export default function QuestionRenderer({
             section={section}
             sectionQuestions={sectionQuestions}
             allAnswers={allAnswers}
+            alwaysShowCaretakerComment={alwaysShowCaretakerComment}
             alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
             alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
           />
