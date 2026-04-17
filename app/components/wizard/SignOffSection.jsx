@@ -16,6 +16,7 @@ export default function SignOffSection({
   handleExtras,
   handleAnswer,
 }) {
+  const persistSecId = q._nv_answer_section_id || sec.id
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
       <p style={{ margin: 0, fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>Sign-off</p>
@@ -27,8 +28,8 @@ export default function SignOffSection({
         type="date"
         value={ext.visit_date || ''}
         onChange={(e) => {
-          handleExtras(q.id, sec.id, { visit_date: e.target.value })
-          handleAnswer(q.id, 'completed', sec.id)
+          handleExtras(q.id, persistSecId, { visit_date: e.target.value })
+          handleAnswer(q.id, 'completed', persistSecId)
         }}
         style={{
           width: '100%',
@@ -48,10 +49,10 @@ export default function SignOffSection({
         type="text"
         value={ext.resident_display_name != null ? ext.resident_display_name : ''}
         placeholder={prefillResidentName || 'e.g. your name'}
-        onChange={(e) => handleExtras(q.id, sec.id, { resident_display_name: e.target.value })}
+        onChange={(e) => handleExtras(q.id, persistSecId, { resident_display_name: e.target.value })}
         onBlur={(e) => {
           const v = e.target.value.trim()
-          if (v) handleAnswer(q.id, 'completed', sec.id)
+          if (v) handleAnswer(q.id, 'completed', persistSecId)
         }}
         style={{
           width: '100%',
@@ -77,8 +78,8 @@ export default function SignOffSection({
           type="checkbox"
           checked={!!ext.nv_signoff_confirmed}
           onChange={(e) => {
-            handleExtras(q.id, sec.id, { nv_signoff_confirmed: e.target.checked })
-            handleAnswer(q.id, 'completed', sec.id)
+            handleExtras(q.id, persistSecId, { nv_signoff_confirmed: e.target.checked })
+            handleAnswer(q.id, 'completed', persistSecId)
           }}
           style={{ marginTop: 3, flexShrink: 0 }}
         />
@@ -90,7 +91,7 @@ export default function SignOffSection({
       <textarea
         id={`nv25-final-comment-${q.id}`}
         value={ext.signoff_comment || ''}
-        onChange={(e) => handleExtras(q.id, sec.id, { signoff_comment: e.target.value })}
+        onChange={(e) => handleExtras(q.id, persistSecId, { signoff_comment: e.target.value })}
         rows={2}
         style={{
           width: '100%',
@@ -105,7 +106,7 @@ export default function SignOffSection({
       <PhotoUploadControl
         id={`nv25-photo-${q.id}`}
         value={(ext.signoff_photo_urls || []).slice(0, maxPhotos)}
-        onChange={(urls) => handleExtras(q.id, sec.id, { signoff_photo_urls: urls.slice(0, maxPhotos) })}
+        onChange={(urls) => handleExtras(q.id, persistSecId, { signoff_photo_urls: urls.slice(0, maxPhotos) })}
         label="Add photo"
         multiple={maxPhotos > 1}
       />

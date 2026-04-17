@@ -60,6 +60,8 @@ export default function WizardQuestionFields({
   const kind = getEffectiveQuestionKind(q)
   const rawVal = answers[q.id]
   const ext = extras[q.id] || {}
+  /** Persist to original Airtable section_id when UI uses synthetic NV sections. */
+  const persistSecId = q._nv_answer_section_id || sec.id
 
   const btnMinH = isMobile ? nv.btnMinHeightMobile : nv.btnMinHeight
 
@@ -67,8 +69,8 @@ export default function WizardQuestionFields({
     if (kind !== 'nv_q25' || !prefillResidentName?.trim()) return
     const cur = extras[q.id]?.resident_display_name
     if (cur !== undefined && cur !== null) return
-    handleExtras(q.id, sec.id, { resident_display_name: prefillResidentName.trim() })
-  }, [kind, q.id, sec.id, prefillResidentName, extras, handleExtras])
+    handleExtras(q.id, persistSecId, { resident_display_name: prefillResidentName.trim() })
+  }, [kind, q.id, persistSecId, prefillResidentName, extras, handleExtras])
 
   if (kind === 'nv_standard') {
     return (
@@ -80,9 +82,9 @@ export default function WizardQuestionFields({
         btnMinH={btnMinH}
         maxPhotos={1}
         commentFocusRef={commentFocusRef}
-        onSelectGrade={(label) => handleAnswer(q.id, label, sec.id)}
-        onComment={(text) => handleExtras(q.id, sec.id, { comment: text })}
-        onPhotos={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls })}
+        onSelectGrade={(label) => handleAnswer(q.id, label, persistSecId)}
+        onComment={(text) => handleExtras(q.id, persistSecId, { comment: text })}
+        onPhotos={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls })}
       />
     )
   }
@@ -99,8 +101,8 @@ export default function WizardQuestionFields({
         prompts={prompts}
         maxPhotos={maxPhotos}
         onExtras={(updates) => {
-          handleExtras(q.id, sec.id, updates)
-          handleAnswer(q.id, 'completed', sec.id)
+          handleExtras(q.id, persistSecId, updates)
+          handleAnswer(q.id, 'completed', persistSecId)
         }}
       />
     )
@@ -114,10 +116,10 @@ export default function WizardQuestionFields({
         ext={ext}
         btnMinH={btnMinH}
         maxPhotos={maxPhotos}
-        onAnswer={(val) => handleAnswer(q.id, val, sec.id)}
+        onAnswer={(val) => handleAnswer(q.id, val, persistSecId)}
         onExtras={(updates) => {
-          handleExtras(q.id, sec.id, updates)
-          handleAnswer(q.id, 'completed', sec.id)
+          handleExtras(q.id, persistSecId, updates)
+          handleAnswer(q.id, 'completed', persistSecId)
         }}
       />
     )
@@ -138,8 +140,8 @@ export default function WizardQuestionFields({
         <textarea
           value={ext.comment || ''}
           onChange={(e) => {
-            handleExtras(q.id, sec.id, { comment: e.target.value })
-            handleAnswer(q.id, 'completed', sec.id)
+            handleExtras(q.id, persistSecId, { comment: e.target.value })
+            handleAnswer(q.id, 'completed', persistSecId)
           }}
           rows={3}
           style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: nv.btnRadius, fontFamily: nv.font }}
@@ -187,7 +189,7 @@ export default function WizardQuestionFields({
               <button
                 key={label}
                 type="button"
-                onClick={() => handleAnswer(q.id, label, sec.id)}
+                onClick={() => handleAnswer(q.id, label, persistSecId)}
                 style={{
                   minHeight: btnMinH,
                   padding: `12px ${nv.btnPx}px`,
@@ -218,7 +220,7 @@ export default function WizardQuestionFields({
             <textarea
               id={`g-comment-${q.id}`}
               value={ext.comment || ''}
-              onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+              onChange={(e) => handleExtras(q.id, persistSecId, { comment: e.target.value })}
               rows={2}
               style={{
                 width: '100%',
@@ -237,7 +239,7 @@ export default function WizardQuestionFields({
                 <PhotoUploadControl
                   id={`g-photo-${q.id}`}
                   value={(ext.photo_urls || []).slice(0, maxPhotos)}
-                  onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+                  onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
                   label="Add photo"
                   multiple
                 />
@@ -256,7 +258,7 @@ export default function WizardQuestionFields({
       <select
         id={`answer-${q.id}`}
         value={sel}
-        onChange={(e) => handleAnswer(q.id, e.target.value, sec.id)}
+        onChange={(e) => handleAnswer(q.id, e.target.value, persistSecId)}
         style={{
           width: '100%',
           minHeight: btnMinH,
@@ -290,7 +292,7 @@ export default function WizardQuestionFields({
             <button
               key={n}
               type="button"
-              onClick={() => handleAnswer(q.id, n, sec.id)}
+              onClick={() => handleAnswer(q.id, n, persistSecId)}
               style={{
                 minHeight: btnMinH,
                 minWidth: 48,
@@ -318,7 +320,7 @@ export default function WizardQuestionFields({
       <PhotoUploadControl
         id={`photo-${q.id}`}
         value={urls.slice(0, maxPhotos)}
-        onChange={(next) => handleAnswer(q.id, stringifyPhotos(next), sec.id)}
+        onChange={(next) => handleAnswer(q.id, stringifyPhotos(next), persistSecId)}
         label="Add photo"
         multiple={maxPhotos > 1}
       />
@@ -332,7 +334,7 @@ export default function WizardQuestionFields({
         id={`answer-${q.id}`}
         type="number"
         value={n}
-        onChange={(e) => handleAnswer(q.id, e.target.value, sec.id)}
+        onChange={(e) => handleAnswer(q.id, e.target.value, persistSecId)}
         style={{
           width: '100%',
           minHeight: btnMinH,
@@ -351,7 +353,7 @@ export default function WizardQuestionFields({
       <textarea
         id={`answer-${q.id}`}
         value={rawVal != null ? String(rawVal) : ''}
-        onChange={(e) => handleAnswer(q.id, e.target.value, sec.id)}
+        onChange={(e) => handleAnswer(q.id, e.target.value, persistSecId)}
         rows={4}
         style={{
           width: '100%',
@@ -372,7 +374,7 @@ export default function WizardQuestionFields({
         id={`answer-${q.id}`}
         type="text"
         value={rawVal != null ? String(rawVal) : ''}
-        onChange={(e) => handleAnswer(q.id, e.target.value, sec.id)}
+        onChange={(e) => handleAnswer(q.id, e.target.value, persistSecId)}
         style={{
           width: '100%',
           minHeight: btnMinH,
@@ -435,7 +437,7 @@ export default function WizardQuestionFields({
               key={opt}
               type="button"
               id={`answer-${q.id}-${opt}`}
-              onClick={() => handleAnswer(q.id, opt, sec.id)}
+              onClick={() => handleAnswer(q.id, opt, persistSecId)}
               style={{
                 minHeight: btnMinH,
                 padding: isMobile ? '14px 16px' : `12px ${nv.btnPx}px`,
@@ -465,7 +467,7 @@ export default function WizardQuestionFields({
           <textarea
             id={`always-${commentId}`}
             value={ext.comment || ''}
-            onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+            onChange={(e) => handleExtras(q.id, persistSecId, { comment: e.target.value })}
             rows={3}
             style={{
               width: '100%',
@@ -483,7 +485,7 @@ export default function WizardQuestionFields({
               <PhotoUploadControl
                 id={`photo-always-${q.id}`}
                 value={(ext.photo_urls || []).slice(0, maxPhotos)}
-                onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+                onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
                 label="Add photo"
                 multiple
               />
@@ -494,7 +496,7 @@ export default function WizardQuestionFields({
 
       {isYes && (
         <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
-          <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, sec.id, { raise_issue: e.target.checked })} />
+          <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, persistSecId, { raise_issue: e.target.checked })} />
           Raise an issue anyway (e.g. still a concern)
         </label>
       )}
@@ -514,7 +516,7 @@ export default function WizardQuestionFields({
                 name={commentId}
                 placeholder="e.g. Please ensure the area is kept clear."
                 value={ext.comment || ''}
-                onChange={(e) => handleExtras(q.id, sec.id, { comment: e.target.value })}
+                onChange={(e) => handleExtras(q.id, persistSecId, { comment: e.target.value })}
                 rows={2}
                 style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
               />
@@ -527,7 +529,7 @@ export default function WizardQuestionFields({
                 <PhotoUploadControl
                   id={`photo-${q.id}`}
                   value={(ext.photo_urls || []).slice(0, maxPhotos)}
-                  onChange={(urls) => handleExtras(q.id, sec.id, { photo_urls: urls.slice(0, maxPhotos) })}
+                  onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
                   label="Add photo"
                   multiple={true}
                 />
@@ -539,7 +541,7 @@ export default function WizardQuestionFields({
             id={severityId}
             name={severityId}
             value={ext.severity || ''}
-            onChange={(e) => handleExtras(q.id, sec.id, { severity: e.target.value })}
+            onChange={(e) => handleExtras(q.id, persistSecId, { severity: e.target.value })}
             style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.helperSize, minHeight: btnMinH, fontFamily: nv.font }}
           >
             <option value="">Optional</option>

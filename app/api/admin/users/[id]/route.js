@@ -100,8 +100,9 @@ export async function PATCH(request, { params }) {
 }
 
 /**
- * Permanent removal of the `users` row only (Neon/Postgres). No Clerk API call.
- * Inspections are unchanged (denormalized inspector fields). `user_estate_assignments` CASCADE.
+ * Permanent removal of the `users` row (Neon/Postgres). No Clerk API call.
+ * Inspections are unchanged (denormalized inspector fields).
+ * Does not run SQL against other tables; optional FK CASCADE applies only if those tables exist in DB.
  * Cannot delete self or the last active owner.
  *
  * No JSON body required (DELETE bodies are often stripped by proxies); confirm in the UI instead.
@@ -155,8 +156,9 @@ export async function DELETE(_request, { params }) {
       deletedId: id,
       deletedFromAppDatabase: true,
       clerkUserDeleted: false,
+      tablesTouched: ['users'],
       message:
-        'Removed this row from the app database (users). Past inspections still show stored inspector name/email. Estate/block assignment rows for this user were removed (CASCADE).',
+        'Removed this user from the app database (`users` row only). Past inspections still show stored inspector name/email. If your database defines related tables (e.g. assignments) with ON DELETE CASCADE, the database may remove those rows automatically.',
       clerkNotice:
         'The Clerk user account was not changed. They may still be able to sign in at Clerk until you delete or block that user in the Clerk Dashboard (or they remain unused).',
     })

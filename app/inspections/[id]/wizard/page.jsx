@@ -84,6 +84,27 @@ function questionUsesNvPackedNotes(q) {
   return q && ['nv_standard', 'nv_estate_feedback', 'nv_issues_report', 'nv_q25'].includes(q.nv_render_kind)
 }
 
+/** When NV uses synthetic sections, answers must POST under each question's original Airtable section_id. */
+function groupNvSectionSaveBatches(sec, answers, extras) {
+  /** @type {Map<string, { answers: Record<string, unknown>, extras: Record<string, unknown> }>} */
+  const m = new Map()
+  for (const q of sec.questions || []) {
+    if (q.nv_hidden) continue
+    const sid = q._nv_answer_section_id || sec.id
+    if (!sid) continue
+    if (!m.has(sid)) m.set(sid, { answers: {}, extras: {} })
+    const bucket = m.get(sid)
+    const v = answers[q.id]
+    if (v !== undefined && v !== null) bucket.answers[q.id] = v
+    const comment = extras[q.id]?.comment
+    if (comment != null) bucket.answers[`${q.id}_comment`] = comment
+    if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
+      bucket.extras[q.id] = extras[q.id]
+    }
+  }
+  return Array.from(m.entries()).map(([section_id, payload]) => ({ section_id, ...payload }))
+}
+
 function getSectionIcon(title) {
   if (!title) return '📋'
   const t = String(title).toLowerCase()
@@ -221,7 +242,8 @@ export default function InspectionWizardPage() {
     setSaving(true)
     try {
       const q = findQuestionInSections(sections, questionId)
-      const payload = { section_id: sectionId, answers: { [questionId]: value } }
+      const persistSid = (q && q._nv_answer_section_id) || sectionId
+      const payload = { section_id: persistSid, answers: { [questionId]: value } }
       if (comment != null) payload.answers[`${questionId}_comment`] = comment
       if (
         q &&
@@ -286,29 +308,23 @@ export default function InspectionWizardPage() {
     if (!id || !sec?.questions?.length) return
     setSaving(true)
     try {
-      const ans = {}
-      const extrasPayload = {}
-      sec.questions.forEach((q) => {
-        if (q.nv_hidden) return
-        const v = answers[q.id]
-        if (v !== undefined && v !== null) ans[q.id] = v
-        const comment = extras[q.id]?.comment
-        if (comment != null) ans[`${q.id}_comment`] = comment
-        if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
-          extrasPayload[q.id] = extras[q.id]
-        }
-      })
-      const res = await fetch(`/api/inspections/${id}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          section_id: sec.id,
-          answers: ans,
-          ...(Object.keys(extrasPayload).length ? { extras: extrasPayload } : {}),
-        }),
-      })
-      if (!res.ok) setError('Save failed')
+      const batches = groupNvSectionSaveBatches(sec, answers, extras)
+      for (const batch of batches) {
+        const hasAns = Object.keys(batch.answers).length > 0
+        const hasEx = Object.keys(batch.extras).length > 0
+        if (!hasAns && !hasEx) continue
+        const res = await fetch(`/api/inspections/${id}/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            section_id: batch.section_id,
+            answers: batch.answers,
+            ...(hasEx ? { extras: batch.extras } : {}),
+          }),
+        })
+        if (!res.ok) setError('Save failed')
+      }
     } catch {
       setError('Save failed')
     } finally {
