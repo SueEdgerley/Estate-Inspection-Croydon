@@ -175,6 +175,12 @@ export default function YesNoQuestion({
   const showCommentField = alwaysShowCaretakerCommentPhoto || requiresComment
   const showPhotoField = alwaysShowCaretakerCommentPhoto || requiresPhoto
 
+  const requiresRecipient = isTriggerYesDetail
+  const showRecipientField =
+    recipientQ &&
+    isThisQuestionTrigger &&
+    (alwaysShowCaretakerRecipient || isTriggerYesDetail)
+
   const recipientValue = recipientQ ? allAnswers[recipientQ.id] ?? '' : ''
 
   return (
@@ -258,6 +264,15 @@ export default function YesNoQuestion({
               Add a comment, at least one photo, and choose who this should be sent to.
             </p>
           )}
+          {alwaysShowCaretakerRecipient &&
+            isThisQuestionTrigger &&
+            recipientQ &&
+            !isYes && (
+              <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
+                Add a comment and photos as needed. When you answer Yes, a comment, at least one photo, and a recipient
+                are required.
+              </p>
+            )}
           {!isTriggerYesDetail && isYes && (nPw === 'on_yes' || nCw === 'on_yes') && (
             <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
               Please add the details or photo requested for your Yes answer.
@@ -386,7 +401,7 @@ export default function YesNoQuestion({
             </div>
           )}
 
-          {isTriggerYesDetail && recipientQ && (
+          {showRecipientField && (
             <div style={{ marginBottom: '1rem' }}>
               <label
                 htmlFor={`recipient-${recipientQ.id}`}
@@ -397,7 +412,8 @@ export default function YesNoQuestion({
                   fontSize: '0.875rem',
                 }}
               >
-                Who does this need to be sent to? <span style={{ color: '#ef4444' }}>*</span>
+                Who does this need to be sent to?{' '}
+                {requiresRecipient && <span style={{ color: '#ef4444' }}>*</span>}
               </label>
               <select
                 id={`recipient-${recipientQ.id}`}
