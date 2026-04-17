@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { QUESTION_TYPES } from '@/lib/airtable'
 import { getEffectiveQuestionKind } from '../../../lib/question-types'
+import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib/template-rules'
 import YesNoQuestion from './YesNoQuestion'
 
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
@@ -34,18 +35,15 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
   const kind = getEffectiveQuestionKind(question)
   const rendersOwnHeading = kind === 'yes_no'
   const questionText = String(question.label || question.question_text || '').toLowerCase()
-  const isRecipientQuestion =
-    kind === 'single_select' &&
-    (questionText.includes('who to send') ||
-      questionText.includes('recipient') ||
-      questionText.includes('send to'))
+  const isSelectKind = kind === 'single_select' || kind === 'select'
+  const isRecipientField = isRecipientSelectorQuestion(question)
   const isCostCodeQuestion =
-    kind === 'single_select' &&
+    isSelectKind &&
     (questionText.includes('cost code') || questionText.includes('cost_code') || questionText.includes('costcode'))
 
   useEffect(() => {
     let cancelled = false
-    if (!isRecipientQuestion) {
+    if (!isRecipientField) {
       setRecipientOptions([])
       return () => {
         cancelled = true
@@ -55,25 +53,36 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
     async function loadPeople() {
       try {
         const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        if (!res.ok) return
+        if (!res.ok) {
+          console.warn('[QuestionRenderer] GET /api/people failed:', res.status, await res.text().catch(() => ''))
+          return
+        }
         const rows = await res.json()
-        if (cancelled || !Array.isArray(rows)) return
+        if (cancelled || !Array.isArray(rows)) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[QuestionRenderer] /api/people response not an array:', rows)
+          }
+          return
+        }
         const mapped = rows
           .map((p) => ({
-            value: p.id,
-            label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || p.id,
+            value: p.id != null ? String(p.id) : '',
+            label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
           }))
           .filter((x) => x.value && x.label)
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[QuestionRenderer] recipient dropdown options:', mapped.length, mapped.slice(0, 5))
+        }
         setRecipientOptions(mapped)
-      } catch {
-        // keep empty options fallback
+      } catch (e) {
+        console.warn('[QuestionRenderer] loadPeople error:', e)
       }
     }
     loadPeople()
     return () => {
       cancelled = true
     }
-  }, [isRecipientQuestion])
+  }, [isRecipientField])
 
   useEffect(() => {
     let cancelled = false
@@ -198,10 +207,14 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
               .split(/\r?\n|,/)
               .map((p) => p.trim())
               .filter(Boolean)
-        const options =
-          optionsFromQuestion.length > 0
+        // Recipient selectors always use Postgres issue_recipients; ignore static Airtable options so the dropdown is not stuck on placeholders.
+        const options = isRecipientField
+          ? recipientOptions
+          : optionsFromQuestion.length > 0
             ? optionsFromQuestion.map((o) => ({ value: o, label: o }))
-            : (isRecipientQuestion ? recipientOptions : (isCostCodeQuestion ? costCodeOptions : []))
+            : isCostCodeQuestion
+              ? costCodeOptions
+              : []
         return (
           <select
             value={localValue ?? ''}

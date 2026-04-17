@@ -6,7 +6,7 @@ import { ensureDatabase, getPgUrl } from '../../../lib/db'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// GET - active recipient list from Postgres people table
+// GET - active issue routing mailboxes (people.category = issue_recipient) for inspection dropdowns
 export async function GET() {
   const { userId } = await auth()
   if (!userId) {
@@ -26,9 +26,11 @@ export async function GET() {
     const result = await sql`
       SELECT id, name, email
       FROM people
-      WHERE active = true
+      WHERE category = 'issue_recipient'
+        AND active = true
       ORDER BY name ASC, email ASC
     `
+    console.log('[GET /api/people] issue_recipient active rows:', result.rows.length)
     return NextResponse.json(result.rows)
   } catch (error) {
     console.error('Error fetching people list:', error)
