@@ -21,6 +21,8 @@ export default function YesNoQuestion({
   section = null,
   sectionQuestions = [],
   allAnswers = {},
+  alwaysShowCaretakerCommentPhoto = false,
+  alwaysShowCaretakerRecipient = false,
 }) {
   const [answer, setAnswer] = useState(value)
   const [comment, setComment] = useState('')
@@ -98,8 +100,10 @@ export default function YesNoQuestion({
       if (recipientQ) onChange(recipientQ.id, '')
     }
 
-    if (wasNo && willYes) clearDetails()
-    if (wasYes && willNo) clearDetails()
+    if (!alwaysShowCaretakerCommentPhoto) {
+      if (wasNo && willYes) clearDetails()
+      if (wasYes && willNo) clearDetails()
+    }
   }
 
   const handlePhotoUpload = async (e) => {
@@ -157,13 +161,19 @@ export default function YesNoQuestion({
         answer,
       })
 
-  const needsDetailSection =
+  const legacyNeedsDetailSection =
     answer != null &&
     ((isNo && shouldCreateAction) ||
       (isYes && (nPw === 'on_yes' || nCw === 'on_yes')) ||
       nPw === 'always' ||
       nCw === 'always' ||
       isTriggerYesDetail)
+
+  const needsDetailSection =
+    alwaysShowCaretakerCommentPhoto || legacyNeedsDetailSection
+
+  const showCommentField = alwaysShowCaretakerCommentPhoto || requiresComment
+  const showPhotoField = alwaysShowCaretakerCommentPhoto || requiresPhoto
 
   const recipientValue = recipientQ ? allAnswers[recipientQ.id] ?? '' : ''
 
@@ -254,7 +264,7 @@ export default function YesNoQuestion({
             </p>
           )}
 
-          {requiresComment && (
+          {showCommentField && (
             <div style={{ marginBottom: '1rem' }}>
               <label
                 style={{
@@ -264,7 +274,7 @@ export default function YesNoQuestion({
                   fontSize: '0.875rem',
                 }}
               >
-                Comment <span style={{ color: '#ef4444' }}>*</span>
+                Comment {requiresComment && <span style={{ color: '#ef4444' }}>*</span>}
               </label>
               <textarea
                 value={comment}
@@ -294,7 +304,7 @@ export default function YesNoQuestion({
             </div>
           )}
 
-          {requiresPhoto && (
+          {showPhotoField && (
             <div style={{ marginBottom: '1rem' }}>
               <label
                 style={{
@@ -304,7 +314,7 @@ export default function YesNoQuestion({
                   fontSize: '0.875rem',
                 }}
               >
-                Photo(s) <span style={{ color: '#ef4444' }}>*</span>
+                Photo(s) {requiresPhoto && <span style={{ color: '#ef4444' }}>*</span>}
                 {photos.length > 0 && (
                   <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontWeight: 'normal' }}>
                     ({photos.length} uploaded)

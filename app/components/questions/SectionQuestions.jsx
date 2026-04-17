@@ -4,7 +4,18 @@ import { useState, useEffect } from 'react'
 import QuestionRenderer from './QuestionRenderer'
 import { getVisibleQuestions } from '@/lib/airtable'
 
-export default function SectionQuestions({ sectionId, inspectionId, section, sectionQuestions = [], answers = {}, onAnswersChange, errors = {}, onQuestionsLoaded }) {
+export default function SectionQuestions({
+  sectionId,
+  inspectionId,
+  section,
+  sectionQuestions = [],
+  answers = {},
+  onAnswersChange,
+  errors = {},
+  onQuestionsLoaded,
+  alwaysShowCaretakerCommentPhoto = false,
+  alwaysShowCaretakerRecipient = false,
+}) {
   const [questions, setQuestions] = useState([])
   const [localAnswers, setLocalAnswers] = useState(answers)
 
@@ -48,6 +59,8 @@ export default function SectionQuestions({ sectionId, inspectionId, section, sec
           section={section}
           sectionQuestions={questions}
           allAnswers={localAnswers}
+          alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
+          alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
         />
       ))}
       

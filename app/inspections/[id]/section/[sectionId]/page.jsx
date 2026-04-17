@@ -274,6 +274,12 @@ await fetch(`/api/inspections/${id}/answers`, {
     )
   }
 
+  const urlSectionNum = parseInt(String(sectionId), 10)
+  const alwaysShowCaretakerCommentPhoto =
+    !Number.isNaN(urlSectionNum) && urlSectionNum >= 1 && urlSectionNum <= 5
+  const alwaysShowCaretakerRecipient =
+    !Number.isNaN(urlSectionNum) && urlSectionNum >= 3 && urlSectionNum <= 5
+
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
@@ -319,6 +325,8 @@ await fetch(`/api/inspections/${id}/answers`, {
             onAnswersChange={handleAnswersChange}
             errors={errors}
             onQuestionsLoaded={handleQuestionsLoaded}
+            alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
+            alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
           />
         )}
         {!section && (

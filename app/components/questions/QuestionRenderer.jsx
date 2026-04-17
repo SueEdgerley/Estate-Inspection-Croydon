@@ -17,6 +17,8 @@ export default function QuestionRenderer({
   section = null,
   sectionQuestions = [],
   allAnswers = {},
+  alwaysShowCaretakerCommentPhoto = false,
+  alwaysShowCaretakerRecipient = false,
 }) {
   const [localValue, setLocalValue] = useState(value ?? '')
   const [recipientOptions, setRecipientOptions] = useState([])
@@ -147,6 +149,8 @@ export default function QuestionRenderer({
             section={section}
             sectionQuestions={sectionQuestions}
             allAnswers={allAnswers}
+            alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
+            alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
           />
         )
 
