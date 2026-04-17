@@ -2,6 +2,7 @@
 
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 
 const DEFAULT_GRADES = ['A', 'B', 'C', 'D', 'NA']
 
@@ -34,7 +35,7 @@ export default function InspectionQuestion({
       ) : null}
       <div>
         <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '0 0 8px', color: nv.text }}>Grade</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {opts.map((opt) => {
             const label = typeof opt === 'string' ? opt : String(opt?.value ?? opt?.label ?? opt)
             const isSel = selected === label
@@ -43,19 +44,12 @@ export default function InspectionQuestion({
                 key={label}
                 type="button"
                 onClick={() => onSelectGrade(label)}
-                style={{
+                style={getGradeButtonStyle(label, isSel, {
                   minHeight: btnMinH,
                   padding: `12px ${nv.btnPx}px`,
-                  minWidth: 48,
                   fontSize: nv.baseSize,
-                  fontWeight: nv.btnFontWeight,
-                  backgroundColor: isSel ? nv.primary : nv.cardBg,
-                  color: isSel ? '#fff' : nv.text,
-                  border: isSel ? `2px solid ${nv.primary}` : nv.btnUnselectedBorder,
                   borderRadius: nv.btnRadius,
-                  cursor: 'pointer',
-                  transition: nv.transition,
-                }}
+                })}
               >
                 {label}
               </button>

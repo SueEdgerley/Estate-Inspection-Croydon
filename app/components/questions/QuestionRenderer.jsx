@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { QUESTION_TYPES } from '@/lib/airtable'
 import { getEffectiveQuestionKind } from '../../../lib/question-types'
 import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib/template-rules'
+import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import YesNoQuestion from './YesNoQuestion'
 
 export default function QuestionRenderer({ question, sectionName, inspectionId, value, onChange, errors = {} }) {
@@ -139,7 +140,7 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
           ['A', 'B', 'C', 'D', 'NA']
         return (
           <div>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
               {opts.map((grade) => {
                 const label = typeof grade === 'string' ? grade : String(grade?.value ?? grade?.label ?? grade)
                 const isSelected = localValue === label
@@ -148,15 +149,12 @@ export default function QuestionRenderer({ question, sectionName, inspectionId, 
                     key={label}
                     type="button"
                     onClick={() => handleChange(label)}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      backgroundColor: isSelected ? '#3b82f6' : 'white',
-                      color: isSelected ? 'white' : '#374151',
-                      border: '1px solid #d1d5db',
+                    style={getGradeButtonStyle(label, isSelected, {
+                      padding: '12px 16px',
+                      minHeight: 48,
+                      fontSize: '1rem',
                       borderRadius: '0.375rem',
-                      cursor: 'pointer',
-                      fontWeight: isSelected ? '600' : '500',
-                    }}
+                    })}
                   >
                     {label}
                   </button>

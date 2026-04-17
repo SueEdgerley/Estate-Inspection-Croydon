@@ -9,6 +9,7 @@ import TextFeedbackSection from './TextFeedbackSection'
 import IssuesReportSection from './IssuesReportSection'
 import SignOffSection from './SignOffSection'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 
 const YN_OPTIONS = ['Yes', 'No', 'NA']
 
@@ -182,7 +183,7 @@ export default function WizardQuestionFields({
         {q.grading_scheme_name && (
           <p style={{ fontSize: nv.helperSize, color: nv.helperColor, margin: 0 }}>{q.grading_scheme_name}</p>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {opts.map((opt) => {
             const label = typeof opt === 'string' ? opt : String(opt?.value ?? opt?.label ?? opt)
             const isSel = selected === label
@@ -191,19 +192,12 @@ export default function WizardQuestionFields({
                 key={label}
                 type="button"
                 onClick={() => handleAnswer(q.id, label, persistSecId)}
-                style={{
+                style={getGradeButtonStyle(label, isSel, {
                   minHeight: btnMinH,
                   padding: `12px ${nv.btnPx}px`,
-                  minWidth: 48,
                   fontSize: nv.baseSize,
-                  fontWeight: nv.btnFontWeight,
-                  backgroundColor: isSel ? nv.primary : nv.cardBg,
-                  color: isSel ? '#fff' : nv.text,
-                  border: isSel ? `2px solid ${nv.primary}` : nv.btnUnselectedBorder,
                   borderRadius: nv.btnRadius,
-                  cursor: 'pointer',
-                  transition: nv.transition,
-                }}
+                })}
               >
                 {label}
               </button>

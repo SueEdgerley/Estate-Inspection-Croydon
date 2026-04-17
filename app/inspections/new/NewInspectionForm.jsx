@@ -13,6 +13,7 @@ import {
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -166,7 +167,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   )
 
   const buttonGroup = (optionList, firstButtonId) => (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
       {(optionList || []).map((opt, idx) => {
         const label = typeof opt === 'string' ? opt : (opt?.label ?? opt?.value ?? opt)
         const val = typeof opt === 'string' ? opt : (opt?.value ?? opt?.label ?? opt)
@@ -177,18 +178,12 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             type="button"
             id={idx === 0 && firstButtonId ? firstButtonId : undefined}
             onClick={() => handleChange(val)}
-            style={{
-              padding: '0.5rem 1rem',
-              minHeight: 44,
-              backgroundColor: isSelected ? '#3b82f6' : '#f3f4f6',
-              color: isSelected ? 'white' : '#374151',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              cursor: 'pointer',
-              fontWeight: isSelected ? 600 : 500,
+            style={getGradeButtonStyle(label, isSelected, {
+              padding: '12px 16px',
+              minHeight: 48,
               fontSize: '0.9375rem',
-              touchAction: 'manipulation',
-            }}
+              borderRadius: '0.375rem',
+            })}
           >
             {label}
           </button>

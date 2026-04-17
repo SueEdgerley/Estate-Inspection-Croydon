@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { isTemplateAdminViewer } from '@/lib/template-visibility'
 import { photobook } from '@/lib/photobook-theme'
+import { getGradePreviewChipStyle } from '@/lib/grading-button-styles'
 
 // Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo")
 function normalizeQuestionType(v) {
@@ -52,17 +53,7 @@ function QuestionPreview({ q }) {
     return (
       <span style={{ display: 'inline-flex', gap: '0.25rem', marginLeft: '0.5rem', flexWrap: 'wrap' }}>
         {(gradingOpts || []).map((opt) => (
-          <span
-            key={opt}
-            style={{
-              padding: '0.2rem 0.5rem',
-              borderRadius: '0.25rem',
-              backgroundColor: '#dbeafe',
-              color: '#1e40af',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-            }}
-          >
+          <span key={opt} style={getGradePreviewChipStyle(opt)}>
             {opt}
           </span>
         ))}
