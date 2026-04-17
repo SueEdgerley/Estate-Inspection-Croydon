@@ -14,6 +14,7 @@ import {
 } from '@/lib/neighbourhood-voice-template-patch'
 import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
+import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -75,6 +76,7 @@ function normalizeQuestionType(v) {
 }
 
 function getQuestionType(question) {
+  if (question.caretaker_routing_bundle) return 'caretaker_routing_bundle'
   if (question.nv_render_kind) return question.nv_render_kind
   const raw = question.question_type
   const rs = String(raw || '').toLowerCase()
@@ -88,7 +90,20 @@ function getQuestionType(question) {
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
-function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo, isNvTemplate = false, expandedByQuestionId = {} }) {
+function InspectionQuestion({
+  question,
+  value,
+  onChange,
+  error,
+  errorComment,
+  errorPhotos,
+  answerExtras,
+  onAnswerExtras,
+  createActionOnNo,
+  isNvTemplate = false,
+  expandedByQuestionId = {},
+  peopleOptions = [],
+}) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
   const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
@@ -192,6 +207,22 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     </div>
   )
 
+  if (qType === 'caretaker_routing_bundle') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        <CaretakerRoutingBundle
+          question={question}
+          answerExtras={answerExtras}
+          onAnswerExtras={onAnswerExtras}
+          errorComment={errorComment}
+          errorPhotos={errorPhotos}
+          textareaStyle={isNvTemplate ? NV_TEXTAREA_SURFACE : {}}
+          peopleOptions={peopleOptions}
+        />
+      </div>
+    )
+  }
+
   if (qType === 'yes_no') {
     return (
       <div style={{ marginBottom: '1rem' }}>
@@ -237,6 +268,34 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
                   }}
                 />
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+                {question.caretaker_recipient_on_yes && isYes && Array.isArray(peopleOptions) && peopleOptions.length > 0 && (
+                  <>
+                    <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                      Who should this be sent to?
+                    </label>
+                    <select
+                      id={`recipient-${question.id}`}
+                      value={extras.recipient_person_id || ''}
+                      onChange={(e) => setExtras({ recipient_person_id: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.375rem',
+                        fontSize: '1rem',
+                        backgroundColor: 'white',
+                        marginBottom: '0.75rem',
+                      }}
+                    >
+                      <option value="">Select recipient…</option>
+                      {peopleOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </>
             )}
             {showActionBlock && question.action_category && (
@@ -244,10 +303,10 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
                 Action category: {question.action_category}
               </p>
             )}
-            {isNvTemplate ? photoBlock : null}
+            {isNvTemplate || (question.caretaker_recipient_on_yes && isYes) ? photoBlock : null}
           </div>
         )}
-        {!isNvTemplate && photoBlock}
+        {!isNvTemplate && !(question.caretaker_recipient_on_yes && isYes) && photoBlock}
         {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -258,7 +317,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     const needPhoto = !!question.nv_graded_require_comment_photo
     const needComment = needPhoto || !!question.nv_graded_require_comment_only
     const hasGrade = value != null && String(value).trim() !== ''
-    const nvGradedExtras = isNvTemplate && needComment && hasGrade
+    const nvGradedExtras = (isNvTemplate || question.caretaker_graded_always_extras) && needComment && hasGrade
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
@@ -307,7 +366,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
             )}
           </div>
         )}
-        {!isNvTemplate && photoBlock}
+        {!isNvTemplate && !question.caretaker_graded_always_extras && photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -653,6 +712,33 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const [validationErrors, setValidationErrors] = useState({})
   const [startingWizard, setStartingWizard] = useState(false)
   const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
+  const [peopleOptions, setPeopleOptions] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPeople() {
+      try {
+        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
+        if (!res.ok || cancelled) return
+        const rows = await res.json()
+        if (cancelled || !Array.isArray(rows)) return
+        setPeopleOptions(
+          rows
+            .map((p) => ({
+              value: p.id != null ? String(p.id) : '',
+              label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
+            }))
+            .filter((x) => x.value && x.label)
+        )
+      } catch {
+        /* ignore */
+      }
+    }
+    loadPeople()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth <= 768)
@@ -809,21 +895,32 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           const photoWhen = q.photo_required_when
           const isNo = normalized === 'No'
           const isYes = normalized === 'Yes'
-          const showComment =
-            (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
-          const showPhoto =
-            (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
           const commentRequired =
             (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
           const photoRequired =
             (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
           const extras = answerExtras[q.id] || {}
-          if (showComment && commentRequired && !(extras.comment || '').trim()) {
+          if (commentRequired && !(extras.comment || '').trim()) {
             errs[`${q.id}_comment`] = 'Comment is required'
           }
           const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
           if (photoRequired && photoUrls.length === 0) {
             errs[`${q.id}_photos`] = 'At least one photo is required'
+          }
+          if (q.caretaker_recipient_on_yes && isYes && !(extras.recipient_person_id || '').trim()) {
+            errs[`${q.id}_recipient`] = 'Please select a recipient'
+          }
+          return
+        }
+
+        if (qType === 'caretaker_routing_bundle') {
+          const ex = answerExtras[q.id] || {}
+          const photos = Array.isArray(ex.photo_urls) ? ex.photo_urls.filter((u) => typeof u === 'string' && u) : []
+          if (!(ex.recipient_person_id || '').trim()) {
+            errs[`${q.id}_recipient`] = 'Recipient is required'
+          }
+          if (photos.length === 0) {
+            errs[`${q.id}_photos`] = 'At least one photo is required for routing'
           }
           return
         }
@@ -1245,6 +1342,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                       createActionOnNo={q.create_action_on_no}
                       isNvTemplate={isNVTemplate(selectedTemplate)}
                       expandedByQuestionId={expandedByQuestionId}
+                      peopleOptions={peopleOptions}
                     />
                   )
                 })}
