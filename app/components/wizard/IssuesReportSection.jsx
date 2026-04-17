@@ -29,7 +29,14 @@ export default function IssuesReportSection({
 
   const propsVal = normalizeYesNoNaDisplay(ext?.issues_abandoned_properties)
   const vehVal = normalizeYesNoNaDisplay(ext?.issues_abandoned_vehicles)
-  const anyYes = propsVal === 'Yes' || vehVal === 'Yes'
+  const propsYes = propsVal === 'Yes'
+  const vehYes = vehVal === 'Yes'
+  const anyYes = propsYes || vehYes
+
+  const photoUrls = Array.isArray(ext?.photo_urls) ? ext.photo_urls.filter((u) => typeof u === 'string' && u.trim()) : []
+  const hasPhoto = photoUrls.length > 0
+  /** After Yes on either Issues line (Q23/Q24 prompts), photo is expected — highlight until provided. */
+  const photoRequiredPending = anyYes && !hasPhoto
 
   const ynBlock = (label, value, fieldBase) => (
     <div style={{ marginBottom: 16 }}>
@@ -118,9 +125,35 @@ export default function IssuesReportSection({
       </div>
 
       {anyYes ? (
-        <div>
-          <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '0 0 8px', color: nv.text }}>Photo</p>
-          <p style={{ fontSize: nv.metaSize, color: nv.muted, margin: '0 0 8px' }}>{photoLocationPrompt}</p>
+        <div
+          role="region"
+          aria-label="Photo required when you answer Yes"
+          style={{
+            marginTop: 4,
+            padding: 14,
+            borderRadius: nv.btnRadius,
+            border: photoRequiredPending ? `2px solid ${nv.primary}` : `1px solid ${nv.cardBorder}`,
+            backgroundColor: photoRequiredPending ? (nv.unansweredAmber || '#FEF3C7') : nv.cardBg,
+            boxShadow: photoRequiredPending ? '0 0 0 1px rgba(30, 58, 138, 0.12)' : 'none',
+            transition: 'border-color 150ms ease, background-color 150ms ease',
+          }}
+        >
+          <p
+            style={{
+              fontSize: nv.baseSize,
+              fontWeight: 700,
+              margin: '0 0 6px',
+              color: nv.text,
+            }}
+          >
+            Please add a photo
+          </p>
+          <p style={{ fontSize: nv.metaSize, color: nv.muted, margin: '0 0 10px', lineHeight: 1.45 }}>
+            {photoRequiredPending
+              ? 'You answered Yes above — a clear photo helps us act on this report.'
+              : 'Thank you — you can replace photos below if needed.'}
+          </p>
+          <p style={{ fontSize: nv.metaSize, color: nv.muted, margin: '0 0 10px' }}>{photoLocationPrompt}</p>
           <PhotoUploadControl
             id={`iss-photo-${q.id}`}
             value={(ext?.photo_urls || []).slice(0, maxPhotos)}
