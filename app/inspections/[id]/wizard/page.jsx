@@ -5,7 +5,11 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
-import { applyNeighbourhoodVoiceTemplatePatch, isNeighbourhoodVoiceQuestionRenderable } from '@/lib/neighbourhood-voice-template-patch'
+import {
+  applyNeighbourhoodVoiceTemplatePatch,
+  getNvQuestionStepLabel,
+  isNeighbourhoodVoiceQuestionRenderable,
+} from '@/lib/neighbourhood-voice-template-patch'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 
 // NV design system (wizard only): calm, modern, resident-friendly
@@ -569,7 +573,26 @@ export default function InspectionWizardPage() {
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
           <p style={{ fontSize: nv.metaSize, color: nv.muted, marginBottom: 12 }}>
             Section {sectionNumForQuestion} of {sections.length} · Question {questionNumInSection} of {totalInSection}
+            {(() => {
+              const si = flatSteps.findIndex((s) => s.question?.id === currentQuestion?.id)
+              if (si < 0 || !flatSteps.length) return ''
+              return ` · Step ${si + 1} of ${flatSteps.length}`
+            })()}
           </p>
+
+          {getNvQuestionStepLabel(q) ? (
+            <p
+              style={{
+                fontSize: nv.baseSize,
+                fontWeight: 600,
+                color: nv.primary,
+                marginBottom: 10,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {getNvQuestionStepLabel(q)}
+            </p>
+          ) : null}
 
           <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{getSectionIcon(sec.title)}</span>
@@ -680,6 +703,19 @@ export default function InspectionWizardPage() {
         {/* Questions: white cards, 16px padding, 16px between cards; question 16-18px medium, helper 14px muted; space question–answers 12px */}
         {sectionQuestions.map((q) => (
           <div key={q.id} style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
+            {getNvQuestionStepLabel(q) ? (
+              <p
+                style={{
+                  fontSize: nv.metaSize,
+                  fontWeight: 600,
+                  color: nv.primary,
+                  marginBottom: 8,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {getNvQuestionStepLabel(q)}
+              </p>
+            ) : null}
             <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
             {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: nv.spaceQuestionAnswers }}>{q.helper_text}</p>}
 

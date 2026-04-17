@@ -9,6 +9,7 @@ import {
   NV_ESTATE_FEEDBACK_PROMPTS,
   NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
+  getNvQuestionStepLabel,
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
@@ -88,6 +89,21 @@ function getQuestionType(question) {
 function InspectionQuestion({ question, value, onChange, error, errorComment, errorPhotos, answerExtras, onAnswerExtras, createActionOnNo, isNvTemplate = false, expandedByQuestionId = {} }) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
+  const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
+  const nvHeading =
+    nvLabel != null ? (
+      <p
+        style={{
+          fontSize: '0.8125rem',
+          fontWeight: 600,
+          color: '#1E3A8A',
+          marginBottom: '0.5rem',
+          letterSpacing: '0.02em',
+        }}
+      >
+        {nvLabel}
+      </p>
+    ) : null
   const opts = question.options || []
   const isRequired = question.is_required
   const yesNoNaValue = normalizeYesNoNaValue(value)
@@ -183,6 +199,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   if (qType === 'yes_no') {
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
@@ -247,6 +264,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
     const nvGradedExtras = isNvTemplate && needComment && hasGrade
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {question.grading_scheme_name && (
@@ -396,6 +414,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   if (qType === 'nv_standard') {
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
@@ -424,6 +443,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
         : NV_ESTATE_FEEDBACK_PROMPTS
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <TextFeedbackSection
           q={question}
           nv={NV_INLINE}
@@ -439,6 +459,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   if (qType === 'nv_issues_report') {
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
         </label>
@@ -461,6 +482,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
       : NV_Q24_AIRTABLE_ROWS_188_192
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {question.question_text}
         </label>
@@ -493,6 +515,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
   if (qType === 'nv_q25') {
     return (
       <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
         <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#374151' }}>Sign-off</p>
         <label htmlFor={`nv25-date-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
           Date of this visit
