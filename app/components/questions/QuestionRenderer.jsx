@@ -5,7 +5,28 @@ import { QUESTION_TYPES } from '@/lib/airtable'
 import { getEffectiveQuestionKind } from '../../../lib/question-types'
 import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib/template-rules'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
+import {
+  indexToCaretakerRowLetter,
+  caretakerRowDisplayLabel,
+} from '@/lib/caretaker-yesno-display'
 import YesNoQuestion from './YesNoQuestion'
+
+const CARETAKER_S12_LAYOUT_SKIP_KINDS = new Set([
+  'nv_standard',
+  'nv_estate_feedback',
+  'nv_issues_report',
+  'nv_q24',
+  'nv_q25',
+])
+
+const caretakerS12CardStyle = {
+  marginBottom: '1.25rem',
+  padding: '1.25rem',
+  border: '1px solid #e5e7eb',
+  borderRadius: '0.5rem',
+  backgroundColor: '#fafafa',
+  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+}
 
 export default function QuestionRenderer({
   question,
@@ -20,6 +41,8 @@ export default function QuestionRenderer({
   alwaysShowCaretakerComment = false,
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
+  caretakerSections12Structured = false,
+  subLabelIndex = 0,
 }) {
   const [localValue, setLocalValue] = useState(value ?? '')
   const [recipientOptions, setRecipientOptions] = useState([])
@@ -392,6 +415,57 @@ export default function QuestionRenderer({
     }
   }
 
+  if (caretakerSections12Structured && !CARETAKER_S12_LAYOUT_SKIP_KINDS.has(kind)) {
+    const letter = indexToCaretakerRowLetter(subLabelIndex)
+    const displayLabel = caretakerRowDisplayLabel(letter, question)
+    const displayQuestion = { ...question, label: displayLabel }
+
+    if (kind === 'instruction') {
+      const body =
+        (question.description && String(question.description).trim()) ||
+        (question.question_text && String(question.question_text).trim()) ||
+        ''
+      return (
+        <div style={caretakerS12CardStyle}>
+          <p style={{ margin: 0, fontWeight: 600, color: '#111827', fontSize: '1rem' }}>{displayQuestion.label}</p>
+          {body ? (
+            <p
+              style={{
+                margin: '0.75rem 0 0',
+                fontSize: '0.875rem',
+                color: '#4b5563',
+                whiteSpace: 'pre-wrap',
+                lineHeight: 1.5,
+              }}
+            >
+              {body}
+            </p>
+          ) : null}
+        </div>
+      )
+    }
+
+    return (
+      <div style={caretakerS12CardStyle}>
+        <YesNoQuestion
+          question={displayQuestion}
+          sectionName={sectionName}
+          inspectionId={inspectionId}
+          value={localValue}
+          onChange={handleChange}
+          errors={errors}
+          section={section}
+          sectionQuestions={sectionQuestions}
+          allAnswers={allAnswers}
+          alwaysShowCaretakerComment={true}
+          alwaysShowCaretakerCommentPhoto={true}
+          alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
+          caretakerSections12Structured={true}
+        />
+      </div>
+    )
+  }
+
   return (
     <div style={{ marginBottom: '1.5rem' }}>
       {!rendersOwnHeading && (
@@ -421,6 +495,47 @@ export default function QuestionRenderer({
       )}
 
       {renderQuestion()}
+
+      {alwaysShowCaretakerComment && kind !== 'yes_no' && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <label
+            htmlFor={'caretaker-comment-' + question.id}
+            style={{
+              display: 'block',
+              marginBottom: '0.5rem',
+              fontWeight: '500',
+              color: '#111827',
+            }}
+          >
+            Comment
+          </label>
+          <textarea
+            id={'caretaker-comment-' + question.id}
+            value={allAnswers[question.id + '_comment'] ?? ''}
+            onChange={(e) => handleChange(question.id + '_comment', e.target.value)}
+            rows={4}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errors[question.id + '_comment'] ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              fontFamily: 'inherit',
+            }}
+          />
+          {errors[question.id + '_comment'] && (
+            <p
+              style={{
+                marginTop: '0.5rem',
+                fontSize: '0.875rem',
+                color: '#ef4444',
+              }}
+            >
+              {errors[question.id + '_comment']}
+            </p>
+          )}
+        </div>
+      )}
 
       {errors[question.id] && (
         <p

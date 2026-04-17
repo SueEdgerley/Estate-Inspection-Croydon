@@ -16,6 +16,7 @@ export default function SectionQuestions({
   alwaysShowCaretakerComment = false,
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
+  caretakerSections12Structured = false,
 }) {
   const [questions, setQuestions] = useState([])
   const [localAnswers, setLocalAnswers] = useState(answers)
@@ -48,7 +49,7 @@ export default function SectionQuestions({
 
   return (
     <div>
-      {visibleQuestions.map((question) => (
+      {visibleQuestions.map((question, index) => (
         <QuestionRenderer
           key={question.id}
           question={question}
@@ -63,6 +64,8 @@ export default function SectionQuestions({
           alwaysShowCaretakerComment={alwaysShowCaretakerComment}
           alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
           alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
+          caretakerSections12Structured={caretakerSections12Structured}
+          subLabelIndex={index}
         />
       ))}
       

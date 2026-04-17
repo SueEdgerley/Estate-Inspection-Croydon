@@ -24,6 +24,7 @@ export default function YesNoQuestion({
   alwaysShowCaretakerComment = false,
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
+  caretakerSections12Structured = false,
 }) {
   const [answer, setAnswer] = useState(value)
   const [comment, setComment] = useState('')
@@ -41,6 +42,30 @@ export default function YesNoQuestion({
     const c = allAnswers?.[`${question.id}_comment`]
     if (c !== undefined && c !== null && c !== '') setComment(String(c))
   }, [question.id, allAnswers])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!caretakerSections12Structured || !inspectionId || !question?.id) return
+    async function loadExistingPhotos() {
+      try {
+        const res = await fetch(
+          `/api/photos?inspection_id=${encodeURIComponent(inspectionId)}&question_id=${encodeURIComponent(question.id)}`,
+          { credentials: 'include' }
+        )
+        if (!res.ok || cancelled) return
+        const rows = await res.json()
+        if (cancelled || !Array.isArray(rows)) return
+        const urls = rows.map((r) => r.blob_url).filter(Boolean)
+        if (urls.length) setPhotos(urls)
+      } catch {
+        /* ignore */
+      }
+    }
+    loadExistingPhotos()
+    return () => {
+      cancelled = true
+    }
+  }, [caretakerSections12Structured, inspectionId, question?.id])
 
   const recipientQ = useMemo(() => {
     if (!sectionQuestions?.length) return null
@@ -85,8 +110,11 @@ export default function YesNoQuestion({
   const handleAnswerChange = async (newAnswer) => {
     const wasNo = answer === false || answer === 'no' || answer === 'No'
     const wasYes = answer === true || answer === 'yes' || answer === 'Yes'
+    const wasNA =
+      answer === 'NA' || answer === 'na' || String(answer || '').toUpperCase() === 'NA'
     const willYes = newAnswer === true || newAnswer === 'yes' || newAnswer === 'Yes'
     const willNo = newAnswer === false || newAnswer === 'no' || newAnswer === 'No'
+    const willNA = newAnswer === 'NA' || newAnswer === 'na' || String(newAnswer || '').toUpperCase() === 'NA'
 
     setAnswer(newAnswer)
     onChange(question.id, newAnswer)
@@ -104,6 +132,8 @@ export default function YesNoQuestion({
     if (!alwaysShowCaretakerComment && !alwaysShowCaretakerCommentPhoto) {
       if (wasNo && willYes) clearDetails()
       if (wasYes && willNo) clearDetails()
+      if (wasNA && (willYes || willNo)) clearDetails()
+      if ((wasYes || wasNo) && willNA) clearDetails()
     }
   }
 
@@ -134,6 +164,8 @@ export default function YesNoQuestion({
 
   const isNo = answer === false || answer === 'no' || answer === 'No'
   const isYes = answer === true || answer === 'yes' || answer === 'Yes'
+  const isNA = answer === 'NA' || answer === 'na' || String(answer || '').toUpperCase() === 'NA'
+  const isS12 = caretakerSections12Structured
   const nCw = normalizeWhenToken(question.comment_required_when)
   const nPw = normalizeWhenToken(question.photo_required_when)
   const shouldCreateAction = shouldCreateActionOnNo(question)
@@ -164,6 +196,7 @@ export default function YesNoQuestion({
 
   const legacyNeedsDetailSection =
     answer != null &&
+    !isNA &&
     ((isNo && shouldCreateAction) ||
       (isYes && (nPw === 'on_yes' || nCw === 'on_yes')) ||
       nPw === 'always' ||
@@ -171,11 +204,14 @@ export default function YesNoQuestion({
       isTriggerYesDetail)
 
   const needsDetailSection =
-    alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || legacyNeedsDetailSection
+    isS12 ||
+    alwaysShowCaretakerComment ||
+    alwaysShowCaretakerCommentPhoto ||
+    legacyNeedsDetailSection
 
   const showCommentField =
-    alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || requiresComment
-  const showPhotoField = alwaysShowCaretakerCommentPhoto || requiresPhoto
+    isS12 || alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || requiresComment
+  const showPhotoField = isS12 || alwaysShowCaretakerCommentPhoto || requiresPhoto
 
   const requiresRecipient = isTriggerYesDetail
   const showRecipientField =
@@ -185,8 +221,23 @@ export default function YesNoQuestion({
 
   const recipientValue = recipientQ ? allAnswers[recipientQ.id] ?? '' : ''
 
+  const detailBoxStyle = isS12
+    ? {
+        marginTop: '1rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem',
+      }
+    : {
+        padding: '1rem',
+        backgroundColor: isNo && shouldCreateAction ? '#fef3c7' : '#eff6ff',
+        border: `1px solid ${isNo && shouldCreateAction ? '#f59e0b' : '#93c5fd'}`,
+        borderRadius: '0.375rem',
+        marginTop: '1rem',
+      }
+
   return (
-    <div style={{ marginBottom: '1.5rem' }}>
+    <div style={{ marginBottom: isS12 ? 0 : '1.5rem' }}>
       <label
         style={{
           display: 'block',
@@ -244,29 +295,40 @@ export default function YesNoQuestion({
         >
           No
         </button>
+        {isS12 && (
+          <button
+            type="button"
+            onClick={() => handleAnswerChange('NA')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              minHeight: 44,
+              backgroundColor: isNA ? '#6366f1' : 'white',
+              color: isNA ? 'white' : '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              cursor: 'pointer',
+              fontWeight: isNA ? '600' : '500',
+            }}
+          >
+            NA
+          </button>
+        )}
       </div>
 
       {needsDetailSection && (
-        <div
-          style={{
-            padding: '1rem',
-            backgroundColor: isNo && shouldCreateAction ? '#fef3c7' : '#eff6ff',
-            border: `1px solid ${isNo && shouldCreateAction ? '#f59e0b' : '#93c5fd'}`,
-            borderRadius: '0.375rem',
-            marginTop: '1rem',
-          }}
-        >
-          {isNo && shouldCreateAction && (
+        <div style={detailBoxStyle}>
+          {!isS12 && isNo && shouldCreateAction && (
             <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#92400e' }}>
               Action will be created automatically
             </p>
           )}
-          {isTriggerYesDetail && (
+          {!isS12 && isTriggerYesDetail && (
             <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
               Add a comment, at least one photo, and choose who this should be sent to.
             </p>
           )}
-          {alwaysShowCaretakerRecipient &&
+          {!isS12 &&
+            alwaysShowCaretakerRecipient &&
             isThisQuestionTrigger &&
             recipientQ &&
             !isYes && (
@@ -275,7 +337,7 @@ export default function YesNoQuestion({
                 are required.
               </p>
             )}
-          {!isTriggerYesDetail && isYes && (nPw === 'on_yes' || nCw === 'on_yes') && (
+          {!isS12 && !isTriggerYesDetail && isYes && (nPw === 'on_yes' || nCw === 'on_yes') && (
             <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>
               Please add the details or photo requested for your Yes answer.
             </p>
@@ -291,7 +353,7 @@ export default function YesNoQuestion({
                   fontSize: '0.875rem',
                 }}
               >
-                Comment {requiresComment && <span style={{ color: '#ef4444' }}>*</span>}
+                Comment {requiresComment && !isS12 && <span style={{ color: '#ef4444' }}>*</span>}
               </label>
               <textarea
                 value={comment}
@@ -301,7 +363,7 @@ export default function YesNoQuestion({
                   onChange(`${question.id}_comment`, newComment)
                 }}
                 placeholder="Please provide details about this issue..."
-                required={requiresComment}
+                required={requiresComment && !isS12}
                 style={{
                   width: '100%',
                   padding: '0.75rem',
@@ -331,7 +393,7 @@ export default function YesNoQuestion({
                   fontSize: '0.875rem',
                 }}
               >
-                Photo(s) {requiresPhoto && <span style={{ color: '#ef4444' }}>*</span>}
+                Photo(s) {requiresPhoto && !isS12 && <span style={{ color: '#ef4444' }}>*</span>}
                 {photos.length > 0 && (
                   <span style={{ marginLeft: '0.5rem', color: '#6b7280', fontWeight: 'normal' }}>
                     ({photos.length} uploaded)
