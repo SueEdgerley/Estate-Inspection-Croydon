@@ -39,6 +39,36 @@ export default function AnalyticsPage() {
   const [authCode, setAuthCode] = useState(null)
   const [message, setMessage] = useState(null)
   const [payload, setPayload] = useState(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  const downloadReportPdf = async () => {
+    setPdfLoading(true)
+    try {
+      const res = await fetch('/api/analytics/report', { credentials: 'include', cache: 'no-store' })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        alert(
+          typeof j?.message === 'string' && j.message
+            ? j.message
+            : j?.error || 'Could not generate the PDF report.'
+        )
+        return
+      }
+      const blob = await res.blob()
+      const u = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = u
+      a.download = `analytics-report-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(u)
+    } catch (e) {
+      alert(e?.message || 'Download failed')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -125,13 +155,48 @@ export default function AnalyticsPage() {
 
       <SignedIn>
         <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '0 1rem 2.5rem' }}>
-          <header style={{ marginBottom: '1.5rem' }}>
-            <h1 style={{ margin: 0, fontSize: 'clamp(1.5rem, 4vw, 2rem)', fontWeight: 700, color: photobook.heading }}>
-              Analytics
-            </h1>
-            <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.9375rem', lineHeight: 1.5 }}>
-              Inspection insights split into sections — open one area at a time for clarity.
-            </p>
+          <header
+            style={{
+              marginBottom: '1.5rem',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
+          >
+            <div style={{ flex: '1 1 16rem', minWidth: 0 }}>
+              <h1 style={{ margin: 0, fontSize: 'clamp(1.5rem, 4vw, 2rem)', fontWeight: 700, color: photobook.heading }}>
+                Analytics
+              </h1>
+              <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.9375rem', lineHeight: 1.5 }}>
+                Inspection insights split into sections — open one area at a time for clarity.
+              </p>
+            </div>
+            {!loading && !authCode && overview != null && (
+              <button
+                type="button"
+                onClick={downloadReportPdf}
+                disabled={pdfLoading}
+                style={{
+                  flex: '0 0 auto',
+                  width: '100%',
+                  maxWidth: '20rem',
+                  padding: '0.75rem 1.25rem',
+                  minHeight: 48,
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  color: '#fff',
+                  backgroundColor: pdfLoading ? '#9ca3af' : photobook.primary,
+                  border: 'none',
+                  borderRadius: '0.5rem',
+                  cursor: pdfLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: pdfLoading ? 'none' : '0 2px 8px rgba(192, 38, 211, 0.25)',
+                }}
+              >
+                {pdfLoading ? 'Preparing PDF…' : 'Download report'}
+              </button>
+            )}
           </header>
 
           {loading && (

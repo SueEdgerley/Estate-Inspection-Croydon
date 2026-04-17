@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl, pgPublicTableExists } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import { loadAnalyticsPayload } from '@/lib/analytics-payload'
+import { buildAnalyticsReportPdfBuffer } from '@/lib/analytics-report-pdf'
 
 const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin']
 
@@ -44,10 +45,7 @@ export async function GET(request) {
       await ensureClerkUserProvisioned(clerkUserId, userEmail, { displayName })
     } catch (provErr) {
       if (isUsersTableMissing(provErr)) {
-        return NextResponse.json(
-          { error: 'DB not migrated', code: 'DB_NOT_MIGRATED' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'DB not migrated', code: 'DB_NOT_MIGRATED' }, { status: 500 })
       }
     }
 
@@ -87,24 +85,27 @@ export async function GET(request) {
     }
 
     if (!admin && assignedEstateCount === 0) {
-      return NextResponse.json({
-        overview: null,
-        estates: [],
-        blocks: [],
-        issues: null,
-        trends: null,
-        performance: null,
-        message: 'No estates assigned yet.',
-      })
+      return NextResponse.json({ error: 'No analytics data', message: 'No estates assigned yet.' }, { status: 400 })
     }
 
     const { searchParams } = new URL(request.url)
     const { body } = await loadAnalyticsPayload({ searchParams, admin, internalUser })
-    return NextResponse.json(body)
+
+    const buf = await buildAnalyticsReportPdfBuffer(body)
+
+    const filename = `analytics-report-${new Date().toISOString().slice(0, 10)}.pdf`
+    return new NextResponse(buf, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store',
+      },
+    })
   } catch (error) {
-    console.error('[Analytics]', error)
+    console.error('[Analytics PDF]', error)
     return NextResponse.json(
-      { error: 'Failed to load analytics', details: error.message },
+      { error: 'Failed to generate report', details: error.message },
       { status: 500 }
     )
   }

@@ -9,6 +9,7 @@ import {
   findTriggerQuestion,
   findPhotoCommentQuestion,
   isCaretakerTriggerActive,
+  inspectionIsCaretaker,
 } from '../../../../../lib/caretaker-template'
 import { isSpecialSection } from '../../../../../lib/template-rules'
 import { validateRequiredQuestions } from '../../../../../lib/airtable'
@@ -275,10 +276,17 @@ await fetch(`/api/inspections/${id}/answers`, {
   }
 
   const urlSectionNum = parseInt(String(sectionId), 10)
+  const isCaretakerInspection = inspectionIsCaretaker(inspection)
   const alwaysShowCaretakerCommentPhoto =
-    !Number.isNaN(urlSectionNum) && urlSectionNum >= 1 && urlSectionNum <= 5
+    isCaretakerInspection &&
+    !Number.isNaN(urlSectionNum) &&
+    urlSectionNum >= 1 &&
+    urlSectionNum <= 5
   const alwaysShowCaretakerRecipient =
-    !Number.isNaN(urlSectionNum) && urlSectionNum >= 3 && urlSectionNum <= 5
+    isCaretakerInspection &&
+    !Number.isNaN(urlSectionNum) &&
+    urlSectionNum >= 3 &&
+    urlSectionNum <= 5
 
   return (
     <div>
