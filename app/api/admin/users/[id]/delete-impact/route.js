@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl, pgPublicTableExists } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getAppAdminAccess } from '@/lib/app-admin-access'
 
 export const runtime = 'nodejs'
@@ -54,12 +54,6 @@ export async function GET(request, { params }) {
       `
     ).rows[0]?.c ?? 0
 
-    const assignmentCount = (
-      await sql`
-        SELECT COUNT(*)::int AS c FROM user_estate_assignments WHERE user_id = ${id}
-      `
-    ).rows[0]?.c ?? 0
-
     const ownerCount = (
       await sql`
         SELECT COUNT(*)::int AS c FROM users
@@ -91,22 +85,11 @@ export async function GET(request, { params }) {
       },
       counts: {
         inspectionsMatchingInspectorId: inspectionCount,
-        estateAssignmentCount: assignmentCount,
-      },
-      schema: {
-        user_estate_assignments_present: hasUserEstateAssignments,
       },
       notes: [
         'DELETE /api/admin/users/:id removes only the `users` row in this app database (no Clerk API call). Revoke Clerk access separately if needed.',
         'Inspections store inspector name and email on each row — they are not foreign-keyed to users, so deleting this login does not remove past inspection records.',
-        ...(hasUserEstateAssignments
-          ? [
-              'This database has `user_estate_assignments`; related rows for this user are typically removed by ON DELETE CASCADE when the user row is deleted.',
-            ]
-          : [
-              'This database has no `user_estate_assignments` table (Phase 1 schema); delete touches only `users`.',
-            ]),
-        'Staff directory rows (people) are not deleted.',
+        'Staff directory (`people`) is separate and is not modified by this action.',
       ],
       canDelete: blockers.length === 0,
       blockers,

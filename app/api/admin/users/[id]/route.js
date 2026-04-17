@@ -158,7 +158,7 @@ export async function DELETE(_request, { params }) {
       clerkUserDeleted: false,
       tablesTouched: ['users'],
       message:
-        'Removed this user from the app database (`users` row only). Past inspections still show stored inspector name/email. If your database defines related tables (e.g. assignments) with ON DELETE CASCADE, the database may remove those rows automatically.',
+        'Removed this user from the app database (`users` row only). Past inspections still show stored inspector name/email. Staff directory (people) was not changed.',
       clerkNotice:
         'The Clerk user account was not changed. They may still be able to sign in at Clerk until you delete or block that user in the Clerk Dashboard (or they remain unused).',
     })

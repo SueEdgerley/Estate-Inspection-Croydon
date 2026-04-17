@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
+import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
@@ -141,13 +141,11 @@ export async function GET(request) {
       )
     }
 
-    // Count estate assignments (for logging only; we do NOT 403 when 0)
+    // Count estate assignments (for logging only) — table may not exist on Phase 1 DBs
     let assignedEstateCount = 0
-    try {
+    if (await pgPublicTableExists('user_estate_assignments')) {
       const countResult = await sql`SELECT COUNT(*)::int AS c FROM user_estate_assignments WHERE user_id = ${internalUser.id}`
       assignedEstateCount = countResult.rows[0]?.c ?? 0
-    } catch {
-      // Table might not exist yet
     }
 
     console.log('[Dashboard] debug:', { role, is_active: internalUser.is_active, assignedEstateCount })

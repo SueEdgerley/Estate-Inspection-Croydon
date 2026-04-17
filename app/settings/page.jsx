@@ -197,15 +197,13 @@ export default function SettingsPage() {
         return
       }
       const ic = data.counts?.inspectionsMatchingInspectorId ?? 0
-      const ac = data.counts?.estateAssignmentCount ?? 0
       const label = data.user?.email || u.email || u.id
       const lines = [
         `Permanently delete the app login for ${label}?`,
         '',
-        `• Removes only the row in this app’s database (Neon users table) — not Clerk, not the staff directory.`,
+        `• Removes only the row in the app users table — not Clerk, not the staff directory (people).`,
         `• Clerk: the person may still exist in Clerk until you delete or block them in the Clerk Dashboard.`,
-        `• Past inspections stay in the database; inspector name/email on each row are unchanged (${ic} inspection(s) reference this user as inspector email/id).`,
-        `• ${ac} estate/block assignment row(s) for this login will be removed (CASCADE).`,
+        `• Past inspections stay in the database; inspector name/email on each row are unchanged (${ic} inspection(s) may reference this user as inspector email/id).`,
         `• Staff directory (people) rows are not deleted — remove those separately if needed.`,
         '',
         'This cannot be undone.',
