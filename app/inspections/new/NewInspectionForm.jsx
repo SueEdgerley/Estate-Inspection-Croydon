@@ -10,7 +10,7 @@ import {
   NV_Q24_GEO_HELPER,
   applyNeighbourhoodVoicePatchesToList,
 } from '@/lib/neighbourhood-voice-template-patch'
-import InspectionQuestion from '@/app/components/wizard/InspectionQuestion'
+import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
 
@@ -393,7 +393,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           {question.question_text}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
-        <InspectionQuestion
+        <WizardInspectionQuestion
           q={question}
           nv={NV_INLINE}
           gradeValue={value}

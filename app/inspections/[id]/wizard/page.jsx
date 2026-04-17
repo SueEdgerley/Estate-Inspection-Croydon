@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
-import { applyNeighbourhoodVoiceTemplatePatch } from '../../../lib/neighbourhood-voice-template-patch'
-import { unpackNvWizardNotes } from '../../../lib/nv-notes-pack'
+import { applyNeighbourhoodVoiceTemplatePatch } from '@/lib/neighbourhood-voice-template-patch'
+import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 
 // NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3
