@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '@/lib/photobook-theme'
+import OverviewTab from '@/app/components/analytics/OverviewTab'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -18,17 +19,6 @@ function formatMonthLabel(isoDate) {
   const d = new Date(isoDate)
   if (Number.isNaN(d.getTime())) return String(isoDate)
   return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-}
-
-function cardStyle(accent = photobook.primary) {
-  return {
-    backgroundColor: 'white',
-    padding: '1.25rem',
-    borderRadius: '0.5rem',
-    boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
-    border: `1px solid ${photobook.softBorder}`,
-    borderTop: `3px solid ${accent}`,
-  }
 }
 
 export default function AnalyticsPage() {
@@ -321,65 +311,7 @@ export default function AnalyticsPage() {
 
               <section role="tabpanel" aria-label={TABS.find((x) => x.id === tab)?.label} style={{ minHeight: '12rem' }}>
                 {tab === 'overview' && (
-                  <div>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                        gap: '1rem',
-                        marginBottom: '1.25rem',
-                      }}
-                    >
-                      <div style={cardStyle()}>
-                        <div style={{ fontSize: '0.8rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
-                          Overall score (A–D avg.)
-                        </div>
-                        <div style={{ fontSize: '1.65rem', fontWeight: 700, color: photobook.heading, lineHeight: 1.2 }}>
-                          {overview.overallScore != null ? Number(overview.overallScore).toFixed(2) : '—'}
-                          <span style={{ fontSize: '0.85rem', fontWeight: 500, color: '#6b7280' }}> / 4</span>
-                        </div>
-                        {overview.gradedInspections != null && (
-                          <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.35rem' }}>
-                            {overview.gradedInspections} graded inspection{overview.gradedInspections === 1 ? '' : 's'}
-                          </div>
-                        )}
-                      </div>
-                      <div style={cardStyle()}>
-                        <div style={{ fontSize: '0.8rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
-                          Total inspections
-                        </div>
-                        <div style={{ fontSize: '1.65rem', fontWeight: 700, color: photobook.heading }}>
-                          {overview.totalInspections}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.35rem' }}>Submitted (in filter)</div>
-                      </div>
-                      <div style={cardStyle()}>
-                        <div style={{ fontSize: '0.8rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
-                          Completion rate
-                        </div>
-                        <div style={{ fontSize: '1.65rem', fontWeight: 700, color: photobook.heading }}>
-                          {overview.completionRatePct != null ? `${overview.completionRatePct}%` : '—'}
-                        </div>
-                        {overview.completionBasis && (
-                          <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.35rem', lineHeight: 1.35 }}>
-                            {overview.completionBasis}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ ...cardStyle(photobook.link), borderTop: `3px solid ${photobook.link}` }}>
-                      <div style={{ fontSize: '0.8rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.5rem' }}>
-                        Simple trend (volume)
-                      </div>
-                      <p style={{ margin: 0, fontSize: '0.9375rem', color: '#374151', lineHeight: 1.55 }}>
-                        {overview.trend?.label}
-                      </p>
-                      <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.75rem', flexWrap: 'wrap', fontSize: '0.8125rem', color: '#6b7280' }}>
-                        <span>Last 90 days: {overview.trend?.recent90d ?? 0}</span>
-                        <span>Previous 90 days: {overview.trend?.prior90d ?? 0}</span>
-                      </div>
-                    </div>
-                  </div>
+                  <OverviewTab overview={overview} trends={trends} issues={issues} />
                 )}
 
                 {tab === 'estates' && (
