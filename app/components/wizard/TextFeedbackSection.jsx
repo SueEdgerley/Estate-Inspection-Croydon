@@ -1,6 +1,7 @@
 'use client'
 
 import PhotoUploadControl from '../questions/PhotoUploadControl'
+import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 
 /**
  * Estate Feedback (Resident Insight): prompts, overall comment, optional photo — no grading.
@@ -46,6 +47,7 @@ export default function TextFeedbackSection({
             onChange={(e) => setRow(i, e.target.value)}
             rows={2}
             style={{
+              ...NV_TEXTAREA_SURFACE,
               width: '100%',
               padding: 10,
               border: nv.cardBorder,
@@ -66,6 +68,7 @@ export default function TextFeedbackSection({
           onChange={(e) => onExtras({ comment: e.target.value })}
           rows={3}
           style={{
+            ...NV_TEXTAREA_SURFACE,
             width: '100%',
             padding: 10,
             border: nv.cardBorder,

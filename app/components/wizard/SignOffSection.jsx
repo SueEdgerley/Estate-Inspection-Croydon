@@ -1,6 +1,7 @@
 'use client'
 
 import PhotoUploadControl from '../questions/PhotoUploadControl'
+import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 
 /**
  * Q25 — Sign-off: date, display name, confirmation, comment, photo.
@@ -32,6 +33,7 @@ export default function SignOffSection({
           handleAnswer(q.id, 'completed', persistSecId)
         }}
         style={{
+          ...NV_TEXT_INPUT_SURFACE,
           width: '100%',
           minHeight: btnMinH,
           padding: `12px ${nv.btnPx}px`,
@@ -55,6 +57,7 @@ export default function SignOffSection({
           if (v) handleAnswer(q.id, 'completed', persistSecId)
         }}
         style={{
+          ...NV_TEXT_INPUT_SURFACE,
           width: '100%',
           minHeight: btnMinH,
           padding: `12px ${nv.btnPx}px`,
@@ -94,6 +97,7 @@ export default function SignOffSection({
         onChange={(e) => handleExtras(q.id, persistSecId, { signoff_comment: e.target.value })}
         rows={2}
         style={{
+          ...NV_TEXTAREA_SURFACE,
           width: '100%',
           padding: 10,
           border: nv.cardBorder,

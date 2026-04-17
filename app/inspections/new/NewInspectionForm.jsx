@@ -12,6 +12,7 @@ import {
   getNvQuestionStepLabel,
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
+import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -230,6 +231,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
                   placeholder="e.g. Please ensure the area is kept clear."
                   rows={2}
                   style={{
+                    ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
                     width: '100%',
                     padding: '0.5rem',
                     border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -288,6 +290,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
               onChange={(e) => setExtras({ comment: e.target.value })}
               rows={2}
               style={{
+                ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
                 width: '100%',
                 padding: '0.5rem',
                 border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -397,6 +400,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           onChange={(e) => handleChange(e.target.value)}
           rows={4}
           style={{
+            ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
             width: '100%',
             padding: '0.75rem',
             border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -500,6 +504,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           onChange={(e) => setExtras({ comment: e.target.value })}
           rows={3}
           style={{
+            ...NV_TEXTAREA_SURFACE,
             width: '100%',
             padding: '0.75rem',
             border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -526,6 +531,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           value={extras.visit_date || ''}
           onChange={(e) => setExtras({ visit_date: e.target.value })}
           style={{
+            ...NV_TEXT_INPUT_SURFACE,
             width: '100%',
             maxWidth: 280,
             padding: '0.75rem',
@@ -544,6 +550,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           value={extras.resident_display_name != null ? extras.resident_display_name : ''}
           onChange={(e) => setExtras({ resident_display_name: e.target.value })}
           style={{
+            ...NV_TEXT_INPUT_SURFACE,
             width: '100%',
             padding: '0.75rem',
             border: '1px solid #d1d5db',
@@ -570,6 +577,7 @@ function InspectionQuestion({ question, value, onChange, error, errorComment, er
           onChange={(e) => setExtras({ signoff_comment: e.target.value })}
           rows={2}
           style={{
+            ...NV_TEXTAREA_SURFACE,
             width: '100%',
             padding: '0.75rem',
             border: '1px solid #d1d5db',

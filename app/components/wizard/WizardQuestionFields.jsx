@@ -8,6 +8,7 @@ import InspectionQuestion from './InspectionQuestion'
 import TextFeedbackSection from './TextFeedbackSection'
 import IssuesReportSection from './IssuesReportSection'
 import SignOffSection from './SignOffSection'
+import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 
 const YN_OPTIONS = ['Yes', 'No', 'NA']
 
@@ -144,7 +145,7 @@ export default function WizardQuestionFields({
             handleAnswer(q.id, 'completed', persistSecId)
           }}
           rows={3}
-          style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: nv.btnRadius, fontFamily: nv.font }}
+          style={{ ...NV_TEXTAREA_SURFACE, width: '100%', padding: 10, border: nv.cardBorder, borderRadius: nv.btnRadius, fontFamily: nv.font }}
         />
       </div>
     )
@@ -223,6 +224,7 @@ export default function WizardQuestionFields({
               onChange={(e) => handleExtras(q.id, persistSecId, { comment: e.target.value })}
               rows={2}
               style={{
+                ...NV_TEXTAREA_SURFACE,
                 width: '100%',
                 padding: 10,
                 border: nv.cardBorder,
@@ -356,6 +358,7 @@ export default function WizardQuestionFields({
         onChange={(e) => handleAnswer(q.id, e.target.value, persistSecId)}
         rows={4}
         style={{
+          ...NV_TEXTAREA_SURFACE,
           width: '100%',
           padding: 12,
           fontSize: nv.baseSize,
@@ -470,6 +473,7 @@ export default function WizardQuestionFields({
             onChange={(e) => handleExtras(q.id, persistSecId, { comment: e.target.value })}
             rows={3}
             style={{
+              ...NV_TEXTAREA_SURFACE,
               width: '100%',
               padding: 10,
               border: nv.cardBorder,
@@ -518,7 +522,17 @@ export default function WizardQuestionFields({
                 value={ext.comment || ''}
                 onChange={(e) => handleExtras(q.id, persistSecId, { comment: e.target.value })}
                 rows={2}
-                style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.baseSize, marginBottom: 12, fontFamily: nv.font, minHeight: 56 }}
+                style={{
+                  ...NV_TEXTAREA_SURFACE,
+                  width: '100%',
+                  padding: 10,
+                  border: nv.cardBorder,
+                  borderRadius: 8,
+                  fontSize: nv.baseSize,
+                  marginBottom: 12,
+                  fontFamily: nv.font,
+                  minHeight: 56,
+                }}
               />
             </>
           )}

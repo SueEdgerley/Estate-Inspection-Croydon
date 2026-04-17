@@ -1,6 +1,7 @@
 'use client'
 
 import PhotoUploadControl from '../questions/PhotoUploadControl'
+import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 
 const DEFAULT_GRADES = ['A', 'B', 'C', 'D', 'NA']
 
@@ -74,6 +75,7 @@ export default function InspectionQuestion({
           onChange={(e) => onComment(e.target.value)}
           rows={3}
           style={{
+            ...NV_TEXTAREA_SURFACE,
             width: '100%',
             padding: 10,
             border: nv.cardBorder,

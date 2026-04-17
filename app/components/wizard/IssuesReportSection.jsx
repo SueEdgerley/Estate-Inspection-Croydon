@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { normalizeYesNoNaDisplay } from '../../../lib/question-types'
 import { NV_Q24_AIRTABLE_ROWS_188_192 } from '../../../lib/neighbourhood-voice-template-patch'
@@ -83,6 +84,7 @@ export default function IssuesReportSection({
         }}
         rows={2}
         style={{
+          ...NV_TEXTAREA_SURFACE,
           width: '100%',
           padding: 10,
           border: nv.cardBorder,
@@ -114,6 +116,7 @@ export default function IssuesReportSection({
           }}
           rows={3}
           style={{
+            ...NV_TEXTAREA_SURFACE,
             width: '100%',
             padding: 10,
             border: nv.cardBorder,

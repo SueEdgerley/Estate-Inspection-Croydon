@@ -51,14 +51,21 @@ a {
   text-decoration: none;
 }
 
-/* NV inspection wizard: page padding 16px mobile, 24px desktop */
+/* NV inspection wizard: page padding 16px mobile, 24px desktop; light form controls (see lib/nv-resident-field-surfaces.js) */
 .nv-wizard-page {
   padding: 16px;
+  color-scheme: only light;
 }
 @media (min-width: 768px) {
   .nv-wizard-page {
     padding: 24px;
   }
+}
+
+.nv-wizard-page textarea::placeholder,
+.nv-wizard-page input::placeholder {
+  color: #6b7280;
+  opacity: 1;
 }
 
 @media (prefers-color-scheme: dark) {
