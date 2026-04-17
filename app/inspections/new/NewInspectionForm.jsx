@@ -14,6 +14,11 @@ import {
 } from '@/lib/neighbourhood-voice-template-patch'
 import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
+import {
+  usesStandardInspectionFormUI,
+  questionIsStandardInspectionConditionRow,
+  questionIsStandardInspectionIssueRow,
+} from '@/lib/standard-inspection-form'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
@@ -103,6 +108,7 @@ function InspectionQuestion({
   isNvTemplate = false,
   expandedByQuestionId = {},
   peopleOptions = [],
+  standardInspectionForm = false,
 }) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
@@ -151,6 +157,9 @@ function InspectionQuestion({
   }, [isNvTemplate, showCommentPhotoBlock])
 
   const extras = answerExtras || { comment: '', photo_urls: [] }
+  const stdInspection = standardInspectionForm && !isNvTemplate
+  const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(question)
+  const isStdIssueRow = stdInspection && questionIsStandardInspectionIssueRow(question)
 
   const handleChange = (val) => {
     onChange(question.id, val)
@@ -246,8 +255,12 @@ function InspectionQuestion({
             {showComment && (
               <>
                 <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                  Resident-friendly message (for poster PDF){commentWhen === 'always' || (commentWhen === 'on_no' && isNo) ? ' ' : ''}
-                  {(commentWhen === 'always' || (commentWhen === 'on_no' && isNo)) && <span style={{ color: '#ef4444' }}>*</span>}
+                  {isStdIssueRow
+                    ? 'Comment'
+                    : `Resident-friendly message (for poster PDF)${commentWhen === 'always' || (commentWhen === 'on_no' && isNo) ? ' ' : ''}`}
+                  {(commentWhen === 'always' ||
+                    (commentWhen === 'on_no' && isNo) ||
+                    (commentWhen === 'on_yes' && isYes)) && <span style={{ color: '#ef4444' }}>*</span>}
                 </label>
                 <textarea
                   id={`comment-${question.id}`}
@@ -313,11 +326,16 @@ function InspectionQuestion({
   }
 
   if (qType === 'graded') {
-    const gradingOpts = question.grading_options || ['A', 'B', 'C', 'D', 'NA']
+    const gradingOpts = question.grading_options?.length ? question.grading_options : ['A', 'B', 'C', 'D', 'NA']
     const needPhoto = !!question.nv_graded_require_comment_photo
     const needComment = needPhoto || !!question.nv_graded_require_comment_only
     const hasGrade = value != null && String(value).trim() !== ''
-    const nvGradedExtras = (isNvTemplate || question.caretaker_graded_always_extras) && needComment && hasGrade
+    const showGradedExtras =
+      isNvTemplate
+        ? needComment && hasGrade
+        : isStdConditionRow && needComment
+          ? true
+          : question.caretaker_graded_always_extras && needComment && hasGrade
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
@@ -329,13 +347,14 @@ function InspectionQuestion({
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {buttonGroup(gradingOpts, id)}
-        {nvGradedExtras && (
+        {showGradedExtras && (
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
             <p style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.875rem', color: '#374151' }}>
               {needPhoto ? 'Comment and photo' : 'Comment'}
             </p>
             <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Comment {isRequired && hasGrade ? <span style={{ color: '#ef4444' }}>*</span> : null}
+              Comment{' '}
+              {isRequired && hasGrade ? <span style={{ color: '#ef4444' }}>*</span> : null}
             </label>
             <textarea
               id={`comment-${question.id}`}
@@ -366,7 +385,7 @@ function InspectionQuestion({
             )}
           </div>
         )}
-        {!isNvTemplate && !question.caretaker_graded_always_extras && photoBlock}
+        {!isNvTemplate && !isStdConditionRow && !question.caretaker_graded_always_extras && photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1343,6 +1362,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                       isNvTemplate={isNVTemplate(selectedTemplate)}
                       expandedByQuestionId={expandedByQuestionId}
                       peopleOptions={peopleOptions}
+                      standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
                     />
                   )
                 })}
