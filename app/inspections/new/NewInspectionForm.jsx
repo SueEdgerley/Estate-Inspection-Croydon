@@ -14,6 +14,8 @@ import {
 } from '@/lib/neighbourhood-voice-template-patch'
 import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
+import { isCaretakerTemplate } from '@/lib/caretaker-template'
+import { caretakerRowDisplayLabel, indexToCaretakerRowLetter } from '@/lib/caretaker-yesno-display'
 import {
   usesStandardInspectionFormUI,
   questionIsStandardInspectionConditionRow,
@@ -109,9 +111,11 @@ function InspectionQuestion({
   expandedByQuestionId = {},
   peopleOptions = [],
   standardInspectionForm = false,
+  caretakerPartLabel = null,
 }) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
+  const labelText = caretakerPartLabel || question.question_text
   const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
   const nvHeading =
     nvLabel != null ? (
@@ -237,7 +241,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <YesNoNaButtons
@@ -319,7 +323,11 @@ function InspectionQuestion({
             {isNvTemplate || (question.caretaker_recipient_on_yes && isYes) ? photoBlock : null}
           </div>
         )}
-        {!isNvTemplate && !(question.caretaker_recipient_on_yes && isYes) && photoBlock}
+        {!isNvTemplate &&
+          !question.caretaker_recipient_on_yes &&
+          !photoWhen &&
+          typeIncludesPhoto &&
+          photoBlock}
         {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -340,7 +348,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
           {question.grading_scheme_name && (
             <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({question.grading_scheme_name})</span>
           )}
@@ -396,7 +404,7 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <select
@@ -429,7 +437,7 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -463,7 +471,7 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <textarea
@@ -493,7 +501,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         <WizardInspectionQuestion
@@ -538,7 +546,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
         </label>
         <IssuesReportSection
           q={question}
@@ -561,7 +569,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {question.question_text}
+          {labelText}
         </label>
         <ol style={{ margin: '0 0 0.75rem 1rem', fontSize: '0.9375rem', color: '#374151' }}>
           {rows.map((line, i) => (
@@ -674,7 +682,7 @@ function InspectionQuestion({
   return (
     <div style={{ marginBottom: '1rem' }}>
       <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-        {question.question_text}
+        {labelText}
         {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
       </label>
       <input
@@ -1343,29 +1351,37 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 {section.help_text && (
                   <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
                 )}
-                {(section.questions || []).map((q) => {
-                  if (q.nv_hidden) return null
-                  if (!isNeighbourhoodVoiceQuestionRenderable(q)) return null
-                  if (!shouldShowQuestion(q, answers)) return null
-                  return (
-                    <InspectionQuestion
-                      key={q.id}
-                      question={q}
-                      value={answers[q.id]}
-                      onChange={handleAnswer}
-                      error={validationErrors[q.id]}
-                      errorComment={validationErrors[`${q.id}_comment`]}
-                      errorPhotos={validationErrors[`${q.id}_photos`]}
-                      answerExtras={answerExtras[q.id]}
-                      onAnswerExtras={(questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))}
-                      createActionOnNo={q.create_action_on_no}
-                      isNvTemplate={isNVTemplate(selectedTemplate)}
-                      expandedByQuestionId={expandedByQuestionId}
-                      peopleOptions={peopleOptions}
-                      standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
-                    />
-                  )
-                })}
+                {(() => {
+                  let caretakerRowIdx = 0
+                  return (section.questions || []).map((q) => {
+                    if (q.nv_hidden) return null
+                    if (!isNeighbourhoodVoiceQuestionRenderable(q)) return null
+                    if (!shouldShowQuestion(q, answers)) return null
+                    const caretakerPartLabel =
+                      isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate)
+                        ? caretakerRowDisplayLabel(indexToCaretakerRowLetter(caretakerRowIdx++), q)
+                        : null
+                    return (
+                      <InspectionQuestion
+                        key={q.id}
+                        question={q}
+                        value={answers[q.id]}
+                        onChange={handleAnswer}
+                        error={validationErrors[q.id]}
+                        errorComment={validationErrors[`${q.id}_comment`]}
+                        errorPhotos={validationErrors[`${q.id}_photos`]}
+                        answerExtras={answerExtras[q.id]}
+                        onAnswerExtras={(questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))}
+                        createActionOnNo={q.create_action_on_no}
+                        isNvTemplate={isNVTemplate(selectedTemplate)}
+                        expandedByQuestionId={expandedByQuestionId}
+                        peopleOptions={peopleOptions}
+                        standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
+                        caretakerPartLabel={caretakerPartLabel}
+                      />
+                    )
+                  })
+                })()}
               </div>
             ))}
           </div>
