@@ -178,11 +178,11 @@ export default function WizardQuestionFields({
     const showGradedFollowUp = (needPhoto || needCommentOnly) && selected
     const showPhoto = needPhoto && selected
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
         {q.grading_scheme_name && (
           <p style={{ fontSize: nv.helperSize, color: nv.helperColor, margin: 0 }}>{q.grading_scheme_name}</p>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, width: '100%', minWidth: 0 }}>
           {opts.map((opt) => {
             const label = typeof opt === 'string' ? opt : String(opt?.value ?? opt?.label ?? opt)
             const isSel = selected === label
