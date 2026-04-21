@@ -1,6 +1,9 @@
 /**
- * Generates PNG icons for PWA / home screen from an inline SVG.
- * Run: node scripts/generate-pwa-icons.mjs
+ * Generates PNG icons for PWA / Add to Home Screen from an inline SVG.
+ * Purple LBC house mark — run after editing the SVG below.
+ *
+ * Run: npm run pwa:icons
+ *   or: node scripts/generate-pwa-icons.mjs
  */
 import fs from 'fs'
 import path from 'path'
@@ -11,19 +14,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
 const outDir = path.join(root, 'public', 'icons')
 
-const THEME = '#1E3A8A'
-const ACCENT = '#ffffff'
-
-/** Simple square mark: matches app “council / housing” tooling feel without embedding external assets. */
+/** Vibrant purple tile + white house / LBC / CROYDON (matches council PWA brief). */
 const svg512 = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" fill="${THEME}" rx="96"/>
-  <g fill="${ACCENT}" transform="translate(96,96)">
-    <rect x="0" y="160" width="320" height="48" rx="8"/>
-    <rect x="0" y="80" width="200" height="48" rx="8"/>
-    <rect x="0" y="0" width="320" height="48" rx="8"/>
-    <path d="M280 240 L320 320 L240 320 Z" opacity="0.95"/>
-  </g>
+  <defs>
+    <radialGradient id="bg" cx="42%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- House silhouette (white) -->
+  <path fill="#ffffff" d="M256 96 L404 244 L404 400 L108 400 L108 244 Z"/>
+  <!-- Four-pane attic window -->
+  <rect x="232" y="152" width="48" height="44" rx="5" fill="none" stroke="#5b21b6" stroke-width="4"/>
+  <line x1="256" y1="152" x2="256" y2="196" stroke="#5b21b6" stroke-width="3"/>
+  <line x1="232" y1="174" x2="280" y2="174" stroke="#5b21b6" stroke-width="3"/>
+  <!-- LBC -->
+  <text x="256" y="318" text-anchor="middle" font-family="Arial Black, Helvetica, Arial, sans-serif" font-size="68" font-weight="700" fill="#ffffff">LBC</text>
+  <!-- Arc under house -->
+  <path d="M 148 418 Q 256 388 364 418" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  <!-- CROYDON -->
+  <text x="256" y="462" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="600" letter-spacing="0.2em" fill="#ffffff">CROYDON</text>
 </svg>`
 
 async function main() {
@@ -42,15 +54,24 @@ async function main() {
     console.log('Wrote', path.relative(root, out))
   }
 
-  // Maskable: same art with padding inside safe zone (inner 80% content)
+  // Maskable: same artwork scaled from centre (~82% safe zone) for Android adaptive icons
   const maskSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" fill="${THEME}" rx="112"/>
-  <g fill="${ACCENT}" transform="translate(128,128) scale(0.5)">
-    <rect x="0" y="160" width="320" height="48" rx="8"/>
-    <rect x="0" y="80" width="200" height="48" rx="8"/>
-    <rect x="0" y="0" width="320" height="48" rx="8"/>
-    <path d="M280 240 L320 320 L240 320 Z" opacity="0.95"/>
+  <defs>
+    <radialGradient id="bgm" cx="42%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgm)"/>
+  <g transform="translate(256 256) scale(0.82) translate(-256 -256)">
+    <path fill="#ffffff" d="M256 96 L404 244 L404 400 L108 400 L108 244 Z"/>
+    <rect x="232" y="152" width="48" height="44" rx="5" fill="none" stroke="#5b21b6" stroke-width="4"/>
+    <line x1="256" y1="152" x2="256" y2="196" stroke="#5b21b6" stroke-width="3"/>
+    <line x1="232" y1="174" x2="280" y2="174" stroke="#5b21b6" stroke-width="3"/>
+    <text x="256" y="318" text-anchor="middle" font-family="Arial Black, Helvetica, Arial, sans-serif" font-size="68" font-weight="700" fill="#ffffff">LBC</text>
+    <path d="M 148 418 Q 256 388 364 418" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+    <text x="256" y="462" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="600" letter-spacing="0.2em" fill="#ffffff">CROYDON</text>
   </g>
 </svg>`
   await sharp(Buffer.from(maskSvg)).resize(512, 512).png().toFile(path.join(outDir, 'icon-512-maskable.png'))

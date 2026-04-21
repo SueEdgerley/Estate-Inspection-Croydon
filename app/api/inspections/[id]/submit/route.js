@@ -213,18 +213,26 @@ export async function POST(request, { params }) {
       }
     }
 
-    // Get all actions (for PDF poster and emails)
-    const allActionsResult = await sql`
-      SELECT 
-        a.*,
-        p.email as recipient_email,
-        p.name as recipient_name
-      FROM actions a
-      LEFT JOIN people p ON a.recipient_person_id = p.id
-      WHERE a.inspection_id = ${id} AND a.status = 'open'
-      ORDER BY a.category, a.created_at
-    `
-    const allActions = allActionsResult.rows
+    // Get all actions (for PDF poster and emails) — must not 500 the response after submit
+    let allActions = []
+    try {
+      const allActionsResult = await sql`
+        SELECT 
+          a.*,
+          p.email as recipient_email,
+          p.name as recipient_name
+        FROM actions a
+        LEFT JOIN people p ON a.recipient_person_id = p.id
+        WHERE a.inspection_id = ${id} AND a.status = 'open'
+        ORDER BY a.category, a.created_at
+      `
+      allActions = allActionsResult.rows
+    } catch (loadActionsErr) {
+      console.error('[inspections/submit] loading actions for poster/email failed:', loadActionsErr)
+      actionCreationWarnings.push(
+        `Could not load open actions for this inspection: ${loadActionsErr?.message || String(loadActionsErr)}`
+      )
+    }
 
     let fullPdfUrl = null
     let posterPdfUrl = null
@@ -375,18 +383,24 @@ export async function POST(request, { params }) {
       }
     }
     
-    // Get actions grouped by category
-    const actionsResult = await sql`
-      SELECT 
-        category, 
-        COUNT(*) as count,
-        STRING_AGG(DISTINCT section_name || ' – ' || title, '; ') as action_list
-      FROM actions 
-      WHERE inspection_id = ${id} AND status = 'open'
-      GROUP BY category
-    `
-    
-    const actionCategories = actionsResult.rows.map(row => row.category)
+    // Get actions grouped by category (must not fail the HTTP response after inspection is submitted)
+    let actionsResult = { rows: [] }
+    try {
+      actionsResult = await sql`
+        SELECT 
+          category, 
+          COUNT(*) as count,
+          STRING_AGG(DISTINCT section_name || ' – ' || title, '; ') as action_list
+        FROM actions 
+        WHERE inspection_id = ${id} AND status = 'open'
+        GROUP BY category
+      `
+    } catch (actionsAggErr) {
+      console.error('[inspections/submit] actions aggregation query failed:', actionsAggErr)
+      actionCreationWarnings.push(
+        `Could not aggregate actions for email context: ${actionsAggErr?.message || String(actionsAggErr)}`
+      )
+    }
 
     // Send emails (must not fail the submit response)
     let emailResults = { sent: [], failed: [] }
@@ -400,22 +414,38 @@ export async function POST(request, { params }) {
       })
     } catch (emailErr) {
       console.error('[inspections/submit] sendEmails threw:', emailErr)
+      actionCreationWarnings.push(`Email sending error: ${emailErr?.message || String(emailErr)}`)
     }
 
-    // Save recipient records
-    for (const recipient of emailResults.sent) {
-      await sql`
-        INSERT INTO inspection_recipients (
-          id, inspection_id, person_id, person_email, recipient_type, sent_at
-        ) VALUES (
-          ${`recipient_${id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`},
-          ${id},
-          ${recipient.person_id || null},
-          ${recipient.email},
-          ${recipient.type || 'targeted'},
-          CURRENT_TIMESTAMP
+    // Save recipient records (best-effort — inspection is already submitted)
+    const sentList = Array.isArray(emailResults?.sent) ? emailResults.sent : []
+    for (let i = 0; i < sentList.length; i++) {
+      const recipient = sentList[i]
+      const emailAddr = recipient?.email != null ? String(recipient.email).trim() : ''
+      if (!emailAddr) {
+        actionCreationWarnings.push('Skipped saving an inspection_recipients row (missing email on sent record).')
+        continue
+      }
+      try {
+        const rid = `recipient_${id}_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 11)}`
+        await sql`
+          INSERT INTO inspection_recipients (
+            id, inspection_id, person_id, person_email, recipient_type, sent_at
+          ) VALUES (
+            ${rid},
+            ${id},
+            ${recipient.person_id || null},
+            ${emailAddr},
+            ${recipient.type || 'targeted'},
+            CURRENT_TIMESTAMP
+          )
+        `
+      } catch (recErr) {
+        console.error('[inspections/submit] inspection_recipients insert failed:', recErr)
+        actionCreationWarnings.push(
+          `Could not save recipient audit row (${emailAddr}): ${recErr?.message || String(recErr)}`
         )
-      `
+      }
     }
 
     return NextResponse.json(
