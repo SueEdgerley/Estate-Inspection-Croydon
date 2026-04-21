@@ -191,6 +191,7 @@ function InspectionQuestion({
         fontSize: NV_INLINE.baseSize,
         borderRadius: NV_INLINE.btnRadius,
         padding: `12px ${NV_INLINE.btnPx}px`,
+        fontFamily: NV_INLINE.font,
       }
     : {
         minHeight: 48,
@@ -204,7 +205,17 @@ function InspectionQuestion({
   const photoId = `photo-${question.id}`
   const photoBlock = (
     <div style={{ marginTop: '0.75rem' }}>
-      <label htmlFor={photoId} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+      <label
+        htmlFor={photoId}
+        style={{
+          display: 'block',
+          marginBottom: '0.5rem',
+          fontSize: isNvTemplate ? NV_INLINE.helperSize : '0.875rem',
+          fontWeight: 600,
+          color: isNvTemplate ? NV_INLINE.text : '#374151',
+          fontFamily: isNvTemplate ? NV_INLINE.font : undefined,
+        }}
+      >
         Add photo
         {photoRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
       </label>
@@ -260,7 +271,17 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
-        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label
+          htmlFor={id}
+          style={{
+            display: 'block',
+            marginBottom: '0.5rem',
+            fontWeight: 500,
+            color: isNvTemplate ? NV_INLINE.text : '#374151',
+            fontSize: isNvTemplate ? NV_INLINE.baseSize : undefined,
+            fontFamily: isNvTemplate ? NV_INLINE.font : undefined,
+          }}
+        >
           {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
@@ -384,10 +405,23 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
-        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label
+          htmlFor={id}
+          style={{
+            display: 'block',
+            marginBottom: '0.5rem',
+            fontWeight: 500,
+            color: isNvTemplate ? NV_INLINE.text : '#374151',
+            fontSize: isNvTemplate ? NV_INLINE.baseSize : undefined,
+            fontFamily: isNvTemplate ? NV_INLINE.font : undefined,
+          }}
+        >
           {labelText}
           {question.grading_scheme_name && (
-            <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({question.grading_scheme_name})</span>
+            <span style={{ fontWeight: 400, color: isNvTemplate ? NV_INLINE.muted : '#6b7280', fontSize: isNvTemplate ? NV_INLINE.helperSize : '0.875rem' }}>
+              {' '}
+              ({question.grading_scheme_name})
+            </span>
           )}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
@@ -544,11 +578,11 @@ function InspectionQuestion({
           style={{
             ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
             width: '100%',
-            padding: '0.75rem',
-            border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
-            fontFamily: 'inherit',
+            padding: isNvTemplate ? 10 : '0.75rem',
+            border: error ? '1px solid #ef4444' : isNvTemplate ? NV_INLINE.cardBorder : '1px solid #d1d5db',
+            borderRadius: isNvTemplate ? NV_INLINE.btnRadius : '0.375rem',
+            fontSize: isNvTemplate ? NV_INLINE.baseSize : '1rem',
+            fontFamily: isNvTemplate ? NV_INLINE.font : 'inherit',
             minHeight: 100,
           }}
         />
@@ -561,7 +595,16 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+        <label
+          style={{
+            display: 'block',
+            marginBottom: '0.5rem',
+            fontWeight: 500,
+            color: NV_INLINE.text,
+            fontSize: NV_INLINE.baseSize,
+            fontFamily: NV_INLINE.font,
+          }}
+        >
           {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
@@ -1423,6 +1466,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                         peopleOptions={peopleOptions}
                         standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
                         caretakerPartLabel={caretakerPartLabel}
+                        isMobile={isMobile}
                       />
                     )
                   })

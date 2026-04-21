@@ -1,6 +1,7 @@
 import './styles/globals.css'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import AppLayout from './components/AppLayout'
+import PwaRegister from './components/PwaRegister'
 import { Providers } from './providers'
 
 const fontSans = Inter({
@@ -16,7 +17,27 @@ const fontMono = JetBrains_Mono({
 export const metadata = {
   title: 'Estate Inspection - Croydon',
   description: 'Estate Inspection Management System for Croydon Council',
-};
+  applicationName: 'Estate Inspection Croydon',
+  appleWebApp: {
+    capable: true,
+    title: 'Estate Inspection',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/icons/apple-touch-icon.png',
+  },
+}
+
+/** Mobile viewport + theme colour for browser chrome / PWA shell */
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1E3A8A',
+}
 
 // Prevent static export at build time so Clerk/auth pages don't fail when env is missing
 export const dynamic = 'force-dynamic';
@@ -28,6 +49,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={`${fontSans.variable} ${fontMono.variable} antialiased`}>
+        <PwaRegister />
         {hasClerkKey ? (
           <Providers publishableKey={publishableKey}>
             <AppLayout>{children}</AppLayout>
