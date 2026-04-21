@@ -15,29 +15,20 @@ import { colours } from '@/lib/nv-theme'
 import { photobook } from '@/lib/photobook-theme'
 
 const ALL_NAV_ITEMS = [
-  { href: '/', label: 'Home' },
-  { href: '/inspections', label: 'Manage Inspections' },
-  { href: '/inspections/ad-hoc', label: 'Create Inspections' },
-  { href: '/actions', label: 'Manage Tasks' },
-  { href: '/templates', label: 'Forms' },
-  { href: '/import', label: 'Import' },
-  { href: '/guides', label: 'Guides' },
-  { href: '/settings', label: 'Settings' },
-  { href: '/downloads', label: 'Data Download' },
-  { href: '/analytics', label: 'Analytics' },
+  { href: '/', label: 'Home', navKey: 'home' },
+  { href: '/inspections', label: 'Manage Inspections', navKey: 'inspections' },
+  { href: '/inspections/ad-hoc', label: 'Create Inspections', navKey: 'inspectionsAdHoc' },
+  { href: '/actions', label: 'Manage Tasks', navKey: 'actions' },
+  { href: '/templates', label: 'Forms', navKey: 'templates' },
+  { href: '/import', label: 'Import', navKey: 'import' },
+  { href: '/guides', label: 'Guides', navKey: 'guides' },
+  { href: '/settings', label: 'Settings', navKey: 'settings' },
+  { href: '/downloads', label: 'Data Download', navKey: 'downloads' },
+  { href: '/analytics', label: 'Analytics', navKey: 'analytics' },
 ]
 
 /** Hidden when signed out (admin pages require login). */
 const ADMIN_ONLY_NAV_HREFS = new Set(['/settings', '/import'])
-
-/** Hrefs visible to app role `user` (non-admin); order matches ALL_NAV_ITEMS subset */
-const USER_ROLE_NAV_HREFS = new Set([
-  '/',
-  '/inspections',
-  '/inspections/ad-hoc',
-  '/actions',
-  '/templates',
-])
 
 /** Croydon Housing + Council horizontal banner (`public/croydon-housing-logo.svg`, white background) */
 const LOGO_SRC = '/croydon-housing-logo.svg'
@@ -56,11 +47,13 @@ export default function AppLayout({ children }) {
   const { isSignedIn, isLoaded: authLoaded } = useAuth()
   const [appRole, setAppRole] = useState(null)
   const [clerkIsAdmin, setClerkIsAdmin] = useState(false)
+  const [roleUi, setRoleUi] = useState(null)
 
   useEffect(() => {
     if (!authLoaded || !isSignedIn) {
       setAppRole(null)
       setClerkIsAdmin(false)
+      setRoleUi(null)
       return
     }
     let cancelled = false
@@ -70,11 +63,13 @@ export default function AppLayout({ children }) {
         if (cancelled) return
         setAppRole(typeof data?.role === 'string' ? data.role : null)
         setClerkIsAdmin(data?.clerkIsAdmin === true)
+        setRoleUi(data?.roleUi && typeof data.roleUi === 'object' ? data.roleUi : null)
       })
       .catch(() => {
         if (!cancelled) {
           setAppRole(null)
           setClerkIsAdmin(false)
+          setRoleUi(null)
         }
       })
     return () => {
@@ -86,16 +81,13 @@ export default function AppLayout({ children }) {
     if (!isSignedIn) {
       return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
     }
-    const r = (appRole || '').toLowerCase().trim()
-    // Only hide Settings / full nav for the standard app "user" role without Clerk admin.
-    // Do not treat null/empty role as non-admin here — many accounts have no users.role yet
-    // and would incorrectly lose Settings (see nav regression).
-    const isRestrictedUser = r === 'user' && !clerkIsAdmin
-    if (isRestrictedUser) {
-      return ALL_NAV_ITEMS.filter((item) => USER_ROLE_NAV_HREFS.has(item.href))
+    const nav = roleUi?.nav
+    if (nav && typeof nav === 'object') {
+      return ALL_NAV_ITEMS.filter((item) => nav[item.navKey] === true)
     }
-    return ALL_NAV_ITEMS
-  }, [isSignedIn, appRole, clerkIsAdmin])
+    // Before roleUi loads: show a safe subset (no admin-only links)
+    return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
+  }, [isSignedIn, roleUi])
 
   const isActive = (href) => {
     if (href === '/') return pathname === '/' || pathname === '/dashboard'
