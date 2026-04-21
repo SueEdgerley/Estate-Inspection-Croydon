@@ -26,29 +26,36 @@ import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
 
-/** Minimal design tokens for NV reusable blocks outside the wizard page. */
+/**
+ * NV design tokens — aligned with `app/inspections/[id]/wizard/page.jsx` `nv` so the
+ * inline New Inspection form matches the wizard (coloured grades, beige fields, borders).
+ */
 const NV_INLINE = {
-  helperSize: '0.875rem',
-  helperColor: '#6b7280',
+  font: 'var(--font-geist-sans), Inter, system-ui, sans-serif',
+  helperSize: 14,
+  helperColor: '#6B7280',
   primary: '#1E3A8A',
-  cardBg: '#fff',
+  cardBg: '#FFFFFF',
   cardBorder: '1px solid #E5E7EB',
   text: '#111827',
-  baseSize: '1rem',
-  metaSize: '0.8125rem',
+  baseSize: 16,
+  metaSize: 13,
   btnPx: 16,
-  font: 'inherit',
   unansweredAmber: '#FEF3C7',
-  btnUnselectedBorder: '1px solid #d1d5db',
-  btnRadius: 8,
+  btnUnselectedBorder: '1px solid #D1D5DB',
+  btnRadius: 10,
   btnFontWeight: 600,
   btnMinHeight: 48,
+  btnMinHeightMobile: 56,
   yesColor: '#16A34A',
   noColor: '#DC2626',
   naColor: '#6B7280',
   primaryLight: '#EFF6FF',
   muted: '#6B7280',
   error: '#DC2626',
+  /** Beige panel behind comment / follow-up blocks (matches NV_TEXTAREA_SURFACE family) */
+  commentPanelBg: '#F5F0E6',
+  commentPanelBorder: '1px solid #E8DFD0',
 }
 
 function shouldShowQuestion(question, answers) {
@@ -112,6 +119,7 @@ function InspectionQuestion({
   peopleOptions = [],
   standardInspectionForm = false,
   caretakerPartLabel = null,
+  isMobile = false,
 }) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
@@ -121,11 +129,12 @@ function InspectionQuestion({
     nvLabel != null ? (
       <p
         style={{
-          fontSize: '0.8125rem',
+          fontSize: NV_INLINE.helperSize,
           fontWeight: 600,
-          color: '#1E3A8A',
+          color: NV_INLINE.primary,
           marginBottom: '0.5rem',
           letterSpacing: '0.02em',
+          fontFamily: NV_INLINE.font,
         }}
       >
         {nvLabel}
@@ -176,6 +185,22 @@ function InspectionQuestion({
     if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
   }
 
+  const gradeChipDims = isNvTemplate
+    ? {
+        minHeight: isMobile ? NV_INLINE.btnMinHeightMobile : NV_INLINE.btnMinHeight,
+        fontSize: NV_INLINE.baseSize,
+        borderRadius: NV_INLINE.btnRadius,
+        padding: `12px ${NV_INLINE.btnPx}px`,
+      }
+    : {
+        minHeight: 48,
+        fontSize: '0.9375rem',
+        borderRadius: '0.375rem',
+        padding: '12px 16px',
+      }
+
+  const nvGradeBtnMin = isMobile ? NV_INLINE.btnMinHeightMobile : NV_INLINE.btnMinHeight
+
   const photoId = `photo-${question.id}`
   const photoBlock = (
     <div style={{ marginTop: '0.75rem' }}>
@@ -195,7 +220,7 @@ function InspectionQuestion({
   )
 
   const buttonGroup = (optionList, firstButtonId) => (
-    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: isNvTemplate ? 10 : '10px', flexWrap: 'wrap' }}>
       {(optionList || []).map((opt, idx) => {
         const label = typeof opt === 'string' ? opt : (opt?.label ?? opt?.value ?? opt)
         const val = typeof opt === 'string' ? opt : (opt?.value ?? opt?.label ?? opt)
@@ -206,12 +231,7 @@ function InspectionQuestion({
             type="button"
             id={idx === 0 && firstButtonId ? firstButtonId : undefined}
             onClick={() => handleChange(val)}
-            style={getGradeButtonStyle(label, isSelected, {
-              padding: '12px 16px',
-              minHeight: 48,
-              fontSize: '0.9375rem',
-              borderRadius: '0.375rem',
-            })}
+            style={getGradeButtonStyle(label, isSelected, gradeChipDims)}
           >
             {label}
           </button>
@@ -250,7 +270,24 @@ function InspectionQuestion({
           onChange={(val) => handleChange(val)}
         />
         {showCommentPhotoBlock && (
-          <div ref={isNvTemplate ? expandedSectionRef : undefined} style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
+          <div
+            ref={isNvTemplate ? expandedSectionRef : undefined}
+            style={{
+              marginTop: '1rem',
+              padding: '1rem',
+              ...(isNvTemplate && !showActionBlock
+                ? {
+                    background: NV_INLINE.commentPanelBg,
+                    borderRadius: NV_INLINE.btnRadius,
+                    border: NV_INLINE.commentPanelBorder,
+                  }
+                : {
+                    background: showActionBlock ? '#fef3c7' : '#f9fafb',
+                    borderRadius: '0.375rem',
+                    border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}`,
+                  }),
+            }}
+          >
             {showActionBlock && (
               <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e' }}>
                 Action will be created automatically
@@ -276,11 +313,11 @@ function InspectionQuestion({
                   style={{
                     ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
                     width: '100%',
-                    padding: '0.5rem',
-                    border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
-                    borderRadius: '0.375rem',
-                    fontSize: '0.875rem',
-                    fontFamily: 'inherit',
+                    padding: isNvTemplate ? 10 : '0.5rem',
+                    border: errorComment ? '1px solid #ef4444' : isNvTemplate ? NV_INLINE.cardBorder : '1px solid #d1d5db',
+                    borderRadius: isNvTemplate ? NV_INLINE.btnRadius : '0.375rem',
+                    fontSize: isNvTemplate ? NV_INLINE.baseSize : '0.875rem',
+                    fontFamily: isNvTemplate ? NV_INLINE.font : 'inherit',
                     marginBottom: '0.75rem',
                   }}
                 />
@@ -356,8 +393,32 @@ function InspectionQuestion({
         </label>
         {buttonGroup(gradingOpts, id)}
         {showGradedExtras && (
-          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
-            <p style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.875rem', color: '#374151' }}>
+          <div
+            style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
+              ...(isNvTemplate
+                ? {
+                    background: NV_INLINE.commentPanelBg,
+                    borderRadius: NV_INLINE.btnRadius,
+                    border: NV_INLINE.commentPanelBorder,
+                  }
+                : {
+                    background: '#f9fafb',
+                    borderRadius: '0.375rem',
+                    border: '1px solid #e5e7eb',
+                  }),
+            }}
+          >
+            <p
+              style={{
+                fontWeight: 600,
+                marginBottom: '0.5rem',
+                fontSize: isNvTemplate ? NV_INLINE.helperSize : '0.875rem',
+                color: isNvTemplate ? NV_INLINE.text : '#374151',
+                fontFamily: isNvTemplate ? NV_INLINE.font : undefined,
+              }}
+            >
               {needPhoto ? 'Comment and photo' : 'Comment'}
             </p>
             <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
@@ -373,11 +434,11 @@ function InspectionQuestion({
               style={{
                 ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
                 width: '100%',
-                padding: '0.5rem',
-                border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                fontFamily: 'inherit',
+                padding: isNvTemplate ? 10 : '0.5rem',
+                border: errorComment ? '1px solid #ef4444' : isNvTemplate ? NV_INLINE.cardBorder : '1px solid #d1d5db',
+                borderRadius: isNvTemplate ? NV_INLINE.btnRadius : '0.375rem',
+                fontSize: isNvTemplate ? NV_INLINE.baseSize : '0.875rem',
+                fontFamily: isNvTemplate ? NV_INLINE.font : 'inherit',
                 marginBottom: needPhoto ? '0.75rem' : 0,
               }}
             />
@@ -509,7 +570,7 @@ function InspectionQuestion({
           nv={NV_INLINE}
           gradeValue={value}
           ext={extras}
-          btnMinH={NV_INLINE.btnMinHeight}
+          btnMinH={nvGradeBtnMin}
           maxPhotos={1}
           onSelectGrade={(label) => onChange(question.id, label)}
           onComment={(text) => setExtras({ comment: text })}
@@ -552,7 +613,7 @@ function InspectionQuestion({
           q={question}
           nv={NV_INLINE}
           ext={extras}
-          btnMinH={NV_INLINE.btnMinHeight}
+          btnMinH={nvGradeBtnMin}
           maxPhotos={3}
           onAnswer={(val) => onChange(question.id, val)}
           onExtras={(updates) => setExtras({ ...extras, ...updates })}
@@ -587,11 +648,11 @@ function InspectionQuestion({
           style={{
             ...NV_TEXTAREA_SURFACE,
             width: '100%',
-            padding: '0.75rem',
-            border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
-            fontFamily: 'inherit',
+            padding: 10,
+            border: errorComment ? '1px solid #ef4444' : NV_INLINE.cardBorder,
+            borderRadius: NV_INLINE.btnRadius,
+            fontSize: NV_INLINE.baseSize,
+            fontFamily: NV_INLINE.font,
           }}
         />
       </div>
@@ -602,8 +663,10 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
-        <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#374151' }}>Sign-off</p>
-        <label htmlFor={`nv25-date-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+        <p style={{ margin: 0, fontSize: NV_INLINE.helperSize, fontWeight: 600, color: NV_INLINE.text, fontFamily: NV_INLINE.font }}>
+          Sign-off
+        </p>
+        <label htmlFor={`nv25-date-${question.id}`} style={{ display: 'block', marginTop: 12, marginBottom: 6, fontSize: NV_INLINE.helperSize, fontWeight: 600, color: NV_INLINE.text, fontFamily: NV_INLINE.font }}>
           Date of this visit
         </label>
         <input
@@ -615,14 +678,16 @@ function InspectionQuestion({
             ...NV_TEXT_INPUT_SURFACE,
             width: '100%',
             maxWidth: 280,
-            padding: '0.75rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
+            minHeight: nvGradeBtnMin,
+            padding: `12px ${NV_INLINE.btnPx}px`,
+            border: NV_INLINE.cardBorder,
+            borderRadius: NV_INLINE.btnRadius,
+            fontSize: NV_INLINE.baseSize,
+            fontFamily: NV_INLINE.font,
             marginBottom: '0.75rem',
           }}
         />
-        <label htmlFor={`nv25-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+        <label htmlFor={`nv25-name-${question.id}`} style={{ display: 'block', marginBottom: 6, fontSize: NV_INLINE.helperSize, fontWeight: 600, color: NV_INLINE.text, fontFamily: NV_INLINE.font }}>
           Name as it should appear on the report
         </label>
         <input
@@ -633,14 +698,16 @@ function InspectionQuestion({
           style={{
             ...NV_TEXT_INPUT_SURFACE,
             width: '100%',
-            padding: '0.75rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
+            minHeight: nvGradeBtnMin,
+            padding: `12px ${NV_INLINE.btnPx}px`,
+            border: NV_INLINE.cardBorder,
+            borderRadius: NV_INLINE.btnRadius,
+            fontSize: NV_INLINE.baseSize,
+            fontFamily: NV_INLINE.font,
             marginBottom: '0.75rem',
           }}
         />
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.875rem', color: '#374151', cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: NV_INLINE.helperSize, color: NV_INLINE.text, cursor: 'pointer', fontFamily: NV_INLINE.font, marginTop: 4 }}>
           <input
             type="checkbox"
             checked={!!extras.nv_signoff_confirmed}
