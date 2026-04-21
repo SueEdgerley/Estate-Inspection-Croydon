@@ -3,7 +3,17 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
-import { extractCaretakerRecipients, findRecipientQuestion } from '@/lib/caretaker-template'
+import {
+  extractCaretakerRecipients,
+  findRecipientQuestion,
+  isCaretakerTemplate,
+} from '@/lib/caretaker-template'
+import { patchCaretakerTemplateForFireSafety } from '@/lib/caretaker-fire-template-patch'
+import {
+  buildCaretakerActionDescription,
+  shouldAutocreateCaretakerAction,
+  normalizeYesNoAnswer,
+} from '@/lib/caretaker-action-details'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
@@ -75,66 +85,32 @@ export async function POST(request, { params }) {
     }
     if (templateVersion && typeof templateVersion === 'object') {
       applyNeighbourhoodVoiceTemplatePatch(templateVersion)
+      if (
+        isCaretakerTemplate({
+          name: templateVersion.name || templateVersion.template_name || inspection.template_name,
+          template_type: templateVersion.template_type || templateVersion.type || inspection.template_type,
+          type: templateVersion.type || templateVersion.template_type,
+        })
+      ) {
+        patchCaretakerTemplateForFireSafety(templateVersion)
+      }
     }
 
     const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)
     const isNv = isNeighbourhoodVoiceTemplateVersion(templateVersion)
+    const wasDraft = inspection.status === 'draft'
 
-    // If draft, create actions from answers so PDF and emails have data
-    if (inspection.status === 'draft') {
-      if (isNv) {
-        await createNeighbourhoodVoiceAutoActions(sql, {
-          inspectionId: id,
-          inspection,
-          templateVersion,
-          answersRows: answersResult.rows,
-        })
-      } else {
-        const version = templateVersion
-        const sections = (version && version.sections) || []
-        for (const sec of sections) {
-          for (const q of sec.questions || []) {
-            const val = answers[q.id]
-            const normalized = val != null ? String(val).toLowerCase().trim() : ''
-            const isNo = normalized === 'no'
-            const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
-            const comment = (answerRow && answerRow.notes) || ''
-            const category = q.action_category || q.category || 'Follow-up'
-            const residentMessage = comment || q.question_text || 'Issue raised from inspection'
-            if (isNo && q.create_action_on_no !== false) {
-              const actionId = `action_${id}_${q.id}_${Date.now()}`
-              await sql`
-                INSERT INTO actions (
-                  id, inspection_id, section_id, section_name, question_id,
-                  category, priority, title, description, location, status,
-                  comment, auto_created, photo_urls
-                )
-                VALUES (
-                  ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
-                  ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
-                  ${comment || null}, true, '[]'::jsonb
-                )
-              `
-            }
-          }
-        }
-      }
-    }
-
-    // Get all actions (for PDF poster and emails)
-    const allActionsResult = await sql`
-      SELECT 
-        a.*,
-        p.email as recipient_email,
-        p.name as recipient_name
-      FROM actions a
-      LEFT JOIN people p ON a.recipient_person_id = p.id
-      WHERE a.inspection_id = ${id} AND a.status = 'open'
-      ORDER BY a.category, a.created_at
+    const locRow = await sql`
+      SELECT COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS location_line
+      FROM inspections i
+      LEFT JOIN estates e ON e.id = i.estate_id
+      LEFT JOIN blocks b ON b.id = i.block_id
+      WHERE i.id = ${id}
+      LIMIT 1
     `
-    const allActions = allActionsResult.rows
+    const estateBlockLine = String(locRow.rows[0]?.location_line || inspection.location_label || inspection.title || '').trim()
 
-    // Mark submitted before PDF so dashboard/reporting see completion even if blob/PDF fails (same path as ad hoc).
+    // Mark submitted first so inspection completion never depends on action rows or email.
     await sql`
       UPDATE inspections
       SET status = 'submitted',
@@ -150,6 +126,105 @@ export async function POST(request, { params }) {
       SELECT * FROM inspections WHERE id = ${id}
     `
     const inspectionLive = refreshedResult.rows[0] || inspection
+
+    const actionCreationWarnings = []
+    if (wasDraft) {
+      try {
+        if (isNv) {
+          await createNeighbourhoodVoiceAutoActions(sql, {
+            inspectionId: id,
+            inspection: inspectionLive,
+            templateVersion,
+            answersRows: answersResult.rows,
+          })
+        } else {
+          const sections = (templateVersion && templateVersion.sections) || []
+          const completedAt = new Date().toISOString()
+          for (const sec of sections) {
+            const recipientQ = findRecipientQuestion(sec.questions || [])
+            const recipientId =
+              recipientQ && answers[recipientQ.id] != null && answers[recipientQ.id] !== ''
+                ? answers[recipientQ.id]
+                : null
+            for (const q of sec.questions || []) {
+              if (!q || !q.id) continue
+              const val = answers[q.id]
+              if (!shouldAutocreateCaretakerAction(q, val, sec)) continue
+              const existing = await sql`
+                SELECT id FROM actions
+                WHERE inspection_id = ${id} AND question_id = ${q.id} AND status = 'open'
+                LIMIT 1
+              `
+              if (existing.rows.length > 0) continue
+              const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
+              const comment = (answerRow && answerRow.notes) || ''
+              const category = q.action_category || q.category || 'other'
+              const qText = q.question_text || q.label || q.id
+              const norm = normalizeYesNoAnswer(val)
+              const answerLabel = norm === 'yes' ? 'Yes' : norm === 'no' ? 'No' : String(val ?? '')
+              const photosResult = await sql`
+                SELECT id, blob_url FROM inspection_photos
+                WHERE inspection_id = ${id} AND question_id = ${q.id}
+              `
+              const photoUrlsArr = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
+              const photoRefs = photosResult.rows.map((p) => p.blob_url || p.id).filter(Boolean).join('; ')
+              const title = `${sec.title || sec.name || 'Section'} – ${qText}`
+              const description = buildCaretakerActionDescription({
+                inspectionId: id,
+                completedAtIso: completedAt,
+                estateBlockLine,
+                sectionName: sec.title || sec.name || '',
+                questionText: qText,
+                answerLabel,
+                comment,
+                photoRefs,
+                category,
+                assigneeLabel: recipientId ? `Person id ${recipientId}` : '',
+                submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
+              })
+              const actionId = `action_${id}_${q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+              try {
+                await sql`
+                  INSERT INTO actions (
+                    id, inspection_id, section_id, section_name, question_id,
+                    category, priority, title, description, location, status,
+                    comment, recipient_person_id, auto_created, photo_urls
+                  )
+                  VALUES (
+                    ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
+                    ${category}, null, ${title}, ${description}, null, 'open',
+                    ${comment || null}, ${recipientId}, true, ${JSON.stringify(photoUrlsArr)}
+                  )
+                `
+              } catch (insertErr) {
+                console.error('[inspections/submit] caretaker action insert failed:', insertErr)
+                actionCreationWarnings.push(
+                  `Could not create action for question ${q.id}: ${insertErr?.message || insertErr}`
+                )
+              }
+            }
+          }
+        }
+      } catch (draftActionErr) {
+        console.error('[inspections/submit] draft action creation failed:', draftActionErr)
+        actionCreationWarnings.push(
+          `Action creation had errors: ${draftActionErr?.message || String(draftActionErr)}`
+        )
+      }
+    }
+
+    // Get all actions (for PDF poster and emails)
+    const allActionsResult = await sql`
+      SELECT 
+        a.*,
+        p.email as recipient_email,
+        p.name as recipient_name
+      FROM actions a
+      LEFT JOIN people p ON a.recipient_person_id = p.id
+      WHERE a.inspection_id = ${id} AND a.status = 'open'
+      ORDER BY a.category, a.created_at
+    `
+    const allActions = allActionsResult.rows
 
     let fullPdfUrl = null
     let posterPdfUrl = null
@@ -313,14 +388,19 @@ export async function POST(request, { params }) {
     
     const actionCategories = actionsResult.rows.map(row => row.category)
 
-    // Send emails
-    const emailResults = await sendEmails({
-      inspection: inspectionLive,
-      recipients,
-      actionCategories: actionsResult.rows,
-      allActions,
-      pdfUrl: fullPdfUrl
-    })
+    // Send emails (must not fail the submit response)
+    let emailResults = { sent: [], failed: [] }
+    try {
+      emailResults = await sendEmails({
+        inspection: inspectionLive,
+        recipients,
+        actionCategories: actionsResult.rows,
+        allActions,
+        pdfUrl: fullPdfUrl,
+      })
+    } catch (emailErr) {
+      console.error('[inspections/submit] sendEmails threw:', emailErr)
+    }
 
     // Save recipient records
     for (const recipient of emailResults.sent) {
@@ -344,6 +424,11 @@ export async function POST(request, { params }) {
         pdfUrl: fullPdfUrl || null,
         fullPdfUrl: fullPdfUrl || null,
         posterPdfUrl: posterPdfUrl || null,
+        emails_sent: Array.isArray(emailResults?.sent) ? emailResults.sent.length : 0,
+        ...(Array.isArray(emailResults?.failed) && emailResults.failed.length > 0
+          ? { email_failures: emailResults.failed }
+          : {}),
+        ...(actionCreationWarnings.length > 0 ? { action_creation_warnings: actionCreationWarnings } : {}),
         ...(pdfError ? { pdfError } : {}),
       },
       { status: 201 }

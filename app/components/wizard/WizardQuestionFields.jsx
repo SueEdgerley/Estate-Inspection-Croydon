@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
+import YesNoNaButtons from '../questions/YesNoNaButtons'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
 import { NV_ESTATE_FEEDBACK_PROMPTS, NV_Q24_AIRTABLE_ROWS_188_192 } from '../../../lib/neighbourhood-voice-template-patch'
 import InspectionQuestion from './InspectionQuestion'
@@ -10,8 +11,6 @@ import IssuesReportSection from './IssuesReportSection'
 import SignOffSection from './SignOffSection'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
-
-const YN_OPTIONS = ['Yes', 'No', 'NA']
 
 function parsePhotoAnswer(raw) {
   if (raw == null || raw === '') return []
@@ -44,7 +43,7 @@ function normalizeOptionsList(q) {
 }
 
 /**
- * Renders the correct controls for one wizard question (mobile or desktop section view).
+ * Renders the correct controls for one wizard question (same NV controls as NewInspectionForm where shared).
  */
 export default function WizardQuestionFields({
   q,
@@ -56,7 +55,6 @@ export default function WizardQuestionFields({
   handleExtras,
   maxPhotos = 3,
   commentFocusRef,
-  isMobile,
   prefillResidentName = '',
 }) {
   const kind = getEffectiveQuestionKind(q)
@@ -65,7 +63,8 @@ export default function WizardQuestionFields({
   /** Persist to original Airtable section_id when UI uses synthetic NV sections. */
   const persistSecId = q._nv_answer_section_id || sec.id
 
-  const btnMinH = isMobile ? nv.btnMinHeightMobile : nv.btnMinHeight
+  /** Match NewInspectionForm / NV_INLINE (48px) — same control scale on all viewports. */
+  const btnMinH = nv.btnMinHeight
 
   useEffect(() => {
     if (kind !== 'nv_q25' || !prefillResidentName?.trim()) return
@@ -414,47 +413,15 @@ export default function WizardQuestionFields({
   const commentId = `comment-${q.id}`
   const severityId = `severity-${q.id}`
 
+  const ynId = `answer-${q.id}`
+
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-        {YN_OPTIONS.map((opt) => {
-          const isSelected = value === opt
-          const isYesOpt = opt === 'Yes'
-          const isNoOpt = opt === 'No'
-          const fillColor = isYesOpt ? nv.yesColor : isNoOpt ? nv.noColor : nv.naColor
-          const bg = isSelected ? fillColor : nv.cardBg
-          const border = isSelected
-            ? `2px solid ${fillColor}`
-            : isMobile
-              ? '2px solid #E5E7EB'
-              : nv.btnUnselectedBorder
-          const color = isSelected ? '#fff' : nv.text
-          return (
-            <button
-              key={opt}
-              type="button"
-              id={`answer-${q.id}-${opt}`}
-              onClick={() => handleAnswer(q.id, opt, persistSecId)}
-              style={{
-                minHeight: btnMinH,
-                padding: isMobile ? '14px 16px' : `12px ${nv.btnPx}px`,
-                fontSize: isMobile ? 16 : nv.baseSize,
-                fontWeight: nv.btnFontWeight,
-                backgroundColor: bg,
-                color,
-                border,
-                borderRadius: nv.btnRadius,
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: nv.transition,
-                width: '100%',
-              }}
-            >
-              {opt}
-            </button>
-          )
-        })}
-      </div>
+      <YesNoNaButtons
+        id={ynId}
+        value={value}
+        onChange={(opt) => handleAnswer(q.id, opt, persistSecId)}
+      />
 
       {showAlwaysComment && (
         <div style={{ marginTop: 16 }}>

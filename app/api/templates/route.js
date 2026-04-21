@@ -6,6 +6,7 @@ import {
   getTemplatesNested,
 } from '@/lib/airtable-client'
 import { filterTemplatesForViewer } from '@/lib/template-visibility'
+import { patchCaretakerTemplatesList } from '@/lib/caretaker-fire-template-patch'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
 
@@ -61,7 +62,9 @@ export async function GET() {
   const viewer = await getViewerContext()
 
   try {
-    const templates = applyTemplateVisibility(await getTemplatesNested(), viewer)
+    const templates = patchCaretakerTemplatesList(
+      applyTemplateVisibility(await getTemplatesNested(), viewer)
+    )
     const diagnostics = getAirtableProductionDiagnostics({
       failing_table: null,
       airtable_status_code: null,
@@ -101,7 +104,7 @@ export async function GET() {
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)
-          const templates = applyTemplateVisibility(rawFallback, viewer)
+          const templates = patchCaretakerTemplatesList(applyTemplateVisibility(rawFallback, viewer))
           if (templates.length > 0) {
             const diagnostics = getAirtableProductionDiagnostics({
               failing_table: error.airtableTableName ?? null,

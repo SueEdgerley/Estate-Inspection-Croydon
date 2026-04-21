@@ -8,7 +8,7 @@ import {
   computeCaretakerRequiresComment,
   computeCaretakerRequiresPhoto,
 } from '@/lib/caretaker-yesno-display'
-import { isSpecialSection, isTriggerQuestion } from '@/lib/template-rules'
+import { getActionTriggerOn } from '@/lib/template-rules'
 import { findRecipientQuestion } from '@/lib/caretaker-template'
 
 export default function YesNoQuestion({
@@ -72,12 +72,11 @@ export default function YesNoQuestion({
     return findRecipientQuestion(sectionQuestions)
   }, [sectionQuestions])
 
-  const isThisQuestionTrigger =
-    section && isSpecialSection(section) && isTriggerQuestion(question, section)
+  const triggerOnYes = getActionTriggerOn(question, section) === 'yes'
 
   useEffect(() => {
     let cancelled = false
-    if (!isThisQuestionTrigger || !recipientQ) {
+    if (!triggerOnYes || !recipientQ) {
       setRecipientOptions([])
       return () => {
         cancelled = true
@@ -105,7 +104,7 @@ export default function YesNoQuestion({
     return () => {
       cancelled = true
     }
-  }, [isThisQuestionTrigger, recipientQ])
+  }, [triggerOnYes, recipientQ])
 
   const handleAnswerChange = async (newAnswer) => {
     const wasNo = answer === false || answer === 'no' || answer === 'No'
@@ -170,7 +169,7 @@ export default function YesNoQuestion({
   const nPw = normalizeWhenToken(question.photo_required_when)
   const shouldCreateAction = shouldCreateActionOnNo(question)
 
-  const isTriggerYesDetail = isThisQuestionTrigger && isYes
+  const isTriggerYesDetail = triggerOnYes && isYes
 
   const requiresComment = isTriggerYesDetail
     ? true
@@ -216,7 +215,7 @@ export default function YesNoQuestion({
   const requiresRecipient = isTriggerYesDetail
   const showRecipientField =
     recipientQ &&
-    isThisQuestionTrigger &&
+    triggerOnYes &&
     (alwaysShowCaretakerRecipient || isTriggerYesDetail)
 
   const recipientValue = recipientQ ? allAnswers[recipientQ.id] ?? '' : ''
@@ -329,7 +328,7 @@ export default function YesNoQuestion({
           )}
           {!isS12 &&
             alwaysShowCaretakerRecipient &&
-            isThisQuestionTrigger &&
+            triggerOnYes &&
             recipientQ &&
             !isYes && (
               <p style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e3a8a' }}>

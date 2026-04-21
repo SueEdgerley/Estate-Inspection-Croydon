@@ -8,10 +8,17 @@ import {
   validateCaretakerTemplate,
   findTriggerQuestion,
   findPhotoCommentQuestion,
+  findRecipientQuestion,
   isCaretakerTriggerActive,
   inspectionIsCaretaker,
 } from '../../../../../lib/caretaker-template'
-import { isSpecialSection } from '../../../../../lib/template-rules'
+import { getActionTriggerOn, isSpecialSection } from '../../../../../lib/template-rules'
+import { patchCaretakerTemplateForFireSafety } from '../../../../../lib/caretaker-fire-template-patch'
+import {
+  buildCaretakerActionDescription,
+  shouldAutocreateCaretakerAction,
+  normalizeYesNoAnswer,
+} from '../../../../../lib/caretaker-action-details'
 import { validateRequiredQuestions } from '../../../../../lib/airtable'
 import { handleYesAnswer, handleNoAnswer } from '../../../../../lib/yesno-action-handler'
 
@@ -33,6 +40,7 @@ export default function InspectionSection() {
   const [loading, setLoading] = useState(true)
   const [answers, setAnswers] = useState({})
   const [createdActions, setCreatedActions] = useState([])
+  const [actionProcessWarning, setActionProcessWarning] = useState(null)
   const [questions, setQuestions] = useState([])
   const [errors, setErrors] = useState({})
   const [section, setSection] = useState(null)
@@ -54,6 +62,9 @@ export default function InspectionSection() {
           } catch {
             version = null
           }
+        }
+        if (version && typeof version === 'object') {
+          patchCaretakerTemplateForFireSafety(version)
         }
         const sections = (version && version.sections) || []
         const currentSection = sections[parseInt(sectionId, 10) - 1] || null
@@ -120,6 +131,8 @@ export default function InspectionSection() {
     const errors = {}
     for (const question of questions) {
       if (!isYesNoQuestion(question)) continue
+      const dir = getActionTriggerOn(question, section)
+      if (dir === 'yes') continue
       const answer = answers[question.id]
       const isNo = answer === false || answer === 'no' || answer === 'No'
       if (!isNo) continue
@@ -145,12 +158,89 @@ export default function InspectionSection() {
     return errors
   }
 
+  const inspectionLocationLine = (inv) => {
+    if (!inv) return ''
+    const line =
+      inv.location_label ||
+      [inv.estate_name, inv.block_name].filter(Boolean).join(' / ') ||
+      inv.title ||
+      ''
+    return String(line).trim()
+  }
+
   const processNoAnswers = async (questions, answers) => {
+    const warnings = []
     const sectionName = section?.name || `Section ${sectionId}`
+    const recipientQ = findRecipientQuestion(questions)
+    const recipientPersonIdFor = () =>
+      recipientQ && answers[recipientQ.id] ? answers[recipientQ.id] : null
+
     for (const question of questions) {
       if (!isYesNoQuestion(question)) continue
       const answer = answers[question.id]
-      const isNo = answer === false || answer === 'no' || answer === 'No'
+      const norm = normalizeYesNoAnswer(answer)
+      const dir = getActionTriggerOn(question, section)
+
+      if (dir === 'yes') {
+        if (norm !== 'yes') {
+          await handleYesAnswer(id, question.id)
+          continue
+        }
+        if (!shouldAutocreateCaretakerAction(question, answer, section)) continue
+        const comment = answers[`${question.id}_comment`] || ''
+        const photosResponse = await fetch(
+          `/api/photos?inspection_id=${id}&question_id=${question.id}`,
+          { credentials: 'include' }
+        )
+        const photos = photosResponse.ok ? await photosResponse.json() : []
+        const photoIds = photos.map((p) => p.id)
+        const priority = answers[`${question.id}_priority`] || question.action_priority || null
+        const recipientPersonId = recipientPersonIdFor()
+        const qText = question.label || question.question_text || question.id
+        const richDescription = buildCaretakerActionDescription({
+          inspectionId: id,
+          completedAtIso: new Date().toISOString(),
+          estateBlockLine: inspectionLocationLine(inspection),
+          sectionName,
+          questionText: qText,
+          answerLabel: 'Yes',
+          comment,
+          photoRefs: photos.map((p) => p.blob_url || p.id).filter(Boolean).join('; '),
+          category: question.action_category || 'other',
+          assigneeLabel: recipientPersonId ? `Person id ${recipientPersonId}` : '',
+          submittedBy: inspection?.inspector_name || inspection?.inspector_id || '',
+        })
+        try {
+          const action = await handleNoAnswer({
+            inspectionId: id,
+            sectionId: sectionId,
+            sectionName: sectionName,
+            questionId: question.id,
+            questionText: qText,
+            question: question,
+            comment: comment,
+            photos: photoIds,
+            priority: priority,
+            recipientPersonId: recipientPersonId || null,
+            richDescription,
+          })
+          if (action) {
+            setCreatedActions((prev) => {
+              const existing = prev.find((a) => a.question_id === question.id)
+              if (existing) {
+                return prev.map((a) => (a.question_id === question.id ? action : a))
+              }
+              return [...prev, action]
+            })
+          }
+        } catch (error) {
+          console.error(`Error processing Yes-trigger issue for ${question.id}:`, error)
+          warnings.push(`Action for "${qText}" could not be saved (${error?.message || 'error'}).`)
+        }
+        continue
+      }
+
+      const isNo = norm === 'no'
       if (!isNo) {
         await handleYesAnswer(id, question.id)
         continue
@@ -159,35 +249,52 @@ export default function InspectionSection() {
       const comment = answers[`${question.id}_comment`] || ''
       const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
       const photos = photosResponse.ok ? await photosResponse.json() : []
-      const photoIds = photos.map(p => p.id)
+      const photoIds = photos.map((p) => p.id)
       const priority = answers[`${question.id}_priority`] || question.action_priority || null
-      const recipientPersonId = question.id === 'who_to_send_to' ? answer : null
+      const recipientPersonId = recipientPersonIdFor()
+      const qText = question.label || question.question_text || question.id
+      const richDescription = buildCaretakerActionDescription({
+        inspectionId: id,
+        completedAtIso: new Date().toISOString(),
+        estateBlockLine: inspectionLocationLine(inspection),
+        sectionName,
+        questionText: qText,
+        answerLabel: 'No',
+        comment,
+        photoRefs: photos.map((p) => p.blob_url || p.id).filter(Boolean).join('; '),
+        category: question.action_category || 'other',
+        assigneeLabel: recipientPersonId ? `Person id ${recipientPersonId}` : '',
+        submittedBy: inspection?.inspector_name || inspection?.inspector_id || '',
+      })
       try {
         const action = await handleNoAnswer({
           inspectionId: id,
           sectionId: sectionId,
           sectionName: sectionName,
           questionId: question.id,
-          questionText: question.label || question.id,
+          questionText: qText,
           question: question,
           comment: comment,
           photos: photoIds,
           priority: priority,
-          recipientPersonId: recipientPersonId
+          recipientPersonId: recipientPersonId || null,
+          richDescription,
         })
         if (action) {
-          setCreatedActions(prev => {
-            const existing = prev.find(a => a.question_id === question.id)
+          setCreatedActions((prev) => {
+            const existing = prev.find((a) => a.question_id === question.id)
             if (existing) {
-              return prev.map(a => a.question_id === question.id ? action : a)
+              return prev.map((a) => (a.question_id === question.id ? action : a))
             }
             return [...prev, action]
           })
         }
       } catch (error) {
         console.error(`Error processing No answer for ${question.id}:`, error)
+        warnings.push(`Action for "${qText}" could not be saved (${error?.message || 'error'}).`)
       }
     }
+    return warnings
   }
 
   const saveAnswers = async () => {
@@ -218,9 +325,15 @@ await fetch(`/api/inspections/${id}/answers`, {
         return
       }
       setErrors({})
+      setActionProcessWarning(null)
       await saveAnswers()
-      await processNoAnswers(questions, answers)
-      alert('Section saved!')
+      const actionWarnings = await processNoAnswers(questions, answers)
+      setActionProcessWarning(actionWarnings.length ? actionWarnings.join(' ') : null)
+      if (actionWarnings.length) {
+        alert(`Section saved. Note: ${actionWarnings.join(' ')}`)
+      } else {
+        alert('Section saved!')
+      }
     } catch (error) {
       console.error('Error saving section:', error)
       alert('Failed to save section')
@@ -248,8 +361,13 @@ await fetch(`/api/inspections/${id}/answers`, {
         alert('Please complete all required fields before continuing')
         return
       }
+      setActionProcessWarning(null)
       await saveAnswers()
-      await processNoAnswers(questions, answers)
+      const actionWarnings = await processNoAnswers(questions, answers)
+      setActionProcessWarning(actionWarnings.length ? actionWarnings.join(' ') : null)
+      if (actionWarnings.length) {
+        alert(`Section saved. Note: ${actionWarnings.join(' ')}`)
+      }
       const nextSection = parseInt(sectionId) + 1
       router.push(`/inspections/${id}/section/${nextSection}`)
     } catch (error) {
@@ -354,6 +472,21 @@ await fetch(`/api/inspections/${id}/answers`, {
             Loading questions for Section {sectionId}...
           </p>
         )}
+        {actionProcessWarning && (
+          <div
+            style={{
+              marginTop: '1rem',
+              padding: '0.75rem 1rem',
+              backgroundColor: '#fffbeb',
+              borderRadius: '0.5rem',
+              border: '1px solid #f59e0b',
+              color: '#92400e',
+              fontSize: '0.875rem',
+            }}
+          >
+            {actionProcessWarning}
+          </div>
+        )}
         {createdActions.length > 0 && (
           <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#eff6ff', borderRadius: '0.5rem', border: '1px solid #3b82f6' }}>
             <p style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#1e40af' }}>
@@ -362,7 +495,7 @@ await fetch(`/api/inspections/${id}/answers`, {
             <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#1e40af' }}>
               {createdActions.map((action, idx) => (
                 <li key={action.id || idx} style={{ marginBottom: '0.25rem' }}>
-                  {action.title} (Photo required)
+                  {action.title}
                 </li>
               ))}
             </ul>

@@ -532,7 +532,8 @@ export default function InspectionWizardPage() {
     const isNo = value === 'No'
     const globalStepIndex = flatSteps.findIndex((s) => s.question?.id === q.id)
     const padX = isMobile ? nv.pagePadMobile : nv.pagePadDesktop
-    const stickyBtnH = isMobile ? nv.btnMinHeightMobile : nv.btnMinHeight
+    /** Match NewInspectionForm NV control height (48px); avoids oversized controls on small screens. */
+    const stickyBtnH = nv.btnMinHeight
 
     if (isNo && focusedNoForQuestionId.current !== q.id && commentFocusRef.current) {
       focusedNoForQuestionId.current = q.id
@@ -541,7 +542,7 @@ export default function InspectionWizardPage() {
 
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', paddingLeft: padX, paddingRight: padX, fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
-        <div style={{ maxWidth: 560, margin: '0 auto' }}>
+        <div style={{ maxWidth: 560, margin: '0 auto', width: '100%', minWidth: 0 }}>
           <div style={{ marginBottom: nv.spaceSections }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, fontSize: nv.metaSize, color: nv.muted, marginBottom: 8 }}>
               <span style={{ fontWeight: 600, color: nv.text }}>
@@ -587,7 +588,7 @@ export default function InspectionWizardPage() {
             </details>
           )}
 
-          <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards }}>
+          <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
             {(q.category || q.action_category) && (
               <span
                 style={{
@@ -617,17 +618,90 @@ export default function InspectionWizardPage() {
               handleExtras={handleExtras}
               maxPhotos={MAX_PHOTOS_PER_QUESTION}
               commentFocusRef={commentFocusRef}
-              isMobile
               prefillResidentName={prefillResidentName}
             />
           </div>
 
           {saving && <p style={{ fontSize: nv.metaSize, color: nv.muted, marginTop: 8 }}>Saving…</p>}
 
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: nv.stickyPad, backgroundColor: nv.stickyBarBg, borderTop: nv.stickyBarBorder, display: 'flex', gap: 8, maxWidth: 560, margin: '0 auto' }}>
-            <button type="button" onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: stickyBtnH, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: 'pointer', fontSize: nv.baseSize }}>Previous</button>
-            <button type="button" onClick={() => saveSection(sec)} disabled={saving} style={{ padding: `12px ${nv.btnPx}px`, minHeight: stickyBtnH, border: nv.btnUnselectedBorder, borderRadius: nv.btnRadius, background: nv.cardBg, fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer', fontSize: nv.baseSize }}>{saving ? 'Saving…' : 'Save draft'}</button>
-            <button type="button" onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))} style={{ padding: `12px ${nv.btnPx}px`, minHeight: stickyBtnH, backgroundColor: nv.primary, color: '#fff', border: 'none', borderRadius: nv.btnRadius, fontWeight: nv.btnFontWeight, cursor: 'pointer', fontSize: nv.baseSize }}>{questionStep === flatSteps.length ? 'Review' : 'Next'}</button>
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: nv.stickyPad,
+              backgroundColor: nv.stickyBarBg,
+              borderTop: nv.stickyBarBorder,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              maxWidth: 560,
+              margin: '0 auto',
+              width: '100%',
+              boxSizing: 'border-box',
+              justifyContent: 'stretch',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setQuestionStep((prev) => Math.max(0, prev - 1))}
+              style={{
+                padding: `10px ${nv.btnPx}px`,
+                minHeight: stickyBtnH,
+                border: nv.btnUnselectedBorder,
+                borderRadius: nv.btnRadius,
+                background: nv.cardBg,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontSize: isMobile ? 15 : nv.baseSize,
+                flex: isMobile ? '1 1 calc(50% - 4px)' : '1 1 0',
+                minWidth: isMobile ? 'calc(50% - 4px)' : 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => saveSection(sec)}
+              disabled={saving}
+              style={{
+                padding: `10px ${nv.btnPx}px`,
+                minHeight: stickyBtnH,
+                border: nv.btnUnselectedBorder,
+                borderRadius: nv.btnRadius,
+                background: nv.cardBg,
+                fontWeight: 500,
+                cursor: saving ? 'not-allowed' : 'pointer',
+                fontSize: isMobile ? 15 : nv.baseSize,
+                flex: isMobile ? '1 1 calc(50% - 4px)' : '1 1 0',
+                minWidth: isMobile ? 'calc(50% - 4px)' : 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              {saving ? 'Saving…' : 'Save draft'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuestionStep((prev) => (prev >= flatSteps.length + 1 ? prev : prev + 1))}
+              style={{
+                padding: `10px ${nv.btnPx}px`,
+                minHeight: stickyBtnH,
+                backgroundColor: nv.primary,
+                color: '#fff',
+                border: 'none',
+                borderRadius: nv.btnRadius,
+                fontWeight: nv.btnFontWeight,
+                cursor: 'pointer',
+                fontSize: isMobile ? 15 : nv.baseSize,
+                flex: isMobile ? '1 1 100%' : '1 1 0',
+                minWidth: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              {questionStep === flatSteps.length ? 'Review' : 'Next'}
+            </button>
           </div>
         </div>
       </div>
