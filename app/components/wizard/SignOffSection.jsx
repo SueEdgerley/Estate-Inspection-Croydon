@@ -1,10 +1,9 @@
 'use client'
 
-import PhotoUploadControl from '../questions/PhotoUploadControl'
-import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+import { NV_TEXT_INPUT_SURFACE } from '@/lib/nv-resident-field-surfaces'
 
 /**
- * Q25 — Sign-off: date, display name, confirmation, comment, photo.
+ * Q25 — Sign-off: date, display name, confirmation.
  */
 export default function SignOffSection({
   q,
@@ -12,7 +11,6 @@ export default function SignOffSection({
   ext,
   sec,
   btnMinH,
-  maxPhotos,
   prefillResidentName,
   handleExtras,
   handleAnswer,
@@ -88,32 +86,6 @@ export default function SignOffSection({
         />
         <span>I confirm this feedback is accurate to the best of my knowledge.</span>
       </label>
-      <label htmlFor={`nv25-final-comment-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text }}>
-        Comment
-      </label>
-      <textarea
-        id={`nv25-final-comment-${q.id}`}
-        value={ext.signoff_comment || ''}
-        onChange={(e) => handleExtras(q.id, persistSecId, { signoff_comment: e.target.value })}
-        rows={2}
-        style={{
-          ...NV_TEXTAREA_SURFACE,
-          width: '100%',
-          padding: 10,
-          border: nv.cardBorder,
-          borderRadius: nv.btnRadius,
-          fontSize: nv.baseSize,
-          fontFamily: nv.font,
-        }}
-      />
-      <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '8px 0 0', color: nv.text }}>Photo</p>
-      <PhotoUploadControl
-        id={`nv25-photo-${q.id}`}
-        value={(ext.signoff_photo_urls || []).slice(0, maxPhotos)}
-        onChange={(urls) => handleExtras(q.id, persistSecId, { signoff_photo_urls: urls.slice(0, maxPhotos) })}
-        label="Add photo"
-        multiple={maxPhotos > 1}
-      />
     </div>
   )
 }

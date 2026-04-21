@@ -159,7 +159,6 @@ export default function WizardQuestionFields({
         ext={ext}
         sec={sec}
         btnMinH={btnMinH}
-        maxPhotos={maxPhotos}
         prefillResidentName={prefillResidentName}
         handleExtras={handleExtras}
         handleAnswer={handleAnswer}

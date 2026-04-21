@@ -649,31 +649,6 @@ function InspectionQuestion({
           />
           <span>I confirm this feedback is accurate to the best of my knowledge.</span>
         </label>
-        <label htmlFor={`nv25-sig-comment-${question.id}`} style={{ display: 'block', marginTop: 12, marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-          Comment
-        </label>
-        <textarea
-          id={`nv25-sig-comment-${question.id}`}
-          value={extras.signoff_comment || ''}
-          onChange={(e) => setExtras({ signoff_comment: e.target.value })}
-          rows={2}
-          style={{
-            ...NV_TEXTAREA_SURFACE,
-            width: '100%',
-            padding: '0.75rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
-            fontFamily: 'inherit',
-          }}
-        />
-        <p style={{ fontSize: '0.875rem', fontWeight: 600, marginTop: 12, marginBottom: 8, color: '#374151' }}>Photo</p>
-        <PhotoUploadControl
-          id={`nv25-sig-photo-${question.id}`}
-          value={extras.signoff_photo_urls || []}
-          onChange={(urls) => setExtras({ signoff_photo_urls: urls })}
-          label="Add photo"
-        />
       </div>
     )
   }
