@@ -1336,7 +1336,10 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
               Sections &amp; questions
             </h2>
-            {selectedTemplate.sections.map((section) => (
+            {(isNVTemplate(selectedTemplate)
+              ? selectedTemplate.sections.filter((s) => s.id !== 'nv-sec-remaining')
+              : selectedTemplate.sections
+            ).map((section) => (
               <div
                 key={section.id}
                 style={{
@@ -1387,31 +1390,33 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           </div>
         )}
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label
-            htmlFor="description"
-            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
-          >
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            placeholder="Additional notes..."
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              fontFamily: 'inherit',
-              resize: 'vertical',
-            }}
-          />
-        </div>
+        {!isNVTemplate(selectedTemplate) && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label
+              htmlFor="description"
+              style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
+            >
+              Description
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Additional notes..."
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <Link
