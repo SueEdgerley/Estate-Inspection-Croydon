@@ -2,12 +2,13 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
+import { getRoleUiFlags } from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Session + app user role for client UI (e.g. nav). Does not enforce permissions.
+ * Session + app user role for client UI (nav). Server routes enforce permissions separately.
  */
 export async function GET() {
   const { userId } = await auth()
@@ -15,7 +16,12 @@ export async function GET() {
   const clerkIsAdmin = clerkUser?.publicMetadata?.isAdmin === true
 
   if (!userId) {
-    return Response.json({ userId: null, role: null, clerkIsAdmin: false })
+    return Response.json({
+      userId: null,
+      role: null,
+      clerkIsAdmin: false,
+      roleUi: null,
+    })
   }
 
   let role = null
@@ -41,5 +47,12 @@ export async function GET() {
     console.warn('[auth/me] role lookup failed:', e?.message)
   }
 
-  return Response.json({ userId, role, clerkIsAdmin })
+  const roleUi = getRoleUiFlags(role, clerkIsAdmin)
+
+  return Response.json({
+    userId,
+    role,
+    clerkIsAdmin,
+    roleUi,
+  })
 }
