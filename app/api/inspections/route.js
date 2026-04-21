@@ -10,6 +10,8 @@ import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
+import { isEstateWalkaboutTemplate, ESTATE_WALKABOUT_CHECKLIST_QID } from '@/lib/estate-walkabout-template'
+import { createEstateWalkaboutActionsFromPayload } from '@/lib/estate-walkabout-actions'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
 export const runtime = 'nodejs'
@@ -25,6 +27,7 @@ function buildTemplateVersionSnapshot(template) {
   return {
     id: template.id,
     name: template.name,
+    template_key: template.template_key ?? null,
     template_type: template.template_type ?? template.type ?? null,
     sections: (template.sections || []).map((sec, secIndex) => ({
       id: sec.id,
@@ -345,6 +348,7 @@ export async function POST(request) {
     const inspectionId = crypto.randomUUID()
     const snapshot = buildTemplateVersionSnapshot(template)
     const templateVersion = await getOrCreateTemplateVersion(template_id, template.name || null, snapshot)
+    const inspectionRowType = isEstateWalkaboutTemplate(template) ? 'estate_walkabout' : 'inspection'
 
     // Draft-only: create inspection with status 'draft' for wizard flow (e.g. Neighbourhood Voice)
     if (createDraft === true) {
@@ -360,7 +364,7 @@ export async function POST(request) {
         VALUES (
           ${inspectionId},
           NULL,
-          'inspection',
+          ${inspectionRowType},
           ${displayTitle},
           ${description && String(description).trim() ? String(description).trim() : null},
           ${location && String(location).trim() ? String(location).trim() : null},
@@ -406,7 +410,7 @@ export async function POST(request) {
       VALUES (
         ${inspectionId},
         NULL,
-        'inspection',
+        ${inspectionRowType},
         ${displayTitle},
         ${description && String(description).trim() ? String(description).trim() : null},
         ${location && String(location).trim() ? String(location).trim() : null},
@@ -528,6 +532,48 @@ export async function POST(request) {
       }
     } catch (photoErr) {
       console.warn('[Inspections] Could not store photos for PDF pipeline:', photoErr.message)
+    }
+
+    // Estate Walkabout: photos embedded in checklist JSON (per item)
+    if (isEstateWalkaboutTemplate(template)) {
+      try {
+        const raw = answers[ESTATE_WALKABOUT_CHECKLIST_QID]
+        const s = typeof raw === 'string' ? raw.trim() : ''
+        if (s) {
+          const parsed = JSON.parse(s)
+          const items = Array.isArray(parsed) ? parsed : []
+          let idx = 0
+          for (const item of items) {
+            const urls = Array.isArray(item?.photo_urls)
+              ? item.photo_urls.filter((u) => typeof u === 'string' && u.trim())
+              : []
+            for (const url of urls) {
+              const photoId = `photo_${inspectionId}_ewchk_${idx++}_${Date.now()}`
+              await sql`
+                INSERT INTO inspection_photos (id, inspection_id, question_id, blob_url, blob_key, filename)
+                VALUES (${photoId}, ${inspectionId}, ${ESTATE_WALKABOUT_CHECKLIST_QID}, ${url}, null, null)
+              `
+            }
+          }
+        }
+      } catch (ewPhotoErr) {
+        console.warn('[Inspections] Estate walkabout checklist photos:', ewPhotoErr.message)
+      }
+      try {
+        const estNameRes = await sql`SELECT name FROM estates WHERE id = ${estateId} LIMIT 1`
+        const estateName = estNameRes.rows[0]?.name || ''
+        await createEstateWalkaboutActionsFromPayload(sql, {
+          inspectionId,
+          estateName,
+          template,
+          answers,
+          answer_extras,
+          inspectorName,
+          inspectorEmail,
+        })
+      } catch (ewActErr) {
+        console.warn('[Inspections] Estate walkabout actions:', ewActErr.message)
+      }
     }
 
     const actionsForPoster = []

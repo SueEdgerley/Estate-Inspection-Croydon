@@ -6,9 +6,8 @@ import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import {
   extractCaretakerRecipients,
   findRecipientQuestion,
-  isCaretakerTemplate,
 } from '@/lib/caretaker-template'
-import { patchCaretakerTemplateForFireSafety } from '@/lib/caretaker-fire-template-patch'
+import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import {
   buildCaretakerActionDescription,
   shouldAutocreateCaretakerAction,
@@ -26,6 +25,8 @@ import {
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
 import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-submit-actions'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
+import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -85,15 +86,7 @@ export async function POST(request, { params }) {
     }
     if (templateVersion && typeof templateVersion === 'object') {
       applyNeighbourhoodVoiceTemplatePatch(templateVersion)
-      if (
-        isCaretakerTemplate({
-          name: templateVersion.name || templateVersion.template_name || inspection.template_name,
-          template_type: templateVersion.template_type || templateVersion.type || inspection.template_type,
-          type: templateVersion.type || templateVersion.template_type,
-        })
-      ) {
-        patchCaretakerTemplateForFireSafety(templateVersion)
-      }
+      applyCaretakerTemplateDisplayPatches(templateVersion)
     }
 
     const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)
@@ -137,6 +130,34 @@ export async function POST(request, { params }) {
             templateVersion,
             answersRows: answersResult.rows,
           })
+        } else if (isEstateWalkaboutTemplateVersion(templateVersion)) {
+          try {
+            const est = await sql`
+              SELECT e.name AS estate_name
+              FROM inspections i
+              LEFT JOIN estates e ON e.id = i.estate_id
+              WHERE i.id = ${id}
+              LIMIT 1
+            `
+            const estateName = est.rows[0]?.estate_name || ''
+            const wr = await createEstateWalkaboutActionsFromInspection(sql, {
+              inspectionId: id,
+              templateVersion,
+              answersRows: answersResult.rows,
+              answersMap: answers,
+              estateName,
+              inspectorName: inspectionLive.inspector_name || inspectorName,
+              inspectorEmail,
+            })
+            for (const w of wr.warnings || []) {
+              actionCreationWarnings.push(w)
+            }
+          } catch (ewErr) {
+            console.error('[inspections/submit] estate walkabout actions:', ewErr)
+            actionCreationWarnings.push(
+              `Estate walkabout actions: ${ewErr?.message || String(ewErr)}`
+            )
+          }
         } else {
           const sections = (templateVersion && templateVersion.sections) || []
           const completedAt = new Date().toISOString()
