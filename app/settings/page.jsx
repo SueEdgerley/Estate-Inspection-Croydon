@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
-const APP_ACCESS_ROLES = ['owner', 'admin', 'user']
+const APP_ACCESS_ROLES = ['owner', 'admin', 'caretaker', 'housing_officer', 'resident', 'esm', 'user']
 const STAFF_ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
 
 const card = {

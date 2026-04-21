@@ -3,11 +3,11 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
-import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
+import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 
-// Dashboard access: use Users.role (owner | admin) for access control. Do not use People for auth.
-const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin']
+// Dashboard access: app roles that may load dashboard stats (not unassigned `user`).
+const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin', 'caretaker', 'housing_officer', 'resident', 'esm']
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
@@ -127,9 +127,9 @@ export async function GET(request) {
       )
     }
 
-    // Source of truth: app database users.role (owner | admin | user). Empty/missing role = not allowed.
     const role = (internalUser.role || '').toLowerCase().trim()
-    if (!ALLOWED_DASHBOARD_ROLES.includes(role)) {
+    const clerkAdminUser = await isAdmin()
+    if (!ALLOWED_DASHBOARD_ROLES.includes(role) && !clerkAdminUser) {
       logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
         {
@@ -150,7 +150,7 @@ export async function GET(request) {
 
     console.log('[Dashboard] debug:', { role, is_active: internalUser.is_active, assignedEstateCount })
 
-    const admin = role === 'admin' || role === 'owner'
+    const admin = role === 'admin' || role === 'owner' || role === 'esm' || clerkAdminUser
 
     // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
     // Temporarily: do not early-return here so we can confirm access works without estate scoping

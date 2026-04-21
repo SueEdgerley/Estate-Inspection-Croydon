@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { createHash } from 'crypto'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
@@ -13,6 +13,11 @@ import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { isEstateWalkaboutTemplate, ESTATE_WALKABOUT_CHECKLIST_QID } from '@/lib/estate-walkabout-template'
 import { createEstateWalkaboutActionsFromPayload } from '@/lib/estate-walkabout-actions'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
+import {
+  getAppRoleContextForClerkUser,
+  roleMayCreateAdHocInspection,
+  roleMayCreateInspectionWithTemplate,
+} from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -122,14 +127,14 @@ export async function GET(request) {
     }
     const userEmail = await getCurrentUserEmail()
     const clerkAdmin = await isAdmin()
-    // Align with /api/dashboard: Postgres users.role owner|admin sees all rows (Clerk isAdmin alone does not).
+    // Align with /api/dashboard: owner|admin|esm (and Clerk admin) see all rows.
     let postgresListAll = false
     try {
       const roleRow = await sql`
         SELECT lower(trim(role)) AS r FROM users WHERE clerk_user_id = ${userId} LIMIT 1
       `
       const r = roleRow.rows[0]?.r || ''
-      postgresListAll = r === 'owner' || r === 'admin'
+      postgresListAll = r === 'owner' || r === 'admin' || r === 'esm'
     } catch {
       postgresListAll = false
     }
@@ -247,6 +252,14 @@ export async function POST(request) {
 
     try {
       await ensureDatabase()
+      const cu = await currentUser()
+      const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+      if (!roleMayCreateAdHocInspection(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+        return NextResponse.json(
+          { error: 'Forbidden: your role cannot create ad-hoc inspections' },
+          { status: 403 }
+        )
+      }
       const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
       if (!loc.ok) {
         return NextResponse.json({ error: loc.message }, { status: loc.status })
@@ -337,6 +350,15 @@ export async function POST(request) {
       return NextResponse.json(
         { error: 'Template not found' },
         { status: 400 }
+      )
+    }
+
+    const cu = await currentUser()
+    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
+      return NextResponse.json(
+        { error: 'Forbidden: your role cannot use this form template' },
+        { status: 403 }
       )
     }
 

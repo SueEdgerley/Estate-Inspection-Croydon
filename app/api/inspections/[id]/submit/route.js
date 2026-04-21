@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
@@ -27,6 +27,7 @@ import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-s
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
+import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -87,6 +88,28 @@ export async function POST(request, { params }) {
     if (templateVersion && typeof templateVersion === 'object') {
       applyNeighbourhoodVoiceTemplatePatch(templateVersion)
       applyCaretakerTemplateDisplayPatches(templateVersion)
+    }
+
+    const cuSubmit = await currentUser()
+    const roleCtxSubmit = await getAppRoleContextForClerkUser(userId, cuSubmit?.publicMetadata?.isAdmin === true)
+    const templateForRoleCheck = templateVersion && typeof templateVersion === 'object'
+      ? {
+          id: templateVersion.id ?? inspection.template_id,
+          name: templateVersion.name ?? inspection.template_name,
+          template_key: templateVersion.template_key,
+          template_type: templateVersion.template_type ?? templateVersion.type,
+          type: templateVersion.type ?? templateVersion.template_type,
+          sections: templateVersion.sections,
+        }
+      : null
+    if (
+      templateForRoleCheck &&
+      !roleMayCreateInspectionWithTemplate(roleCtxSubmit.normalized, roleCtxSubmit.clerkIsAdmin, templateForRoleCheck)
+    ) {
+      return NextResponse.json(
+        { error: 'Forbidden: your role cannot submit this inspection type' },
+        { status: 403 }
+      )
     }
 
     const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)

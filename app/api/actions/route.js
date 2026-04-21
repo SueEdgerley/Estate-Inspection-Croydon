@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import {
+  getAppRoleContextForClerkUser,
+  roleMayPostManualAction,
+  roleMayViewGlobalActionsList,
+} from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,6 +14,13 @@ export const dynamic = 'force-dynamic'
 // GET - Fetch all actions
 export async function GET(request) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const cu = await currentUser()
+    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -19,6 +32,11 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const inspectionId = searchParams.get('inspection_id')
     const questionId = searchParams.get('question_id')
+
+    const globalList = !inspectionId
+    if (globalList && !roleMayViewGlobalActionsList(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     
     let query
     if (inspectionId && questionId) {
@@ -93,6 +111,16 @@ export async function GET(request) {
 // POST - Create a new action
 export async function POST(request) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const cu = await currentUser()
+    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    if (!roleMayPostManualAction(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {

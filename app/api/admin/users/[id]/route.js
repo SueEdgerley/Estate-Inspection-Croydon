@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getAppAdminAccess } from '@/lib/app-admin-access'
+import { ASSIGNABLE_APP_ROLES } from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const APP_ROLES = ['owner', 'admin', 'user']
+const APP_ROLES = ASSIGNABLE_APP_ROLES
 
 async function requireAdmin() {
   const access = await getAppAdminAccess()
