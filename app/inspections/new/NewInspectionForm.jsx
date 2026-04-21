@@ -26,6 +26,8 @@ import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingB
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
+import EstateWalkaboutNewInspectionForm from '@/app/components/estate-walkabout/EstateWalkaboutNewInspectionForm'
+import { isEstateWalkaboutTemplate } from '@/lib/estate-walkabout-template'
 
 /**
  * NV design tokens — aligned with `app/inspections/[id]/wizard/page.jsx` `nv` so the
@@ -1210,6 +1212,19 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           {loadError}
         </div>
       </div>
+    )
+  }
+
+  if (selectedTemplate && isEstateWalkaboutTemplate(selectedTemplate)) {
+    return (
+      <EstateWalkaboutNewInspectionForm
+        estates={estates}
+        blocks={blocks}
+        templates={templates}
+        templateId={templateId}
+        setTemplateId={setTemplateId}
+        templateLocked={isTemplateLocked}
+      />
     )
   }
 
