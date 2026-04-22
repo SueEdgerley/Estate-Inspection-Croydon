@@ -15,6 +15,7 @@ const CARETAKER_S12_LAYOUT_SKIP_KINDS = new Set([
   'nv_standard',
   'nv_estate_feedback',
   'nv_issues_report',
+  'nv_plain_textarea',
   'nv_q24',
   'nv_q25',
 ])
@@ -352,6 +353,25 @@ export default function QuestionRenderer({
           <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: 0 }}>
             This step is designed for the Neighbourhood Voice wizard. Open the inspection wizard to complete it.
           </p>
+        )
+
+      case 'nv_plain_textarea':
+        return (
+          <textarea
+            value={localValue ?? ''}
+            onChange={(e) => handleChange(e.target.value)}
+            rows={8}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              fontFamily: 'inherit',
+              minHeight: 160,
+              lineHeight: 1.45,
+            }}
+          />
         )
 
       case 'nv_q24':

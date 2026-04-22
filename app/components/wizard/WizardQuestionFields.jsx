@@ -72,6 +72,34 @@ export default function WizardQuestionFields({
     handleExtras(q.id, persistSecId, { resident_display_name: prefillResidentName.trim() })
   }, [kind, q.id, persistSecId, prefillResidentName, extras, handleExtras])
 
+  if (kind === 'nv_plain_textarea') {
+    const text = String(rawVal ?? '')
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+        <label htmlFor={`nv-plain-${q.id}`} style={{ fontSize: nv.baseSize, fontWeight: 500, color: nv.text, lineHeight: 1.45 }}>
+          {q.resident_wording || q.question_text}
+        </label>
+        <textarea
+          id={`nv-plain-${q.id}`}
+          value={text}
+          onChange={(e) => handleAnswer(q.id, e.target.value, persistSecId)}
+          rows={8}
+          style={{
+            ...NV_TEXTAREA_SURFACE,
+            width: '100%',
+            padding: 12,
+            border: nv.cardBorder,
+            borderRadius: nv.btnRadius,
+            fontSize: nv.baseSize,
+            fontFamily: nv.font,
+            minHeight: 160,
+            lineHeight: 1.45,
+          }}
+        />
+      </div>
+    )
+  }
+
   if (kind === 'nv_standard') {
     return (
       <InspectionQuestion

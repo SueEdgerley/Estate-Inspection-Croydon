@@ -495,6 +495,36 @@ function InspectionQuestion({
     )
   }
 
+  if (qType === 'nv_plain_textarea') {
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
+        <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151', fontSize: '1rem', lineHeight: 1.45 }}>
+          {labelText}
+        </label>
+        <textarea
+          id={id}
+          name={id}
+          value={value ?? ''}
+          onChange={(e) => onChange(question.id, e.target.value)}
+          rows={8}
+          style={{
+            ...NV_TEXTAREA_SURFACE,
+            width: '100%',
+            padding: '0.75rem',
+            border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '1rem',
+            fontFamily: 'inherit',
+            minHeight: 160,
+            lineHeight: 1.45,
+          }}
+        />
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
   if (qType === 'nv_standard') {
     return (
       <div style={{ marginBottom: '1rem' }}>
