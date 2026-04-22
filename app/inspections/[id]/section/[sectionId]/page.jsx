@@ -21,6 +21,7 @@ import {
 } from '../../../../../lib/caretaker-action-details'
 import { validateRequiredQuestions } from '../../../../../lib/airtable'
 import { handleYesAnswer, handleNoAnswer } from '../../../../../lib/yesno-action-handler'
+import { isEstateInspectionFormTemplate } from '../../../../../lib/standard-inspection-form'
 
 export default function InspectionSection() {
   const params = useParams()
@@ -416,6 +417,27 @@ await fetch(`/api/inspections/${id}/answers`, {
     urlSectionNum >= 3 &&
     urlSectionNum <= 5
 
+  let estateInspectionForm = false
+  if (inspection) {
+    let tv = inspection.template_version
+    if (typeof tv === 'string') {
+      try {
+        tv = JSON.parse(tv)
+      } catch {
+        tv = null
+      }
+    }
+    if (tv && typeof tv === 'object') {
+      estateInspectionForm = isEstateInspectionFormTemplate(tv)
+    } else {
+      estateInspectionForm = isEstateInspectionFormTemplate({
+        name: inspection.template_name,
+        id: inspection.template_id,
+        template_key: inspection.template_key,
+      })
+    }
+  }
+
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}>
@@ -451,6 +473,35 @@ await fetch(`/api/inspections/${id}/answers`, {
             {section.name}
           </h2>
         )}
+        {section && estateInspectionForm && (section.what_to_look_for || section.help_text) && (
+          <div
+            style={{
+              marginBottom: '1.25rem',
+              padding: '1rem',
+              backgroundColor: '#f9fafb',
+              borderRadius: '0.5rem',
+              border: '1px solid #e5e7eb',
+              fontSize: '0.875rem',
+              color: '#4b5563',
+              lineHeight: 1.55,
+            }}
+          >
+            {section.what_to_look_for ? (
+              <>
+                <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#111827' }}>What to look for</p>
+                <p style={{ margin: '0 0 0.75rem', whiteSpace: 'pre-wrap' }}>{section.what_to_look_for}</p>
+              </>
+            ) : null}
+            {section.help_text && section.help_text !== section.what_to_look_for ? (
+              <>
+                <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#111827' }}>
+                  {section.what_to_look_for ? 'Additional help' : 'Help'}
+                </p>
+                <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{section.help_text}</p>
+              </>
+            ) : null}
+          </div>
+        )}
         {section && (
           <SectionQuestions
             sectionId={section.id}
@@ -465,6 +516,7 @@ await fetch(`/api/inspections/${id}/answers`, {
             alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
             alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
             caretakerSections12Structured={caretakerSections12Structured}
+            estateInspectionForm={estateInspectionForm}
           />
         )}
         {!section && (

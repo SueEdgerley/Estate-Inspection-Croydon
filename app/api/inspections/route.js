@@ -50,6 +50,7 @@ function buildTemplateVersionSnapshot(template) {
         question_text: q.question_text ?? q.label,
         resident_wording: q.resident_wording ?? null,
         helper_text: q.helper_text ?? null,
+        instructions: q.instructions ?? null,
         question_type: q.question_type ?? null,
         question_type_raw: q.question_type_raw ?? null,
         answer_mode: q.answer_mode ?? q.question_type ?? null,

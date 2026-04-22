@@ -17,6 +17,7 @@ export default function SectionQuestions({
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
   caretakerSections12Structured = false,
+  estateInspectionForm = false,
 }) {
   const [questions, setQuestions] = useState([])
   const [localAnswers, setLocalAnswers] = useState(answers)
@@ -66,6 +67,7 @@ export default function SectionQuestions({
           alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
           caretakerSections12Structured={caretakerSections12Structured}
           subLabelIndex={index}
+          estateInspectionForm={estateInspectionForm}
         />
       ))}
       

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { QUESTION_TYPES } from '@/lib/airtable'
 import { getEffectiveQuestionKind } from '../../../lib/question-types'
+import { isEstateInspectionInstructionalQuestion } from '@/lib/estate-standard-inspection-template-patch'
 import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib/template-rules'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import {
@@ -44,6 +45,7 @@ export default function QuestionRenderer({
   alwaysShowCaretakerRecipient = false,
   caretakerSections12Structured = false,
   subLabelIndex = 0,
+  estateInspectionForm = false,
 }) {
   const [localValue, setLocalValue] = useState(value ?? '')
   const [recipientOptions, setRecipientOptions] = useState([])
@@ -78,6 +80,54 @@ export default function QuestionRenderer({
 
   const kind = getEffectiveQuestionKind(question)
   const rendersOwnHeading = kind === 'yes_no'
+
+  const estateAirtableSupplementary =
+    estateInspectionForm && (question.instructions || question.helper_text)
+      ? [question.instructions, question.helper_text].filter((x) => x && String(x).trim()).join('\n\n')
+      : ''
+
+  if (estateInspectionForm && isEstateInspectionInstructionalQuestion(question)) {
+    const rawParts = [
+      question.label || question.question_text,
+      question.resident_wording,
+      question.instructions,
+      question.helper_text,
+    ].filter((p) => p != null && String(p).trim())
+    const seen = new Set()
+    const unique = []
+    for (const p of rawParts) {
+      const t = String(p).trim()
+      if (seen.has(t)) continue
+      seen.add(t)
+      unique.push(t)
+    }
+    return (
+      <div
+        style={{
+          marginBottom: '1.5rem',
+          padding: '0.75rem 1rem',
+          backgroundColor: '#f9fafb',
+          borderRadius: '0.375rem',
+          border: '1px solid #e5e7eb',
+        }}
+      >
+        {unique.map((text, i) => (
+          <p
+            key={i}
+            style={{
+              margin: i ? '0.75rem 0 0' : 0,
+              fontSize: '0.9375rem',
+              color: '#374151',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.55,
+            }}
+          >
+            {text}
+          </p>
+        ))}
+      </div>
+    )
+  }
   const questionText = String(question.label || question.question_text || '').toLowerCase()
   const isSelectKind = kind === 'single_select' || kind === 'select'
   const isRecipientField = isRecipientSelectorQuestion(question)
@@ -164,20 +214,35 @@ export default function QuestionRenderer({
     switch (kind) {
       case 'yes_no':
         return (
-          <YesNoQuestion
-            question={question}
-            sectionName={sectionName}
-            inspectionId={inspectionId}
-            value={localValue}
-            onChange={handleChange}
-            errors={errors}
-            section={section}
-            sectionQuestions={sectionQuestions}
-            allAnswers={allAnswers}
-            alwaysShowCaretakerComment={alwaysShowCaretakerComment}
-            alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
-            alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
-          />
+          <>
+            {estateAirtableSupplementary ? (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  marginBottom: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {estateAirtableSupplementary}
+              </p>
+            ) : null}
+            <YesNoQuestion
+              question={question}
+              sectionName={sectionName}
+              inspectionId={inspectionId}
+              value={localValue}
+              onChange={handleChange}
+              errors={errors}
+              section={section}
+              sectionQuestions={sectionQuestions}
+              allAnswers={allAnswers}
+              alwaysShowCaretakerComment={alwaysShowCaretakerComment}
+              alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
+              alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
+            />
+          </>
         )
 
       case 'nv_standard':
@@ -189,6 +254,19 @@ export default function QuestionRenderer({
           ['A', 'B', 'C', 'D', 'NA']
         return (
           <div>
+            {estateAirtableSupplementary ? (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  marginBottom: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {estateAirtableSupplementary}
+              </p>
+            ) : null}
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
               {opts.map((grade) => {
                 const label = typeof grade === 'string' ? grade : String(grade?.value ?? grade?.label ?? grade)
@@ -263,7 +341,21 @@ export default function QuestionRenderer({
               ? costCodeOptions
               : []
         return (
-          <select
+          <>
+            {estateAirtableSupplementary ? (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  marginBottom: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {estateAirtableSupplementary}
+              </p>
+            ) : null}
+            <select
             value={localValue ?? ''}
             onChange={(e) => handleChange(e.target.value)}
             style={{
@@ -282,6 +374,7 @@ export default function QuestionRenderer({
               </option>
             ))}
           </select>
+          </>
         )
       }
 
@@ -316,35 +409,65 @@ export default function QuestionRenderer({
 
       case 'number':
         return (
-          <input
-            type="number"
-            value={localValue ?? ''}
-            onChange={(e) => handleChange(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-            }}
-          />
+          <>
+            {estateAirtableSupplementary ? (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  marginBottom: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {estateAirtableSupplementary}
+              </p>
+            ) : null}
+            <input
+              type="number"
+              value={localValue ?? ''}
+              onChange={(e) => handleChange(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+              }}
+            />
+          </>
         )
 
       case 'long_text':
         return (
-          <textarea
-            value={localValue ?? ''}
-            onChange={(e) => handleChange(e.target.value)}
-            rows={4}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              fontFamily: 'inherit',
-            }}
-          />
+          <>
+            {estateAirtableSupplementary ? (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  marginBottom: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {estateAirtableSupplementary}
+              </p>
+            ) : null}
+            <textarea
+              value={localValue ?? ''}
+              onChange={(e) => handleChange(e.target.value)}
+              rows={4}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                fontFamily: 'inherit',
+              }}
+            />
+          </>
         )
 
       case 'nv_estate_feedback':
@@ -419,18 +542,33 @@ export default function QuestionRenderer({
 
       default:
         return (
-          <input
-            type="text"
-            value={localValue ?? ''}
-            onChange={(e) => handleChange(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-            }}
-          />
+          <>
+            {estateAirtableSupplementary ? (
+              <p
+                style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  marginBottom: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5,
+                }}
+              >
+                {estateAirtableSupplementary}
+              </p>
+            ) : null}
+            <input
+              type="text"
+              value={localValue ?? ''}
+              onChange={(e) => handleChange(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+              }}
+            />
+          </>
         )
     }
   }

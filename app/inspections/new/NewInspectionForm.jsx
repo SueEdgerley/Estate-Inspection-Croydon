@@ -19,7 +19,9 @@ import {
   usesStandardInspectionFormUI,
   questionIsStandardInspectionConditionRow,
   questionIsStandardInspectionIssueRow,
+  isEstateInspectionFormTemplate,
 } from '@/lib/standard-inspection-form'
+import { isEstateInspectionInstructionalQuestion } from '@/lib/estate-standard-inspection-template-patch'
 import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
@@ -96,6 +98,25 @@ function getQuestionType(question) {
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
+function EstateQuestionInstructionBlock({ question }) {
+  const text = [question.instructions, question.helper_text].filter((x) => x && String(x).trim()).join('\n\n')
+  if (!text) return null
+  return (
+    <p
+      style={{
+        marginTop: '0.25rem',
+        marginBottom: '0.75rem',
+        fontSize: '0.875rem',
+        color: '#6b7280',
+        whiteSpace: 'pre-wrap',
+        lineHeight: 1.5,
+      }}
+    >
+      {text}
+    </p>
+  )
+}
+
 function InspectionQuestion({
   question,
   value,
@@ -111,9 +132,53 @@ function InspectionQuestion({
   peopleOptions = [],
   standardInspectionForm = false,
   caretakerPartLabel = null,
+  estateInspectionForm = false,
 }) {
   const id = `answer-${question.id}`
   const qType = getQuestionType(question)
+
+  if (estateInspectionForm && isEstateInspectionInstructionalQuestion(question)) {
+    const rawParts = [
+      caretakerPartLabel || question.question_text,
+      question.resident_wording,
+      question.instructions,
+      question.helper_text,
+    ].filter((p) => p != null && String(p).trim())
+    const seen = new Set()
+    const unique = []
+    for (const p of rawParts) {
+      const t = String(p).trim()
+      if (seen.has(t)) continue
+      seen.add(t)
+      unique.push(t)
+    }
+    return (
+      <div
+        style={{
+          marginBottom: '1rem',
+          padding: '0.75rem 1rem',
+          backgroundColor: '#f9fafb',
+          borderRadius: '0.375rem',
+          border: '1px solid #e5e7eb',
+        }}
+      >
+        {unique.map((text, i) => (
+          <p
+            key={i}
+            style={{
+              margin: i ? '0.65rem 0 0' : 0,
+              fontSize: '0.9375rem',
+              color: '#374151',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.55,
+            }}
+          >
+            {text}
+          </p>
+        ))}
+      </div>
+    )
+  }
   const labelText = caretakerPartLabel || question.question_text
   const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
   const nvHeading =
@@ -243,6 +308,7 @@ function InspectionQuestion({
           {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
+        {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         <YesNoNaButtons
           id={id}
           value={yesNoNaValue}
@@ -353,6 +419,7 @@ function InspectionQuestion({
           )}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
+        {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         {buttonGroup(gradingOpts, id)}
         {showGradedExtras && (
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
@@ -406,6 +473,7 @@ function InspectionQuestion({
           {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
+        {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         <select
           id={id}
           name={id}
@@ -439,6 +507,7 @@ function InspectionQuestion({
           {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
+        {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
             <button
@@ -473,6 +542,7 @@ function InspectionQuestion({
           {labelText}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
+        {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         <textarea
           id={id}
           name={id}
@@ -669,6 +739,7 @@ function InspectionQuestion({
         {labelText}
         {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
       </label>
+      {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
       <input
         id={id}
         name={id}
@@ -868,6 +939,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
 
   const templates = apiPayload.templates || []
   const selectedTemplate = templates.find((t) => t.id === templateId)
+  const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
 
   const handleAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
@@ -897,6 +969,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         if (q.nv_hidden) return
         if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
         if (!shouldShowQuestion(q, answers)) return
+        if (estateInspectionForm && isEstateInspectionInstructionalQuestion(q)) return
         const qType = getQuestionType(q)
         const v = answers[q.id]
 
@@ -1339,8 +1412,38 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
                   {section.title}
                 </h3>
-                {section.help_text && (
-                  <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
+                {estateInspectionForm && (section.what_to_look_for || section.help_text) ? (
+                  <div
+                    style={{
+                      marginBottom: '1rem',
+                      padding: '0.75rem 1rem',
+                      backgroundColor: '#f9fafb',
+                      borderRadius: '0.375rem',
+                      border: '1px solid #e5e7eb',
+                      fontSize: '0.875rem',
+                      color: '#4b5563',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {section.what_to_look_for ? (
+                      <>
+                        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#374151' }}>What to look for</p>
+                        <p style={{ margin: '0 0 0.75rem', whiteSpace: 'pre-wrap' }}>{section.what_to_look_for}</p>
+                      </>
+                    ) : null}
+                    {section.help_text && section.help_text !== section.what_to_look_for ? (
+                      <>
+                        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#374151' }}>
+                          {section.what_to_look_for ? 'Additional help' : 'Help'}
+                        </p>
+                        <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{section.help_text}</p>
+                      </>
+                    ) : null}
+                  </div>
+                ) : (
+                  section.help_text && (
+                    <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
+                  )
                 )}
                 {(() => {
                   let caretakerRowIdx = 0
@@ -1369,6 +1472,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                         peopleOptions={peopleOptions}
                         standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
                         caretakerPartLabel={caretakerPartLabel}
+                        estateInspectionForm={estateInspectionForm}
                       />
                     )
                   })
