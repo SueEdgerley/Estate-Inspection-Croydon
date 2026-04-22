@@ -21,7 +21,10 @@ import {
   questionIsStandardInspectionIssueRow,
   isEstateInspectionFormTemplate,
 } from '@/lib/standard-inspection-form'
-import { isEstateInspectionInstructionalQuestion } from '@/lib/estate-standard-inspection-template-patch'
+import {
+  buildEstateInspectionChecklistQuestionIndexMap,
+  isEstateInspectionInstructionalQuestion,
+} from '@/lib/estate-standard-inspection-template-patch'
 import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
@@ -98,6 +101,23 @@ function getQuestionType(question) {
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
+/** Q3 (checklist index 2): force same control path as graded when Airtable type still resolves as text/long_text/etc. */
+function estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex) {
+  if (!estateInspectionForm || estateChecklistIndex !== 2) return question
+  const t = getQuestionType(question)
+  if (t === 'graded' || t === 'nv_standard') return question
+  return {
+    ...question,
+    question_type: 'graded',
+    answer_mode: 'graded',
+    grading_options:
+      Array.isArray(question.grading_options) && question.grading_options.length
+        ? question.grading_options
+        : ['A', 'B', 'C', 'D', 'NA'],
+    grading_scheme_name: question.grading_scheme_name || 'Croydon NV Grading – Final',
+  }
+}
+
 function EstateQuestionInstructionBlock({ question }) {
   const text = [question.instructions, question.helper_text].filter((x) => x && String(x).trim()).join('\n\n')
   if (!text) return null
@@ -133,11 +153,17 @@ function InspectionQuestion({
   standardInspectionForm = false,
   caretakerPartLabel = null,
   estateInspectionForm = false,
+  estateChecklistIndex,
 }) {
   const id = `answer-${question.id}`
-  const qType = getQuestionType(question)
 
-  if (estateInspectionForm && isEstateInspectionInstructionalQuestion(question)) {
+  const rawLayoutType = String(question.question_type_raw ?? '').toLowerCase()
+  const isExplicitAirtableLayoutRow =
+    /instruction|section_header|divider|^info$|^static$|^label$/i.test(rawLayoutType)
+  const skipInstructionalBlockForEstateQ3 =
+    estateInspectionForm && estateChecklistIndex === 2 && !isExplicitAirtableLayoutRow
+
+  if (isEstateInspectionInstructionalQuestion(question) && !skipInstructionalBlockForEstateQ3) {
     const rawParts = [
       caretakerPartLabel || question.question_text,
       question.resident_wording,
@@ -179,6 +205,10 @@ function InspectionQuestion({
       </div>
     )
   }
+
+  const eq = estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex)
+  const qType = getQuestionType(eq)
+
   const labelText = caretakerPartLabel || question.question_text
   const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
   const nvHeading =
@@ -226,7 +256,7 @@ function InspectionQuestion({
 
   const extras = answerExtras || { comment: '', photo_urls: [] }
   const stdInspection = standardInspectionForm && !isNvTemplate
-  const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(question)
+  const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(eq)
   const isStdIssueRow = stdInspection && questionIsStandardInspectionIssueRow(question)
 
   const handleChange = (val) => {
@@ -399,23 +429,23 @@ function InspectionQuestion({
   }
 
   if (qType === 'graded') {
-    const gradingOpts = question.grading_options?.length ? question.grading_options : ['A', 'B', 'C', 'D', 'NA']
-    const needPhoto = !!question.nv_graded_require_comment_photo
-    const needComment = needPhoto || !!question.nv_graded_require_comment_only
+    const gradingOpts = eq.grading_options?.length ? eq.grading_options : ['A', 'B', 'C', 'D', 'NA']
+    const needPhoto = !!eq.nv_graded_require_comment_photo
+    const needComment = needPhoto || !!eq.nv_graded_require_comment_only
     const hasGrade = value != null && String(value).trim() !== ''
     const showGradedExtras =
       isNvTemplate
         ? needComment && hasGrade
         : isStdConditionRow && needComment
           ? true
-          : question.caretaker_graded_always_extras && needComment && hasGrade
+          : eq.caretaker_graded_always_extras && needComment && hasGrade
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {labelText}
-          {question.grading_scheme_name && (
-            <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({question.grading_scheme_name})</span>
+          {eq.grading_scheme_name && (
+            <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({eq.grading_scheme_name})</span>
           )}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
@@ -461,7 +491,7 @@ function InspectionQuestion({
         )}
         {!isNvTemplate &&
           !isStdConditionRow &&
-          (!question.caretaker_graded_always_extras || estateInspectionForm) &&
+          (!eq.caretaker_graded_always_extras || estateInspectionForm) &&
           photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -943,6 +973,13 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const templates = apiPayload.templates || []
   const selectedTemplate = templates.find((t) => t.id === templateId)
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
+  const estateChecklistIndexByQid = useMemo(
+    () =>
+      estateInspectionForm && selectedTemplate
+        ? buildEstateInspectionChecklistQuestionIndexMap(selectedTemplate)
+        : new Map(),
+    [estateInspectionForm, selectedTemplate]
+  )
 
   const handleAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
@@ -972,8 +1009,19 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         if (q.nv_hidden) return
         if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
         if (!shouldShowQuestion(q, answers)) return
-        if (estateInspectionForm && isEstateInspectionInstructionalQuestion(q)) return
-        const qType = getQuestionType(q)
+        const qRawLayout = String(q.question_type_raw ?? '').toLowerCase()
+        const qExplicitLayout = /instruction|section_header|divider|^info$|^static$|^label$/i.test(qRawLayout)
+        const qIdx = estateChecklistIndexByQid.get(q.id)
+        if (
+          estateInspectionForm &&
+          isEstateInspectionInstructionalQuestion(q) &&
+          !(qIdx === 2 && !qExplicitLayout)
+        ) {
+          return
+        }
+        const checklistIdx = qIdx
+        const qForType = estateEffectiveQuestionForRendering(q, estateInspectionForm, checklistIdx)
+        const qType = getQuestionType(qForType)
         const v = answers[q.id]
 
         if (qType === 'yes_no') {
@@ -1031,8 +1079,8 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         if (qType === 'graded' || qType === 'nv_standard') {
           const extras = answerExtras[q.id] || {}
           const isStd = qType === 'nv_standard'
-          const needPhoto = isStd || !!q.nv_graded_require_comment_photo
-          const needComment = isStd || needPhoto || !!q.nv_graded_require_comment_only
+          const needPhoto = isStd || !!qForType.nv_graded_require_comment_photo
+          const needComment = isStd || needPhoto || !!qForType.nv_graded_require_comment_only
           if (!needComment && !isStd) {
             if (q.is_required && (v === undefined || v === null || (typeof v === 'string' && !v.trim()))) {
               errs[q.id] = 'Required'
@@ -1476,6 +1524,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                         standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
                         caretakerPartLabel={caretakerPartLabel}
                         estateInspectionForm={estateInspectionForm}
+                        estateChecklistIndex={estateChecklistIndexByQid.get(q.id)}
                       />
                     )
                   })
