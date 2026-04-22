@@ -4,9 +4,8 @@ import { useEffect } from 'react'
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import YesNoNaButtons from '../questions/YesNoNaButtons'
 import { getEffectiveQuestionKind, normalizeYesNoNaDisplay } from '../../../lib/question-types'
-import { NV_ESTATE_FEEDBACK_PROMPTS, NV_Q24_AIRTABLE_ROWS_188_192 } from '../../../lib/neighbourhood-voice-template-patch'
+import { NV_Q24_AIRTABLE_ROWS_188_192 } from '../../../lib/neighbourhood-voice-template-patch'
 import InspectionQuestion from './InspectionQuestion'
-import TextFeedbackSection from './TextFeedbackSection'
 import IssuesReportSection from './IssuesReportSection'
 import SignOffSection from './SignOffSection'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
@@ -86,25 +85,6 @@ export default function WizardQuestionFields({
         onSelectGrade={(label) => handleAnswer(q.id, label, persistSecId)}
         onComment={(text) => handleExtras(q.id, persistSecId, { comment: text })}
         onPhotos={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls })}
-      />
-    )
-  }
-
-  if (kind === 'nv_estate_feedback') {
-    const prompts = Array.isArray(q.nv_estate_feedback_prompts) && q.nv_estate_feedback_prompts.length
-      ? q.nv_estate_feedback_prompts
-      : NV_ESTATE_FEEDBACK_PROMPTS
-    return (
-      <TextFeedbackSection
-        q={q}
-        nv={nv}
-        ext={ext}
-        prompts={prompts}
-        maxPhotos={maxPhotos}
-        onExtras={(updates) => {
-          handleExtras(q.id, persistSecId, updates)
-          handleAnswer(q.id, 'completed', persistSecId)
-        }}
       />
     )
   }

@@ -6,7 +6,6 @@ import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 import {
-  NV_ESTATE_FEEDBACK_PROMPTS,
   NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
   getNvQuestionStepLabel,
@@ -24,7 +23,6 @@ import {
 import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
-import TextFeedbackSection from '@/app/components/wizard/TextFeedbackSection'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
 
 /** Minimal design tokens for NV reusable blocks outside the wizard page. */
@@ -518,26 +516,6 @@ function InspectionQuestion({
         />
         {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
         {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
-      </div>
-    )
-  }
-
-  if (qType === 'nv_estate_feedback') {
-    const prompts =
-      Array.isArray(question.nv_estate_feedback_prompts) && question.nv_estate_feedback_prompts.length
-        ? question.nv_estate_feedback_prompts
-        : NV_ESTATE_FEEDBACK_PROMPTS
-    return (
-      <div style={{ marginBottom: '1rem' }}>
-        {nvHeading}
-        <TextFeedbackSection
-          q={question}
-          nv={NV_INLINE}
-          ext={extras}
-          prompts={prompts}
-          maxPhotos={3}
-          onExtras={(updates) => setExtras({ ...extras, ...updates })}
-        />
       </div>
     )
   }
