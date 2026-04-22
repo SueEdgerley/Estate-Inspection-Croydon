@@ -459,7 +459,10 @@ function InspectionQuestion({
             )}
           </div>
         )}
-        {!isNvTemplate && !isStdConditionRow && !question.caretaker_graded_always_extras && photoBlock}
+        {!isNvTemplate &&
+          !isStdConditionRow &&
+          (!question.caretaker_graded_always_extras || estateInspectionForm) &&
+          photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
