@@ -11,7 +11,7 @@ import {
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
-import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 
 // NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3
@@ -199,7 +199,7 @@ export default function InspectionWizardPage() {
         }
         if (version && typeof version === 'object') {
           applyNeighbourhoodVoiceTemplatePatch(version)
-          applyCaretakerTemplateDisplayPatches(version)
+          applyTemplateDisplayPatches(version)
           const secs = version.sections || []
           if (!cancelled) setTemplate(version)
           const steps = []

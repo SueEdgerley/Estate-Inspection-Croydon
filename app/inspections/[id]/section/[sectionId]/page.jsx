@@ -13,7 +13,7 @@ import {
   inspectionIsCaretaker,
 } from '../../../../../lib/caretaker-template'
 import { getActionTriggerOn, isSpecialSection } from '../../../../../lib/template-rules'
-import { applyCaretakerTemplateDisplayPatches } from '../../../../../lib/caretaker-fire-template-patch'
+import { applyTemplateDisplayPatches } from '../../../../../lib/caretaker-fire-template-patch'
 import {
   buildCaretakerActionDescription,
   shouldAutocreateCaretakerAction,
@@ -65,7 +65,7 @@ export default function InspectionSection() {
           }
         }
         if (version && typeof version === 'object') {
-          applyCaretakerTemplateDisplayPatches(version)
+          applyTemplateDisplayPatches(version)
         }
         const sections = (version && version.sections) || []
         const currentSection = sections[parseInt(sectionId, 10) - 1] || null

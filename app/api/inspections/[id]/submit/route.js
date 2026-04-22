@@ -7,7 +7,7 @@ import {
   extractCaretakerRecipients,
   findRecipientQuestion,
 } from '@/lib/caretaker-template'
-import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import {
   buildCaretakerActionDescription,
   shouldAutocreateCaretakerAction,
@@ -89,7 +89,7 @@ export async function POST(request, { params }) {
     if (templateVersion && typeof templateVersion === 'object') {
       templateVersion = applyGroundsMaintenanceTemplateToSnapshot(templateVersion)
       applyNeighbourhoodVoiceTemplatePatch(templateVersion)
-      applyCaretakerTemplateDisplayPatches(templateVersion)
+      applyTemplateDisplayPatches(templateVersion)
     }
 
     const cuSubmit = await currentUser()

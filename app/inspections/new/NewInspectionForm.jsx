@@ -25,7 +25,7 @@ import {
   buildEstateInspectionChecklistQuestionIndexMap,
   isEstateInspectionInstructionalQuestion,
 } from '@/lib/estate-standard-inspection-template-patch'
-import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -490,7 +490,7 @@ function InspectionQuestion({
           </div>
         )}
         {!isNvTemplate &&
-          !isStdConditionRow &&
+          (!isStdConditionRow || estateInspectionForm) &&
           (!eq.caretaker_graded_always_extras || estateInspectionForm) &&
           photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
@@ -941,7 +941,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         const templateList = templatesData.templates || []
         applyNeighbourhoodVoicePatchesToList(templateList)
         for (const t of templateList) {
-          applyCaretakerTemplateDisplayPatches(t)
+          applyTemplateDisplayPatches(t)
         }
 
         if (!cancelled) {
