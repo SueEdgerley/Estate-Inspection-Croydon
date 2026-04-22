@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,7 +32,22 @@ export async function GET(request, { params }) {
       )
     }
 
-    return NextResponse.json(result.rows[0])
+    const row = { ...result.rows[0] }
+    let tv = row.template_version
+    if (typeof tv === 'string') {
+      try {
+        tv = JSON.parse(tv)
+      } catch {
+        tv = null
+      }
+    }
+    if (tv && typeof tv === 'object') {
+      row.template_version = applyGroundsMaintenanceTemplateToSnapshot(tv)
+    } else {
+      row.template_version = tv
+    }
+
+    return NextResponse.json(row)
   } catch (error) {
     console.error('Error fetching inspection:', error)
     return NextResponse.json(

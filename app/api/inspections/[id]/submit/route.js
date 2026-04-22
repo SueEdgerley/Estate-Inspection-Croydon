@@ -26,6 +26,7 @@ import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-q
 import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-submit-actions'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
+import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 
@@ -86,6 +87,7 @@ export async function POST(request, { params }) {
       }
     }
     if (templateVersion && typeof templateVersion === 'object') {
+      templateVersion = applyGroundsMaintenanceTemplateToSnapshot(templateVersion)
       applyNeighbourhoodVoiceTemplatePatch(templateVersion)
       applyCaretakerTemplateDisplayPatches(templateVersion)
     }
@@ -319,6 +321,7 @@ export async function POST(request, { params }) {
         }
       }
       if (pdfVersion && typeof pdfVersion === 'object') {
+        applyGroundsMaintenanceTemplateToSnapshot(pdfVersion)
         applyNeighbourhoodVoiceTemplatePatch(pdfVersion)
       }
       const sections = Array.isArray(pdfVersion.sections) ? pdfVersion.sections : []
@@ -413,6 +416,7 @@ export async function POST(request, { params }) {
       }
     }
     if (emailVersion && typeof emailVersion === 'object') {
+      applyGroundsMaintenanceTemplateToSnapshot(emailVersion)
       applyNeighbourhoodVoiceTemplatePatch(emailVersion)
     }
     const versionSections = (emailVersion && emailVersion.sections) || []
