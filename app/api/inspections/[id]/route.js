@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
+import { applyCaretakerTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -42,7 +43,9 @@ export async function GET(request, { params }) {
       }
     }
     if (tv && typeof tv === 'object') {
-      row.template_version = applyGroundsMaintenanceTemplateToSnapshot(tv)
+      const patched = applyGroundsMaintenanceTemplateToSnapshot(tv)
+      applyCaretakerTemplateDisplayPatches(patched)
+      row.template_version = patched
     } else {
       row.template_version = tv
     }
