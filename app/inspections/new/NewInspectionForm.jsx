@@ -27,6 +27,7 @@ import {
 } from '@/lib/estate-standard-inspection-template-patch'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import { getSectionsWithOrderedQuestions } from '@/lib/inspection-template-render-sections'
+import { buildEstateInspectionFormSections } from '@/lib/estate-inspection-form-sections'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -102,9 +103,9 @@ function getQuestionType(question) {
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
-/** Q3 (checklist index 2): force same control path as graded when Airtable type still resolves as text/long_text/etc. */
+/** Estate checklist body row: force graded control path when Airtable type still resolves as text/long_text/etc. */
 function estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex) {
-  if (!estateInspectionForm || estateChecklistIndex !== 2) return question
+  if (!estateInspectionForm || estateChecklistIndex == null) return question
   const t = getQuestionType(question)
   if (t === 'graded' || t === 'nv_standard') return question
   return {
@@ -161,10 +162,10 @@ function InspectionQuestion({
   const rawLayoutType = String(question.question_type_raw ?? '').toLowerCase()
   const isExplicitAirtableLayoutRow =
     /instruction|section_header|divider|^info$|^static$|^label$/i.test(rawLayoutType)
-  const skipInstructionalBlockForEstateQ3 =
-    estateInspectionForm && estateChecklistIndex === 2 && !isExplicitAirtableLayoutRow
+  const skipInstructionalBlockForEstateChecklistRow =
+    estateInspectionForm && estateChecklistIndex != null && !isExplicitAirtableLayoutRow
 
-  if (isEstateInspectionInstructionalQuestion(question) && !skipInstructionalBlockForEstateQ3) {
+  if (isEstateInspectionInstructionalQuestion(question) && !skipInstructionalBlockForEstateChecklistRow) {
     const rawParts = [
       caretakerPartLabel || question.question_text,
       question.resident_wording,
@@ -976,6 +977,9 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
+    if (isEstateInspectionFormTemplate(selectedTemplate)) {
+      return buildEstateInspectionFormSections(selectedTemplate)
+    }
     return getSectionsWithOrderedQuestions(selectedTemplate)
   }, [selectedTemplate])
   const estateChecklistIndexByQid = useMemo(
@@ -1023,7 +1027,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         if (
           estateInspectionForm &&
           isEstateInspectionInstructionalQuestion(q) &&
-          !(qIdx === 2 && !qExplicitLayout)
+          !(qIdx != null && !qExplicitLayout)
         ) {
           return
         }
@@ -1469,7 +1473,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 }}
               >
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
-                  {section.title}
+                  {section.title || section.name || 'Section'}
                 </h3>
                 {estateInspectionForm && (section.what_to_look_for || section.help_text) ? (
                   <div
