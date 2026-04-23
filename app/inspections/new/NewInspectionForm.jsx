@@ -112,6 +112,7 @@ function stripLeadingOrderedNumber(s) {
 function estateShowsPhotoFromAirtable(question, eq) {
   const e = eq && typeof eq === 'object' ? eq : question
   if (e?.nv_graded_require_comment_photo) return true
+  if (question?.include_photo || e?.include_photo) return true
   if (question?.type_includes_photo) return true
   const pw = question?.photo_required_when ?? e?.photo_required_when
   if (pw === 'always' || pw === 'on_no' || pw === 'on_yes') return true
@@ -148,6 +149,10 @@ function estateEffectiveQuestionForRendering(question, estateInspectionForm, est
         ? question.grading_options
         : ['A', 'B', 'C', 'D', 'NA'],
     grading_scheme_name: question.grading_scheme_name || 'Croydon NV Grading – Final',
+    include_photo: question.include_photo,
+    type_includes_photo: question.type_includes_photo,
+    photo_required_when: question.photo_required_when,
+    require_photo_on_no: question.require_photo_on_no,
   }
 }
 
@@ -1080,7 +1085,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
       (sec.questions || []).forEach((q) => {
         if (q.nv_hidden) return
         if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
-        if (!shouldShowQuestion(q, answers)) return
+        if (!estateInspectionForm && !shouldShowQuestion(q, answers)) return
         const qRawLayout = String(q.question_type_raw ?? '').toLowerCase()
         const qExplicitLayout = /instruction|section_header|divider|^info$|^static$|^label$/i.test(qRawLayout)
         const qIdx = estateChecklistIndexByQid.get(q.id)
@@ -1527,8 +1532,8 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             {estateInspectionForm ? (
               <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
                 Sections and questions follow your Airtable template (numbers, titles, and order). Grading is A–D–NA.
-                Photo upload appears only on rows where the template marks a photo (e.g. Include Photo checkbox or
-                Photo required when).
+                Photo upload appears only when the template marks it (Include Photo checkbox or photo / “required
+                when” fields in Airtable).
               </p>
             ) : null}
             {(isNVTemplate(selectedTemplate)
@@ -1598,13 +1603,13 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 {(() => {
                   let caretakerRowIdx = 0
                   let estateSectionSeq = 0
-                  const rows = (section.questions || []).filter(
-                    (q) =>
-                      !q.nv_hidden &&
-                      isNeighbourhoodVoiceQuestionRenderable(q) &&
-                      shouldShowQuestion(q, answers)
-                  )
-                  return rows.map((q) => {
+                  const rows = (section.questions || []).filter((q) => {
+                    if (q.nv_hidden) return false
+                    if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
+                    if (estateInspectionForm) return true
+                    return shouldShowQuestion(q, answers)
+                  })
+                  const items = rows.map((q) => {
                     estateSectionSeq += 1
                     const estateDisplayNumber = estateInspectionForm
                       ? estateAirtableQuestionDisplayNumber(q, estateSectionSeq)
@@ -1613,29 +1618,50 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                       isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate)
                         ? caretakerRowDisplayLabel(indexToCaretakerRowLetter(caretakerRowIdx++), q)
                         : null
-                    return (
-                      <InspectionQuestion
-                        key={q.id}
-                        question={q}
-                        value={answers[q.id]}
-                        onChange={handleAnswer}
-                        error={validationErrors[q.id]}
-                        errorComment={validationErrors[`${q.id}_comment`]}
-                        errorPhotos={validationErrors[`${q.id}_photos`]}
-                        answerExtras={answerExtras[q.id]}
-                        onAnswerExtras={(questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))}
-                        createActionOnNo={q.create_action_on_no}
-                        isNvTemplate={isNVTemplate(selectedTemplate)}
-                        expandedByQuestionId={expandedByQuestionId}
-                        peopleOptions={peopleOptions}
-                        standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
-                        caretakerPartLabel={caretakerPartLabel}
-                        estateInspectionForm={estateInspectionForm}
-                        estateChecklistIndex={estateChecklistIndexByQid.get(q.id)}
-                        estateDisplayNumber={estateDisplayNumber}
-                      />
+                    const qProps = {
+                      question: q,
+                      value: answers[q.id],
+                      onChange: handleAnswer,
+                      error: validationErrors[q.id],
+                      errorComment: validationErrors[`${q.id}_comment`],
+                      errorPhotos: validationErrors[`${q.id}_photos`],
+                      answerExtras: answerExtras[q.id],
+                      onAnswerExtras: (questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras })),
+                      createActionOnNo: q.create_action_on_no,
+                      isNvTemplate: isNVTemplate(selectedTemplate),
+                      expandedByQuestionId,
+                      peopleOptions,
+                      standardInspectionForm: usesStandardInspectionFormUI(selectedTemplate),
+                      caretakerPartLabel,
+                      estateInspectionForm,
+                      estateChecklistIndex: estateChecklistIndexByQid.get(q.id),
+                      estateDisplayNumber,
+                    }
+                    return estateInspectionForm ? (
+                      <li key={q.id} style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        <InspectionQuestion {...qProps} />
+                      </li>
+                    ) : (
+                      <InspectionQuestion key={q.id} {...qProps} />
                     )
                   })
+                  if (estateInspectionForm) {
+                    return (
+                      <ol
+                        style={{
+                          listStyle: 'none',
+                          margin: 0,
+                          padding: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.25rem',
+                        }}
+                      >
+                        {items}
+                      </ol>
+                    )
+                  }
+                  return <>{items}</>
                 })()}
               </div>
             ))}

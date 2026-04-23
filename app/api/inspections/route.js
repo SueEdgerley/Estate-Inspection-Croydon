@@ -60,6 +60,7 @@ function buildTemplateVersionSnapshot(template) {
         comment_required_when: q.comment_required_when ?? null,
         photo_required_when: q.photo_required_when ?? null,
         type_includes_photo: q.type_includes_photo ?? false,
+        include_photo: !!(q.include_photo ?? false),
         is_required: q.is_required ?? false,
         category: q.category ?? null,
         action_category: q.action_category ?? q.category ?? null,
