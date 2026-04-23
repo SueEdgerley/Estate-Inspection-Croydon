@@ -26,6 +26,7 @@ import {
   isEstateInspectionInstructionalQuestion,
 } from '@/lib/estate-standard-inspection-template-patch'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import { getSectionsWithOrderedQuestions } from '@/lib/inspection-template-render-sections'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -973,12 +974,19 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const templates = apiPayload.templates || []
   const selectedTemplate = templates.find((t) => t.id === templateId)
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
+  const inspectionRenderSections = useMemo(() => {
+    if (!selectedTemplate) return []
+    return getSectionsWithOrderedQuestions(selectedTemplate)
+  }, [selectedTemplate])
   const estateChecklistIndexByQid = useMemo(
     () =>
       estateInspectionForm && selectedTemplate
-        ? buildEstateInspectionChecklistQuestionIndexMap(selectedTemplate)
+        ? buildEstateInspectionChecklistQuestionIndexMap({
+            ...selectedTemplate,
+            sections: inspectionRenderSections,
+          })
         : new Map(),
-    [estateInspectionForm, selectedTemplate]
+    [estateInspectionForm, selectedTemplate, inspectionRenderSections]
   )
 
   const handleAnswer = (questionId, value) => {
@@ -1004,7 +1012,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
     if (!templateId) errs.template_id = 'Select a template'
     if (!selectedTemplate) return { ...errs }
 
-    selectedTemplate.sections.forEach((sec) => {
+    inspectionRenderSections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
         if (q.nv_hidden) return
         if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
@@ -1443,14 +1451,14 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           </div>
         )}
 
-        {selectedTemplate && selectedTemplate.sections && selectedTemplate.sections.length > 0 && (
+        {selectedTemplate && inspectionRenderSections.length > 0 && (
           <div style={{ marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
               Sections &amp; questions
             </h2>
             {(isNVTemplate(selectedTemplate)
-              ? selectedTemplate.sections.filter((s) => s.id !== 'nv-sec-remaining')
-              : selectedTemplate.sections
+              ? inspectionRenderSections.filter((s) => s.id !== 'nv-sec-remaining')
+              : inspectionRenderSections
             ).map((section) => (
               <div
                 key={section.id}
