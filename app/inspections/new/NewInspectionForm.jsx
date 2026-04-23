@@ -20,6 +20,7 @@ import {
   questionIsStandardInspectionConditionRow,
   questionIsStandardInspectionIssueRow,
   isEstateInspectionFormTemplate,
+  isEstateInspectionFormV2Template,
 } from '@/lib/standard-inspection-form'
 import {
   buildEstateInspectionChecklistQuestionIndexMap,
@@ -975,6 +976,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const templates = apiPayload.templates || []
   const selectedTemplate = templates.find((t) => t.id === templateId)
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
+  const estateInspectionV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
     if (isEstateInspectionFormTemplate(selectedTemplate)) {
@@ -1460,6 +1462,12 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
               Sections &amp; questions
             </h2>
+            {estateInspectionV2 ? (
+              <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
+                Estate Inspection Form V2 — layout follows your Airtable template (section order, section titles, and
+                question order within each section).
+              </p>
+            ) : null}
             {(isNVTemplate(selectedTemplate)
               ? inspectionRenderSections.filter((s) => s.id !== 'nv-sec-remaining')
               : inspectionRenderSections
