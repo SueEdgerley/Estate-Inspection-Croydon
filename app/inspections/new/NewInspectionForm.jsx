@@ -1107,6 +1107,14 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
     }
     return getSectionsWithOrderedQuestions(selectedTemplate)
   }, [selectedTemplate])
+
+  useEffect(() => {
+    if (!estateInspectionForm) return
+    for (const section of inspectionRenderSections) {
+      console.log(section.title || section.name, (section.questions || []).length)
+    }
+  }, [estateInspectionForm, inspectionRenderSections])
+
   const estateChecklistIndexByQid = useMemo(
     () =>
       estateInspectionForm && selectedTemplate

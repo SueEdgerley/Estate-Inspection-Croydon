@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import QuestionRenderer from './QuestionRenderer'
 import { getVisibleQuestions } from '@/lib/airtable'
 
@@ -41,8 +41,19 @@ export default function SectionQuestions({
     onAnswersChange(newAnswers)
   }
 
-  // Get visible questions based on conditional logic
-  const visibleQuestions = getVisibleQuestions(questions, localAnswers)
+  // Estate staff form: show every checklist row; conditional logic is for NV / caretaker flows.
+  const visibleQuestions = useMemo(() => {
+    if (estateInspectionForm) {
+      return questions.filter((q) => !q.nv_hidden)
+    }
+    return getVisibleQuestions(questions, localAnswers)
+  }, [estateInspectionForm, questions, localAnswers])
+
+  useEffect(() => {
+    if (!estateInspectionForm || !section) return
+    const title = section.name || section.title || sectionId
+    console.debug('[estate-section-render]', title, 'questions.length', questions.length, 'visible', visibleQuestions.length)
+  }, [estateInspectionForm, section, sectionId, questions, visibleQuestions.length])
 
   if (questions.length === 0) {
     return <div style={{ padding: '1rem', color: '#6b7280' }}>No questions found for this section.</div>

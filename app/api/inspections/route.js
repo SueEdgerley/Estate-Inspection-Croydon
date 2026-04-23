@@ -29,55 +29,69 @@ function parseDueDateInput(raw) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-function buildTemplateVersionSnapshot(template) {
+function mapSnapshotQuestion(q, qIndex) {
   return {
-    id: template.id,
-    name: template.name,
-    template_key: template.template_key ?? null,
-    template_type: template.template_type ?? template.type ?? null,
-    sections: (template.sections || []).map((sec, secIndex) => ({
+    id: q.id,
+    question_key: q.question_key ?? q.id,
+    order: q.order ?? qIndex + 1,
+    sort_order: q.sort_order ?? q.order ?? qIndex + 1,
+    label: q.label ?? q.question_text ?? null,
+    question_text: q.question_text ?? q.label,
+    resident_wording: q.resident_wording ?? null,
+    helper_text: q.helper_text ?? null,
+    instructions: q.instructions ?? null,
+    question_type: q.question_type ?? null,
+    question_type_raw: q.question_type_raw ?? null,
+    answer_mode: q.answer_mode ?? q.question_type ?? null,
+    options: q.options ?? null,
+    grading_scheme_name: q.grading_scheme_name ?? null,
+    grading_options: q.grading_options ?? null,
+    comment_required_when: q.comment_required_when ?? null,
+    photo_required_when: q.photo_required_when ?? null,
+    type_includes_photo: q.type_includes_photo ?? false,
+    include_photo: !!(q.include_photo ?? false),
+    is_required: q.is_required ?? false,
+    category: q.category ?? null,
+    action_category: q.action_category ?? q.category ?? null,
+    create_action_on_no: q.create_action_on_no ?? true,
+    require_comment_on_no: q.require_comment_on_no ?? true,
+    require_photo_on_no: q.require_photo_on_no ?? true,
+    triggers_task: q.triggers_task ?? false,
+    triggers_email: q.triggers_email ?? false,
+    email_routing: q.email_routing ?? null,
+    email_route_team_id: q.email_route_team_id ?? null,
+    issue_type: q.issue_type ?? null,
+    programme_tag: q.programme_tag ?? null,
+    depends_on_question_id: q.depends_on_question_id ?? null,
+    show_when_value: q.show_when_value ?? null,
+  }
+}
+
+function buildTemplateVersionSnapshot(template) {
+  const questionsFlat = []
+  const sections = (template.sections || []).map((sec, secIndex) => {
+    const mappedQs = (sec.questions || []).map((q, qIndex) => {
+      const row = mapSnapshotQuestion(q, qIndex)
+      questionsFlat.push({ ...row, section_id: String(sec.id) })
+      return row
+    })
+    return {
       id: sec.id,
       order: sec.order ?? secIndex + 1,
       title: sec.title ?? sec.name,
       name: sec.name ?? sec.title ?? null,
       help_text: sec.help_text ?? null,
       what_to_look_for: sec.what_to_look_for ?? null,
-      questions: (sec.questions || []).map((q, qIndex) => ({
-        id: q.id,
-        question_key: q.question_key ?? q.id,
-        order: q.order ?? qIndex + 1,
-        sort_order: q.sort_order ?? q.order ?? qIndex + 1,
-        label: q.label ?? q.question_text ?? null,
-        question_text: q.question_text ?? q.label,
-        resident_wording: q.resident_wording ?? null,
-        helper_text: q.helper_text ?? null,
-        instructions: q.instructions ?? null,
-        question_type: q.question_type ?? null,
-        question_type_raw: q.question_type_raw ?? null,
-        answer_mode: q.answer_mode ?? q.question_type ?? null,
-        options: q.options ?? null,
-        grading_scheme_name: q.grading_scheme_name ?? null,
-        grading_options: q.grading_options ?? null,
-        comment_required_when: q.comment_required_when ?? null,
-        photo_required_when: q.photo_required_when ?? null,
-        type_includes_photo: q.type_includes_photo ?? false,
-        include_photo: !!(q.include_photo ?? false),
-        is_required: q.is_required ?? false,
-        category: q.category ?? null,
-        action_category: q.action_category ?? q.category ?? null,
-        create_action_on_no: q.create_action_on_no ?? true,
-        require_comment_on_no: q.require_comment_on_no ?? true,
-        require_photo_on_no: q.require_photo_on_no ?? true,
-        triggers_task: q.triggers_task ?? false,
-        triggers_email: q.triggers_email ?? false,
-        email_routing: q.email_routing ?? null,
-        email_route_team_id: q.email_route_team_id ?? null,
-        issue_type: q.issue_type ?? null,
-        programme_tag: q.programme_tag ?? null,
-        depends_on_question_id: q.depends_on_question_id ?? null,
-        show_when_value: q.show_when_value ?? null,
-      })),
-    })),
+      questions: mappedQs,
+    }
+  })
+  return {
+    id: template.id,
+    name: template.name,
+    template_key: template.template_key ?? null,
+    template_type: template.template_type ?? template.type ?? null,
+    sections,
+    questions: questionsFlat,
   }
 }
 
