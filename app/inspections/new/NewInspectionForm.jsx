@@ -20,7 +20,6 @@ import {
   questionIsStandardInspectionConditionRow,
   questionIsStandardInspectionIssueRow,
   isEstateInspectionFormTemplate,
-  isEstateInspectionFormV2Template,
 } from '@/lib/standard-inspection-form'
 import {
   buildEstateInspectionChecklistQuestionIndexMap,
@@ -87,6 +86,13 @@ function normalizeQuestionType(v) {
   if (raw.includes('yes') && raw.includes('no')) return 'yes_no'
   const s = raw.replace(/[\s\-/]+/g, '_').replace(/_+$/g, '') || 'text'
   return s === 'yesno' ? 'yes_no' : s
+}
+
+/** Airtable Question Order / sort_order / order when present; else visible position within the section. */
+function estateAirtableQuestionDisplayNumber(question, oneBasedSequentialInSection) {
+  const n = Number(question?.sort_order ?? question?.order ?? question?.question_order ?? 0)
+  if (Number.isFinite(n) && n > 0) return n
+  return oneBasedSequentialInSection
 }
 
 function getQuestionType(question) {
@@ -157,6 +163,7 @@ function InspectionQuestion({
   caretakerPartLabel = null,
   estateInspectionForm = false,
   estateChecklistIndex,
+  estateDisplayNumber,
 }) {
   const id = `answer-${question.id}`
 
@@ -202,7 +209,16 @@ function InspectionQuestion({
               lineHeight: 1.55,
             }}
           >
-            {text}
+            {estateInspectionForm && estateDisplayNumber != null && i === 0 ? (
+              <>
+                <span style={{ fontWeight: 700, color: '#111827', marginRight: '0.35rem', fontVariantNumeric: 'tabular-nums' }}>
+                  {estateDisplayNumber}.
+                </span>
+                {text}
+              </>
+            ) : (
+              text
+            )}
           </p>
         ))}
       </div>
@@ -213,6 +229,24 @@ function InspectionQuestion({
   const qType = getQuestionType(eq)
 
   const labelText = caretakerPartLabel || question.question_text
+  const displayPrimaryLabel =
+    estateInspectionForm && estateDisplayNumber != null ? (
+      <>
+        <span
+          style={{
+            fontWeight: 700,
+            color: '#111827',
+            marginRight: '0.35rem',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {estateDisplayNumber}.
+        </span>
+        {labelText}
+      </>
+    ) : (
+      labelText
+    )
   const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
   const nvHeading =
     nvLabel != null ? (
@@ -338,7 +372,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {labelText}
+          {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
@@ -446,7 +480,7 @@ function InspectionQuestion({
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {labelText}
+          {displayPrimaryLabel}
           {eq.grading_scheme_name && (
             <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.875rem' }}> ({eq.grading_scheme_name})</span>
           )}
@@ -506,7 +540,7 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {labelText}
+          {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
@@ -540,7 +574,7 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {labelText}
+          {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
@@ -575,7 +609,7 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-          {labelText}
+          {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
@@ -772,7 +806,7 @@ function InspectionQuestion({
   return (
     <div style={{ marginBottom: '1rem' }}>
       <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
-        {labelText}
+        {displayPrimaryLabel}
         {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
       </label>
       {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
@@ -976,7 +1010,6 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const templates = apiPayload.templates || []
   const selectedTemplate = templates.find((t) => t.id === templateId)
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
-  const estateInspectionV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
     if (isEstateInspectionFormTemplate(selectedTemplate)) {
@@ -1462,10 +1495,10 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
               Sections &amp; questions
             </h2>
-            {estateInspectionV2 ? (
+            {estateInspectionForm ? (
               <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
-                Estate Inspection Form V2 — layout follows your Airtable template (section order, section titles, and
-                question order within each section).
+                Sections and questions follow your Airtable template (section order, titles, and question order). Each
+                checklist line uses A–D–NA grading with an optional photo.
               </p>
             ) : null}
             {(isNVTemplate(selectedTemplate)
@@ -1518,10 +1551,18 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 )}
                 {(() => {
                   let caretakerRowIdx = 0
-                  return (section.questions || []).map((q) => {
-                    if (q.nv_hidden) return null
-                    if (!isNeighbourhoodVoiceQuestionRenderable(q)) return null
-                    if (!shouldShowQuestion(q, answers)) return null
+                  let estateSectionSeq = 0
+                  const rows = (section.questions || []).filter(
+                    (q) =>
+                      !q.nv_hidden &&
+                      isNeighbourhoodVoiceQuestionRenderable(q) &&
+                      shouldShowQuestion(q, answers)
+                  )
+                  return rows.map((q) => {
+                    estateSectionSeq += 1
+                    const estateDisplayNumber = estateInspectionForm
+                      ? estateAirtableQuestionDisplayNumber(q, estateSectionSeq)
+                      : null
                     const caretakerPartLabel =
                       isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate)
                         ? caretakerRowDisplayLabel(indexToCaretakerRowLetter(caretakerRowIdx++), q)
@@ -1545,6 +1586,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                         caretakerPartLabel={caretakerPartLabel}
                         estateInspectionForm={estateInspectionForm}
                         estateChecklistIndex={estateChecklistIndexByQid.get(q.id)}
+                        estateDisplayNumber={estateDisplayNumber}
                       />
                     )
                   })
