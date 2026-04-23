@@ -95,6 +95,30 @@ function estateAirtableQuestionDisplayNumber(question, oneBasedSequentialInSecti
   return oneBasedSequentialInSection
 }
 
+function estateAirtableSectionDisplayNumber(section, oneBasedIndexInTemplate) {
+  const n = Number(section?.sort_order ?? section?.section_order ?? section?.order ?? 0)
+  if (Number.isFinite(n) && n > 0) return n
+  return oneBasedIndexInTemplate
+}
+
+/** Strip a leading "1. " / "2) " so we do not duplicate the computed section number. */
+function stripLeadingOrderedNumber(s) {
+  return String(s || '')
+    .replace(/^\s*\d+[\.)]\s*/, '')
+    .trim()
+}
+
+/** Estate: show photo upload only when Airtable marks the question (checkbox, type, or photo-required-when). */
+function estateShowsPhotoFromAirtable(question, eq) {
+  const e = eq && typeof eq === 'object' ? eq : question
+  if (e?.nv_graded_require_comment_photo) return true
+  if (question?.type_includes_photo) return true
+  const pw = question?.photo_required_when ?? e?.photo_required_when
+  if (pw === 'always' || pw === 'on_no' || pw === 'on_yes') return true
+  if (question?.require_photo_on_no) return true
+  return false
+}
+
 function getQuestionType(question) {
   if (question.caretaker_routing_bundle) return 'caretaker_routing_bundle'
   if (question.nv_render_kind) return question.nv_render_kind
@@ -227,6 +251,7 @@ function InspectionQuestion({
 
   const eq = estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex)
   const qType = getQuestionType(eq)
+  const estatePhotoAllowed = estateInspectionForm && estateShowsPhotoFromAirtable(question, eq)
 
   const labelText = caretakerPartLabel || question.question_text
   const displayPrimaryLabel =
@@ -456,10 +481,9 @@ function InspectionQuestion({
           </div>
         )}
         {!isNvTemplate &&
-          !question.caretaker_recipient_on_yes &&
-          !photoWhen &&
-          typeIncludesPhoto &&
-          photoBlock}
+          (estateInspectionForm
+            ? estatePhotoAllowed && photoBlock
+            : !question.caretaker_recipient_on_yes && !photoWhen && typeIncludesPhoto && photoBlock)}
         {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -527,9 +551,9 @@ function InspectionQuestion({
           </div>
         )}
         {!isNvTemplate &&
-          (!isStdConditionRow || estateInspectionForm) &&
-          (!eq.caretaker_graded_always_extras || estateInspectionForm) &&
-          photoBlock}
+          (estateInspectionForm
+            ? estatePhotoAllowed && photoBlock
+            : !isStdConditionRow && !eq.caretaker_graded_always_extras && photoBlock)}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -563,7 +587,7 @@ function InspectionQuestion({
             <option key={o} value={o}>{o}</option>
           ))}
         </select>
-        {photoBlock}
+        {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -599,7 +623,7 @@ function InspectionQuestion({
             </button>
           ))}
         </div>
-        {photoBlock}
+        {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -630,6 +654,7 @@ function InspectionQuestion({
             minHeight: 100,
           }}
         />
+        {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -824,7 +849,7 @@ function InspectionQuestion({
           fontSize: '1rem',
         }}
       />
-      {photoBlock}
+      {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
       {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
     </div>
   )
@@ -1126,7 +1151,11 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         if (qType === 'graded' || qType === 'nv_standard') {
           const extras = answerExtras[q.id] || {}
           const isStd = qType === 'nv_standard'
-          const needPhoto = isStd || !!qForType.nv_graded_require_comment_photo
+          const photoWhenG = qForType.photo_required_when ?? q.photo_required_when
+          const needPhoto =
+            isStd ||
+            !!qForType.nv_graded_require_comment_photo ||
+            (estateInspectionForm && photoWhenG === 'always')
           const needComment = isStd || needPhoto || !!qForType.nv_graded_require_comment_only
           if (!needComment && !isStd) {
             if (q.is_required && (v === undefined || v === null || (typeof v === 'string' && !v.trim()))) {
@@ -1497,14 +1526,15 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
             </h2>
             {estateInspectionForm ? (
               <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
-                Sections and questions follow your Airtable template (section order, titles, and question order). Each
-                checklist line uses A–D–NA grading with an optional photo.
+                Sections and questions follow your Airtable template (numbers, titles, and order). Grading is A–D–NA.
+                Photo upload appears only on rows where the template marks a photo (e.g. Include Photo checkbox or
+                Photo required when).
               </p>
             ) : null}
             {(isNVTemplate(selectedTemplate)
               ? inspectionRenderSections.filter((s) => s.id !== 'nv-sec-remaining')
               : inspectionRenderSections
-            ).map((section) => (
+            ).map((section, sectionIdx) => (
               <div
                 key={section.id}
                 style={{
@@ -1514,7 +1544,23 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 }}
               >
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
-                  {estateInspectionForm ? section.title || section.name || 'Section' : section.title}
+                  {estateInspectionForm ? (
+                    <>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: '#111827',
+                          marginRight: '0.35rem',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {estateAirtableSectionDisplayNumber(section, sectionIdx + 1)}.
+                      </span>
+                      {stripLeadingOrderedNumber(section.title || section.name) || 'Section'}
+                    </>
+                  ) : (
+                    section.title
+                  )}
                 </h3>
                 {estateInspectionForm && (section.what_to_look_for || section.help_text) ? (
                   <div
