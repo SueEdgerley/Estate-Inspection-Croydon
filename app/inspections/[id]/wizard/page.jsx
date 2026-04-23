@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
@@ -12,6 +12,8 @@ import {
 } from '@/lib/neighbourhood-voice-template-patch'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
+import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 
 // NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3
@@ -126,6 +128,8 @@ function getSectionIcon(title) {
 export default function InspectionWizardPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const showTemplateDebug = searchParams.get('debug') === '1'
   const { user } = useUser()
   const prefillResidentName = useMemo(() => {
     if (!user) return ''
@@ -150,6 +154,8 @@ export default function InspectionWizardPage() {
   const [reviewConfirmed, setReviewConfirmed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [questionStep, setQuestionStep] = useState(0)
+  const [snapshotDebugBeforePatches, setSnapshotDebugBeforePatches] = useState(null)
+  const [snapshotDebugAfterPatches, setSnapshotDebugAfterPatches] = useState(null)
   const commentFocusRef = useRef(null)
   const focusedNoForQuestionId = useRef(null)
 
@@ -198,8 +204,15 @@ export default function InspectionWizardPage() {
           }
         }
         if (version && typeof version === 'object') {
+          const cloneForDebug = JSON.parse(JSON.stringify(version))
+          const beforeSummary = summarizeTemplateSnapshotForDebug(cloneForDebug)
           applyNeighbourhoodVoiceTemplatePatch(version)
           applyTemplateDisplayPatches(version)
+          const afterSummary = summarizeTemplateSnapshotForDebug(version)
+          if (!cancelled) {
+            setSnapshotDebugBeforePatches(beforeSummary)
+            setSnapshotDebugAfterPatches(afterSummary)
+          }
           const secs = version.sections || []
           if (!cancelled) setTemplate(version)
           const steps = []
@@ -214,6 +227,9 @@ export default function InspectionWizardPage() {
             setSections(secs)
             setFlatSteps(steps)
           }
+        } else if (!cancelled) {
+          setSnapshotDebugBeforePatches(null)
+          setSnapshotDebugAfterPatches(null)
         }
 
         if (ansRes.ok) {
@@ -303,6 +319,16 @@ export default function InspectionWizardPage() {
     }
   }, [id, answers, extras])
 
+  const templateVersionDebugPanel =
+    showTemplateDebug && inspection ? (
+      <InspectionTemplateVersionDebugPanel
+        inspection={inspection}
+        snapshotBeforePatches={snapshotDebugBeforePatches}
+        snapshotAfterPatches={snapshotDebugAfterPatches}
+        heading="Inspection template_version debug (?debug=1)"
+      />
+    ) : null
+
   const totalQuestions = flatSteps.length
   const answeredCount = flatSteps.filter((s) => {
     const v = answers[s.question?.id]
@@ -360,6 +386,7 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
+          {templateVersionDebugPanel}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <span
               style={{
@@ -437,6 +464,7 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '7rem', paddingLeft: nv.pagePadMobile, paddingRight: nv.pagePadMobile, fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          {templateVersionDebugPanel}
           <h1 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 16 }}>Review and submit</h1>
 
           {issues.length > 0 && (
@@ -546,6 +574,7 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', paddingLeft: padX, paddingRight: padX, fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto', width: '100%', minWidth: 0 }}>
+          {templateVersionDebugPanel}
           <div style={{ marginBottom: nv.spaceSections }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, fontSize: nv.metaSize, color: nv.muted, marginBottom: 8 }}>
               <span style={{ fontWeight: 600, color: nv.text }}>

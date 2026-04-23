@@ -19,11 +19,13 @@ export async function GET(request, { params }) {
     }
     const { id } = await params
 
-    // Use * so a missing optional column (e.g. before migrate) cannot 500 the whole GET.
     const result = await sql`
-      SELECT *
-      FROM inspections
-      WHERE id = ${id}
+      SELECT i.*,
+        tv.created_at AS _template_version_row_created_at,
+        tv.version_hash AS _template_version_row_hash
+      FROM inspections i
+      LEFT JOIN template_versions tv ON tv.id = i.template_version_id
+      WHERE i.id = ${id}
     `
 
     if (result.rows.length === 0) {
@@ -34,6 +36,15 @@ export async function GET(request, { params }) {
     }
 
     const row = { ...result.rows[0] }
+    const tvCreated = row._template_version_row_created_at
+    const tvHash = row._template_version_row_hash
+    delete row._template_version_row_created_at
+    delete row._template_version_row_hash
+    row.template_version_meta = {
+      template_version_id: row.template_version_id ?? null,
+      version_hash: tvHash ?? null,
+      created_at: tvCreated ?? null,
+    }
     let tv = row.template_version
     if (typeof tv === 'string') {
       try {

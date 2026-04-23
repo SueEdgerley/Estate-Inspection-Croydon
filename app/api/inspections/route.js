@@ -18,6 +18,7 @@ import {
   roleMayCreateAdHocInspection,
   roleMayCreateInspectionWithTemplate,
 } from '@/lib/app-role-access'
+import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -93,6 +94,7 @@ function hashSnapshot(snapshot) {
 
 async function getOrCreateTemplateVersion(templateId, templateName, snapshot) {
   const versionHash = hashSnapshot(snapshot)
+  /** Reuse only when the **most recently created** row for this template_id has the same hash (stableStringify of snapshot). */
   const latest = await sql`
     SELECT id, snapshot, version_hash
     FROM template_versions
@@ -416,6 +418,7 @@ export async function POST(request) {
           templateVersionId: templateVersion.id,
           templateVersionHash: templateVersion.versionHash,
           templateVersionReused: templateVersion.reused,
+          snapshotDebug: summarizeTemplateSnapshotForDebug(templateVersion.snapshot),
         },
         { status: 201 }
       )
@@ -799,6 +802,7 @@ export async function POST(request) {
       templateVersionId: templateVersion.id,
       templateVersionHash: templateVersion.versionHash,
       templateVersionReused: templateVersion.reused,
+      snapshotDebug: summarizeTemplateSnapshotForDebug(templateVersion.snapshot),
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,

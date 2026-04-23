@@ -28,6 +28,8 @@ import {
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import { getSectionsWithOrderedQuestions } from '@/lib/inspection-template-render-sections'
 import { buildEstateInspectionFormSections } from '@/lib/estate-inspection-form-sections'
+import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
+import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@/lib/template-version-debug'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
@@ -917,6 +919,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const searchParams = useSearchParams()
   const [isMobile, setIsMobile] = useState(false)
   const templateFromUrl = String(searchParams?.get('template_id') || '').trim()
+  const debugTemplateVersion = searchParams?.get('debug') === '1'
   const isTemplateLocked = !!templateFromUrl
   const [apiPayload, setApiPayload] = useState({ templates: [] })
   const estates = Array.isArray(initialEstates) ? initialEstates : []
@@ -945,6 +948,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
   const [startingWizard, setStartingWizard] = useState(false)
+  const [lastDraftPostResponse, setLastDraftPostResponse] = useState(null)
   const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
   const [peopleOptions, setPeopleOptions] = useState([])
 
@@ -1015,6 +1019,10 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
       if (!res.ok) {
         setSubmitError(data?.error || data?.details || `Request failed (${res.status})`)
         return
+      }
+      if (debugTemplateVersion) {
+        setLastDraftPostResponse(data)
+        logInspectionTemplateDebug({ source: 'POST /api/inspections draft=true', body: data })
       }
       const inspectionId = data.inspectionId ?? data.id
       if (inspectionId) router.push(`/inspections/${inspectionId}/wizard`)
@@ -1108,6 +1116,27 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           })
         : new Map(),
     [estateInspectionForm, selectedTemplate, inspectionRenderSections]
+  )
+
+  const liveFormTemplateSummary = useMemo(() => {
+    if (!selectedTemplate) return null
+    return summarizeTemplateSnapshotForDebug({
+      ...selectedTemplate,
+      sections: inspectionRenderSections,
+    })
+  }, [selectedTemplate, inspectionRenderSections])
+
+  const debugPseudoInspection = useMemo(
+    () =>
+      selectedTemplate
+        ? {
+            id: '(new inspection form — no inspection row until draft or submit)',
+            template_id: selectedTemplate.id,
+            template_version_id: null,
+            template_version_meta: null,
+          }
+        : null,
+    [selectedTemplate]
   )
 
   const handleAnswer = (questionId, value) => {
@@ -1300,6 +1329,10 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         setSubmitError(msg)
         return
       }
+      if (debugTemplateVersion) {
+        setLastDraftPostResponse(data)
+        logInspectionTemplateDebug({ source: 'POST /api/inspections submit', body: data })
+      }
       if (data.error) {
         setSubmitError(data.error || data.details || 'Save failed')
         return
@@ -1360,6 +1393,16 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           Choose estate (required), optional block, location note, then complete the form
         </p>
       </div>
+
+      {debugTemplateVersion && selectedTemplate ? (
+        <InspectionTemplateVersionDebugPanel
+          inspection={debugPseudoInspection}
+          liveAirtableSummary={liveFormTemplateSummary}
+          postCreateSnapshotDebug={lastDraftPostResponse?.snapshotDebug}
+          draftPostResponse={lastDraftPostResponse}
+          heading="New inspection — live /api/templates shape (?debug=1). After draft/submit, see draft_post_response."
+        />
+      ) : null}
 
       <form
         onSubmit={handleSubmit}
