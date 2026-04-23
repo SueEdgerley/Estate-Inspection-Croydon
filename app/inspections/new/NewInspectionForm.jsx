@@ -194,6 +194,50 @@ function InspectionQuestion({
   estateChecklistIndex,
   estateDisplayNumber,
 }) {
+  const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
+  const rawCostBlob = `${question.question_text || ''} ${question.label || ''}`.toLowerCase()
+  const estateCostCodeSelectNeedsApi =
+    estateInspectionForm &&
+    (() => {
+      const qt = getQuestionType(question)
+      if (qt !== 'select' && qt !== 'single_select') return false
+      if ((question.options || []).length > 0) return false
+      return (
+        rawCostBlob.includes('cost code') ||
+        rawCostBlob.includes('costcode') ||
+        rawCostBlob.includes('cost_code')
+      )
+    })()
+
+  useEffect(() => {
+    if (!estateCostCodeSelectNeedsApi) {
+      setEstateApiCostCodes([])
+      return undefined
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/cost-codes', { cache: 'no-store', credentials: 'include' })
+        if (!res.ok || cancelled) return
+        const rows = await res.json()
+        if (!Array.isArray(rows) || cancelled) return
+        setEstateApiCostCodes(
+          rows
+            .map((c) => ({
+              value: c.code,
+              label: c.description ? `${c.code} - ${c.description}` : String(c.code),
+            }))
+            .filter((x) => x.value)
+        )
+      } catch {
+        if (!cancelled) setEstateApiCostCodes([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [estateCostCodeSelectNeedsApi, question.id])
+
   const id = `answer-${question.id}`
 
   const rawLayoutType = String(question.question_type_raw ?? '').toLowerCase()
@@ -565,7 +609,13 @@ function InspectionQuestion({
   }
 
   if (qType === 'select' || qType === 'single_select') {
-    const options = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o))).filter(Boolean)
+    const fromAirtable = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o))).filter(Boolean)
+    const selectPairs =
+      fromAirtable.length > 0
+        ? fromAirtable.map((o) => ({ value: o, label: o }))
+        : estateApiCostCodes.length > 0
+          ? estateApiCostCodes.map(({ value: v, label: lab }) => ({ value: v, label: lab || v }))
+          : []
     return (
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
@@ -588,8 +638,10 @@ function InspectionQuestion({
           }}
         >
           <option value="">Select...</option>
-          {(options.length ? options : ['—']).map((o) => (
-            <option key={o} value={o}>{o}</option>
+          {selectPairs.map((o) => (
+            <option key={String(o.value)} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
         {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
@@ -1084,7 +1136,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
     inspectionRenderSections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
         if (q.nv_hidden) return
-        if (!isNeighbourhoodVoiceQuestionRenderable(q)) return
+        if (!estateInspectionForm && !isNeighbourhoodVoiceQuestionRenderable(q)) return
         if (!estateInspectionForm && !shouldShowQuestion(q, answers)) return
         const qRawLayout = String(q.question_type_raw ?? '').toLowerCase()
         const qExplicitLayout = /instruction|section_header|divider|^info$|^static$|^label$/i.test(qRawLayout)
@@ -1605,8 +1657,8 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                   let estateSectionSeq = 0
                   const rows = (section.questions || []).filter((q) => {
                     if (q.nv_hidden) return false
-                    if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     if (estateInspectionForm) return true
+                    if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
                   })
                   const items = rows.map((q) => {
