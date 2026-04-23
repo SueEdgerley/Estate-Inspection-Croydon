@@ -1473,7 +1473,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
                 }}
               >
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
-                  {section.title || section.name || 'Section'}
+                  {estateInspectionForm ? section.title || section.name || 'Section' : section.title}
                 </h3>
                 {estateInspectionForm && (section.what_to_look_for || section.help_text) ? (
                   <div
