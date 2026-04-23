@@ -19,6 +19,11 @@ import {
   roleMayCreateInspectionWithTemplate,
 } from '@/lib/app-role-access'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
+import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
+import {
+  countQuestionsInTemplate,
+  logInspectionQuestionPipeline,
+} from '@/lib/estate-inspection-question-pipeline-diag'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -371,6 +376,14 @@ export async function POST(request) {
       )
     }
 
+    if (isEstateInspectionFormTemplate(template)) {
+      logInspectionQuestionPipeline('inspection_create_live_template_from_getTemplatesNested', {
+        template_id: template.id,
+        template_name: template.name,
+        ...countQuestionsInTemplate(template),
+      })
+    }
+
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
     if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
@@ -389,7 +402,23 @@ export async function POST(request) {
     const blockId = loc.blockId
     const inspectionId = crypto.randomUUID()
     const snapshot = buildTemplateVersionSnapshot(template)
+    if (isEstateInspectionFormTemplate(template)) {
+      logInspectionQuestionPipeline('template_version_snapshot_built_for_insert', {
+        template_id: template.id,
+        template_name: template.name,
+        ...countQuestionsInTemplate(snapshot),
+      })
+    }
     const templateVersion = await getOrCreateTemplateVersion(template_id, template.name || null, snapshot)
+    if (isEstateInspectionFormTemplate(template)) {
+      logInspectionQuestionPipeline('template_version_after_getOrCreate', {
+        template_id: template.id,
+        template_version_id: templateVersion.id,
+        reused: templateVersion.reused,
+        version_hash_prefix: templateVersion.versionHash?.slice(0, 12) ?? null,
+        ...countQuestionsInTemplate(templateVersion.snapshot),
+      })
+    }
     const inspectionRowType = isEstateWalkaboutTemplate(template) ? 'estate_walkabout' : 'inspection'
 
     // Draft-only: create inspection with status 'draft' for wizard flow (e.g. Neighbourhood Voice)
@@ -433,6 +462,16 @@ export async function POST(request) {
           templateVersionHash: templateVersion.versionHash,
           templateVersionReused: templateVersion.reused,
           snapshotDebug: summarizeTemplateSnapshotForDebug(templateVersion.snapshot),
+          ...(isEstateInspectionFormTemplate(template)
+            ? {
+                questionPipelineDebug: {
+                  live_getTemplatesNested: countQuestionsInTemplate(template),
+                  persisted_template_version: countQuestionsInTemplate(templateVersion.snapshot),
+                  templateVersionReused: templateVersion.reused,
+                  template_version_id: templateVersion.id,
+                },
+              }
+            : {}),
         },
         { status: 201 }
       )
@@ -817,6 +856,16 @@ export async function POST(request) {
       templateVersionHash: templateVersion.versionHash,
       templateVersionReused: templateVersion.reused,
       snapshotDebug: summarizeTemplateSnapshotForDebug(templateVersion.snapshot),
+      ...(isEstateInspectionFormTemplate(template)
+        ? {
+            questionPipelineDebug: {
+              live_getTemplatesNested: countQuestionsInTemplate(template),
+              persisted_template_version: countQuestionsInTemplate(templateVersion.snapshot),
+              templateVersionReused: templateVersion.reused,
+              template_version_id: templateVersion.id,
+            },
+          }
+        : {}),
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,

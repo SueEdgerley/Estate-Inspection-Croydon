@@ -3,11 +3,17 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
+import {
+  countQuestionsInTemplate,
+  logInspectionQuestionPipeline,
+} from '@/lib/estate-inspection-question-pipeline-diag'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request, { params }) {
+  const includeQuestionPipelineInBody = request.nextUrl?.searchParams?.get('debug') === '1'
   try {
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -59,6 +65,30 @@ export async function GET(request, { params }) {
       row.template_version = patched
     } else {
       row.template_version = tv
+    }
+
+    const tvOut = row.template_version
+    if (tvOut && typeof tvOut === 'object') {
+      const estateProbe = {
+        id: row.template_id,
+        name: row.template_name || tvOut.name,
+        template_key: tvOut.template_key ?? row.template_key,
+      }
+      if (isEstateInspectionFormTemplate(estateProbe)) {
+        const counts = countQuestionsInTemplate(tvOut)
+        logInspectionQuestionPipeline('http_get_inspection_template_version_response', {
+          inspection_id: row.id,
+          template_id: row.template_id,
+          template_name: row.template_name,
+          ...counts,
+        })
+        if (includeQuestionPipelineInBody) {
+          row.questionPipelineDebug = {
+            source: 'GET /api/inspections/:id template_version (after snapshot patches)',
+            ...counts,
+          }
+        }
+      }
     }
 
     return NextResponse.json(row)
