@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '../../lib/photobook-theme'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
+import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
@@ -117,7 +118,7 @@ export default function DashboardHome() {
 
       for (let index = 0; index < selectedRows.length; index++) {
         const inspection = selectedRows[index]
-        let pdfUrl = String(inspection.full_pdf_url || inspection.pdf_url || '').trim()
+        let pdfUrl = getInspectionFullReportPdfUrl(inspection) || ''
         if (!pdfUrl) {
           const res = await fetch(`/api/inspections/${inspection.id}/report-pdf`, {
             method: 'POST',

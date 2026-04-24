@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
+import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },

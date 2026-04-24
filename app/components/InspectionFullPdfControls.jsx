@@ -1,20 +1,26 @@
 'use client'
 
 import { useState } from 'react'
+import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 /**
  * Full inspection report PDF: open saved Blob URL, or POST to generate/upload then open.
+ * Pass `savedPdfUrl` and/or `inspection` (row with nullable full_pdf_url / pdf_url / camelCase).
  */
 export default function InspectionFullPdfControls({
   inspectionId,
   savedPdfUrl,
+  inspection,
   pdfGenerationError,
   onAfterGenerate,
   variant = 'links',
   linkStyle = {},
 }) {
   const [busy, setBusy] = useState(false)
-  const url = String(savedPdfUrl || '').trim()
+  const fromProp =
+    savedPdfUrl != null && String(savedPdfUrl).trim() !== '' ? String(savedPdfUrl).trim() : null
+  const fromRow = inspection ? getInspectionFullReportPdfUrl(inspection) : null
+  const url = (fromProp ?? fromRow ?? '') || ''
 
   const openInBrowser = (href, download) => {
     const a = document.createElement('a')
