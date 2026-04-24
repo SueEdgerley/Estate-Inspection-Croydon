@@ -16,6 +16,10 @@ import {
   getCanonicalEstateWalkaboutTemplateForInsert,
 } from '@/lib/estate-walkabout-template'
 import { createEstateWalkaboutActionsFromPayload } from '@/lib/estate-walkabout-actions'
+import {
+  tryGenerateAndStoreIssueJobCardPdf,
+  formatDateGb,
+} from '@/lib/issue-job-card-upload'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 import {
   getAppRoleContextForClerkUser,
@@ -660,6 +664,9 @@ export async function POST(request) {
           answer_extras,
           inspectorName,
           inspectorEmail,
+          locationLine: displayTitle,
+          submittedAt: new Date().toISOString(),
+          inspectionTypeLabel: template.name || '',
         })
       } catch (ewActErr) {
         console.warn('[Inspections] Estate walkabout actions:', ewActErr.message)
