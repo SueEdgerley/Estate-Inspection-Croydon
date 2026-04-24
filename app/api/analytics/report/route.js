@@ -102,7 +102,21 @@ export async function GET(request) {
       internalUser,
     })
 
-    const buf = await buildAnalyticsReportPdfBuffer(body)
+    let buf
+    try {
+      buf = await buildAnalyticsReportPdfBuffer(body)
+    } catch (pdfErr) {
+      console.error('[Analytics PDF] buildAnalyticsReportPdfBuffer:', pdfErr)
+      return NextResponse.json(
+        {
+          error: 'Failed to build PDF',
+          details: pdfErr?.message || String(pdfErr),
+          hint:
+            'If this mentions font or encoding, the server may need pdfkit as a server external package (see next.config.js).',
+        },
+        { status: 500 }
+      )
+    }
 
     const filename = `analytics-report-${new Date().toISOString().slice(0, 10)}.pdf`
     return new NextResponse(buf, {
@@ -116,7 +130,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('[Analytics PDF]', error)
     return NextResponse.json(
-      { error: 'Failed to generate report', details: error.message },
+      { error: 'Failed to generate report', details: error?.message || String(error) },
       { status: 500 }
     )
   }

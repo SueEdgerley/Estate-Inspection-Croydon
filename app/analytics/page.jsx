@@ -100,12 +100,26 @@ export default function AnalyticsPage() {
         `/api/analytics/report${qs ? `?${qs}` : ''}`,
         { credentials: 'include', cache: 'no-store' }
       )
+      const contentType = (res.headers.get('content-type') || '').toLowerCase()
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
         alert(
           typeof j?.message === 'string' && j.message
             ? j.message
-            : j?.error || 'Could not generate the PDF report.'
+            : j?.details
+              ? `${j?.error || 'Error'}: ${j.details}`
+              : j?.error || 'Could not generate the PDF report.'
+        )
+        return
+      }
+      if (!contentType.includes('application/pdf')) {
+        const j = await res.json().catch(() => ({}))
+        alert(
+          typeof j?.message === 'string' && j.message
+            ? j.message
+            : j?.details
+              ? `${j?.error || 'Error'}: ${j.details}`
+              : j?.error || 'Server did not return a PDF (check you are signed in and have analytics access).'
         )
         return
       }
