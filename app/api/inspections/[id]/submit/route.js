@@ -33,6 +33,11 @@ import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
+import {
+  tryGenerateAndStoreIssueJobCardPdf,
+  formatAssignedTeamLabel,
+  formatDateGb,
+} from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
@@ -178,6 +183,9 @@ export async function POST(request, { params }) {
               estateName,
               inspectorName: inspectionLive.inspector_name || inspectorName,
               inspectorEmail,
+              locationLine: estateBlockLine,
+              submittedAt: inspectionLive.submitted_at || new Date().toISOString(),
+              inspectionTypeLabel: templateVersion?.name || inspectionLive.template_name || '',
             })
             for (const w of wr.warnings || []) {
               actionCreationWarnings.push(w)
@@ -274,6 +282,34 @@ export async function POST(request, { params }) {
                 actionCreationWarnings.push(
                   `Could not create action for question ${q.id}: ${insertErr?.message || insertErr}`
                 )
+                continue
+              }
+              try {
+                const team = await formatAssignedTeamLabel(sql, actionRecipient)
+                const detail = [comment, description].filter(Boolean).join('\n\n').slice(0, 2500)
+                const pdfR = await tryGenerateAndStoreIssueJobCardPdf(sql, {
+                  actionId,
+                  inspectionId: id,
+                  inspectionType: inspectionLive.template_name || 'Inspection',
+                  blockEstate: estateBlockLine || '—',
+                  location: estateBlockLine || '—',
+                  dateRaised: formatDateGb(completedAt),
+                  issueTitle: title,
+                  issueDetail: detail,
+                  assignedTeam: team,
+                  status: 'Open',
+                  photoUrls: photoUrlsArr,
+                })
+                if (!pdfR?.ok) {
+                  actionCreationWarnings.push(
+                    `Issue job card PDF not saved for action ${actionId}: ${pdfR?.error || 'unknown'}`
+                  )
+                }
+              } catch (pdfErr) {
+                console.error('[inspections/submit] issue job card PDF:', pdfErr)
+                actionCreationWarnings.push(
+                  `Issue job card PDF failed for ${actionId}: ${pdfErr?.message || String(pdfErr)}`
+                )
               }
             }
 
@@ -346,6 +382,21 @@ export async function POST(request, { params }) {
                     ${inspectionBlockId}, ${costCode}
                   )
                 `
+                const teamG = await formatAssignedTeamLabel(sql, actionRecipient)
+                const detailG = [comment, description, `Grade: ${answerLabel}`].filter(Boolean).join('\n\n').slice(0, 2500)
+                await tryGenerateAndStoreIssueJobCardPdf(sql, {
+                  actionId,
+                  inspectionId: id,
+                  inspectionType: inspectionLive.template_name || 'Inspection',
+                  blockEstate: estateBlockLine || '—',
+                  location: estateBlockLine || '—',
+                  dateRaised: formatDateGb(completedAt),
+                  issueTitle: title,
+                  issueDetail: detailG,
+                  assignedTeam: teamG,
+                  status: 'Open',
+                  photoUrls: photoUrlsArr,
+                })
               } catch (insertErr) {
                 console.error('[inspections/submit] graded caretaker action insert failed:', insertErr)
                 actionCreationWarnings.push(
