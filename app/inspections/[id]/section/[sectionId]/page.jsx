@@ -12,7 +12,7 @@ import {
   isCaretakerTriggerActive,
   inspectionIsCaretaker,
 } from '../../../../../lib/caretaker-template'
-import { getActionTriggerOn, isSpecialSection } from '../../../../../lib/template-rules'
+import { getActionTriggerOn, isSpecialSection, validateCaretakerQuestion } from '../../../../../lib/template-rules'
 import { applyTemplateDisplayPatches } from '../../../../../lib/caretaker-fire-template-patch'
 import {
   buildCaretakerActionDescription,
@@ -132,29 +132,15 @@ export default function InspectionSection() {
     const errors = {}
     for (const question of questions) {
       if (!isYesNoQuestion(question)) continue
-      const dir = getActionTriggerOn(question, section)
-      if (dir === 'yes') continue
       const answer = answers[question.id]
-      const isNo = answer === false || answer === 'no' || answer === 'No'
-      if (!isNo) continue
-      if (question.create_action_on_no === false) continue
-      if (question.require_comment_on_no !== false) {
-        const comment = answers[`${question.id}_comment`]
-        if (!comment || comment.trim() === '') {
-          errors[`${question.id}_comment`] = 'Comment is required when answering "No"'
-        }
-      }
-      if (question.require_photo_on_no !== false) {
-        const photos = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
-        if (photos.ok) {
-          const photoData = await photos.json()
-          if (photoData.length === 0) {
-            errors[`${question.id}_photos`] = 'At least one photo is required when answering "No"'
-          }
-        } else {
-          errors[`${question.id}_photos`] = 'At least one photo is required when answering "No"'
-        }
-      }
+      const comment = answers[`${question.id}_comment`] || ''
+      const photosRes = await fetch(
+        `/api/photos?inspection_id=${id}&question_id=${question.id}`,
+        { credentials: 'include' }
+      )
+      const photoData = photosRes.ok ? await photosRes.json() : []
+      const qErrors = validateCaretakerQuestion(question, answer, comment, photoData, section)
+      Object.assign(errors, qErrors)
     }
     return errors
   }
@@ -179,88 +165,29 @@ export default function InspectionSection() {
     for (const question of questions) {
       if (!isYesNoQuestion(question)) continue
       const answer = answers[question.id]
-      const norm = normalizeYesNoAnswer(answer)
-      const dir = getActionTriggerOn(question, section)
-
-      if (dir === 'yes') {
-        if (norm !== 'yes') {
-          await handleYesAnswer(id, question.id)
-          continue
-        }
-        if (!shouldAutocreateCaretakerAction(question, answer, section)) continue
-        const comment = answers[`${question.id}_comment`] || ''
-        const photosResponse = await fetch(
-          `/api/photos?inspection_id=${id}&question_id=${question.id}`,
-          { credentials: 'include' }
-        )
-        const photos = photosResponse.ok ? await photosResponse.json() : []
-        const photoIds = photos.map((p) => p.id)
-        const priority = answers[`${question.id}_priority`] || question.action_priority || null
-        const recipientPersonId = recipientPersonIdFor()
-        const qText = question.label || question.question_text || question.id
-        const richDescription = buildCaretakerActionDescription({
-          inspectionId: id,
-          completedAtIso: new Date().toISOString(),
-          estateBlockLine: inspectionLocationLine(inspection),
-          sectionName,
-          questionText: qText,
-          answerLabel: 'Yes',
-          comment,
-          photoRefs: photos.map((p) => p.blob_url || p.id).filter(Boolean).join('; '),
-          category: question.action_category || 'other',
-          assigneeLabel: recipientPersonId ? `Person id ${recipientPersonId}` : '',
-          submittedBy: inspection?.inspector_name || inspection?.inspector_id || '',
-        })
-        try {
-          const action = await handleNoAnswer({
-            inspectionId: id,
-            sectionId: sectionId,
-            sectionName: sectionName,
-            questionId: question.id,
-            questionText: qText,
-            question: question,
-            comment: comment,
-            photos: photoIds,
-            priority: priority,
-            recipientPersonId: recipientPersonId || null,
-            richDescription,
-          })
-          if (action) {
-            setCreatedActions((prev) => {
-              const existing = prev.find((a) => a.question_id === question.id)
-              if (existing) {
-                return prev.map((a) => (a.question_id === question.id ? action : a))
-              }
-              return [...prev, action]
-            })
-          }
-        } catch (error) {
-          console.error(`Error processing Yes-trigger issue for ${question.id}:`, error)
-          warnings.push(`Action for "${qText}" could not be saved (${error?.message || 'error'}).`)
-        }
-        continue
-      }
-
-      const isNo = norm === 'no'
-      if (!isNo) {
+      if (!shouldAutocreateCaretakerAction(question, answer, section)) {
         await handleYesAnswer(id, question.id)
         continue
       }
-      if (question.create_action_on_no === false) continue
+      const norm = normalizeYesNoAnswer(answer)
       const comment = answers[`${question.id}_comment`] || ''
-      const photosResponse = await fetch(`/api/photos?inspection_id=${id}&question_id=${question.id}`, { credentials: 'include' })
+      const photosResponse = await fetch(
+        `/api/photos?inspection_id=${id}&question_id=${question.id}`,
+        { credentials: 'include' }
+      )
       const photos = photosResponse.ok ? await photosResponse.json() : []
       const photoIds = photos.map((p) => p.id)
       const priority = answers[`${question.id}_priority`] || question.action_priority || null
       const recipientPersonId = recipientPersonIdFor()
       const qText = question.label || question.question_text || question.id
+      const answerLabel = norm === 'yes' ? 'Yes' : norm === 'no' ? 'No' : String(answer ?? '')
       const richDescription = buildCaretakerActionDescription({
         inspectionId: id,
         completedAtIso: new Date().toISOString(),
         estateBlockLine: inspectionLocationLine(inspection),
         sectionName,
         questionText: qText,
-        answerLabel: 'No',
+        answerLabel,
         comment,
         photoRefs: photos.map((p) => p.blob_url || p.id).filter(Boolean).join('; '),
         category: question.action_category || 'other',
@@ -291,7 +218,7 @@ export default function InspectionSection() {
           })
         }
       } catch (error) {
-        console.error(`Error processing No answer for ${question.id}:`, error)
+        console.error(`Error processing issue-trigger answer for ${question.id}:`, error)
         warnings.push(`Action for "${qText}" could not be saved (${error?.message || 'error'}).`)
       }
     }
@@ -322,7 +249,7 @@ await fetch(`/api/inspections/${id}/answers`, {
       const allErrors = { ...requiredErrors, ...caretakerErrors, ...triggerPhotoErrors, ...noAnswerErrors }
       if (Object.keys(allErrors).length > 0) {
         setErrors(allErrors)
-        alert('Please complete all required fields (comments and photos for "No" answers)')
+        alert('Please complete all required fields (comments and photos where an issue is raised)')
         return
       }
       setErrors({})

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '../../lib/photobook-theme'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
-import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
+import { getInspectionFullReportPdfUrl, withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
@@ -95,7 +95,7 @@ export default function DashboardHome() {
       })
 
       const nextInspections = Array.isArray(data?.inspections) ? data.inspections : []
-      setInspections(nextInspections)
+      setInspections(nextInspections.map((r) => withInspectionPdfDefaults(r)))
       const nextIds = new Set(nextInspections.map((i) => i.id))
       setSelectedInspectionIds((prev) => prev.filter((id) => nextIds.has(id)))
     } catch (e) {
@@ -171,7 +171,7 @@ export default function DashboardHome() {
         i.due_date || '',
         i.submitted_at || '',
         i.grading || '',
-        i.full_pdf_url || i.pdf_url || '',
+        getInspectionFullReportPdfUrl(i) || '',
       ])
 
       const csv = [headers.map(escapeCell).join(','), ...rows.map((r) => r.map(escapeCell).join(','))].join('\n')

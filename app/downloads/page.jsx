@@ -109,7 +109,7 @@ export default function DownloadsPage() {
               fontSize: '1rem',
             }}
           >
-            Tasks
+            Issues / Actions
           </button>
         </div>
 
@@ -154,7 +154,7 @@ export default function DownloadsPage() {
             </p>
             <div>
               <p style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                Tasks
+                Issues / Actions
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 {filterButton('Raised', { tab: 'tasks', taskType: 'raised' }, 'tasks_raised')}

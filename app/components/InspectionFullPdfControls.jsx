@@ -134,7 +134,10 @@ export default function InspectionFullPdfControls({
     )
   }
 
-  const errTitle = pdfGenerationError ? String(pdfGenerationError) : ''
+  const errTitle =
+    pdfGenerationError != null && String(pdfGenerationError).trim() !== ''
+      ? String(pdfGenerationError)
+      : ''
 
   if (variant === 'icons') {
     return (

@@ -5,7 +5,7 @@ import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/l
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
-import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 
 // Dashboard access: app roles that may load dashboard stats (not unassigned `user`).
 const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin', 'caretaker', 'housing_officer', 'resident', 'esm']
@@ -194,11 +194,20 @@ export async function GET(request) {
     )
 
     const lim = whereParams.length + 1
-    const inspectionsResult = await run(
-      `SELECT
+    const dashboardPdfFragments = [
+      'pdf_url, full_pdf_url, poster_pdf_url, pdf_generation_error',
+      'pdf_url, full_pdf_url, poster_pdf_url',
+      'pdf_url, full_pdf_url',
+      'pdf_url',
+    ]
+    const inspectionsRows = await queryInspectionRowsWithPdfColumnFallback(
+      run,
+      dashboardPdfFragments,
+      (pdfCols) =>
+        `SELECT
         id, type, location_label, inspector_name, inspector_id,
         template_id, template_name, due_date, submitted_at, grading,
-        pdf_url, full_pdf_url, poster_pdf_url, pdf_generation_error
+        ${pdfCols}
       FROM inspections
       WHERE ${whereText}
       ORDER BY submitted_at DESC
@@ -215,7 +224,7 @@ export async function GET(request) {
     logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok')
     return NextResponse.json({
       stats,
-      inspections: (inspectionsResult.rows || []).map((r) => withInspectionPdfDefaults(r)),
+      inspections: inspectionsRows,
     })
   } catch (error) {
     console.error('Error fetching dashboard data:', error)

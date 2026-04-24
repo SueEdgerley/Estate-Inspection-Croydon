@@ -4,6 +4,12 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
+import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+
+function normalizeInspectionListRows(data) {
+  if (!Array.isArray(data)) return []
+  return data.map((r) => withInspectionPdfDefaults(r))
+}
 
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },
@@ -76,7 +82,7 @@ export default function InspectionsListPage() {
       const res = await fetch(buildInspectionsApiUrl(), { credentials: 'include', cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
-      if (Array.isArray(data)) setInspections(data)
+      if (Array.isArray(data)) setInspections(normalizeInspectionListRows(data))
     } catch {
       /* ignore */
     }
@@ -110,7 +116,7 @@ export default function InspectionsListPage() {
           throw new Error(msg || `Request failed: ${res.status}`)
         }
         const data = await res.json()
-        setInspections(Array.isArray(data) ? data : [])
+        setInspections(normalizeInspectionListRows(data))
       } catch (e) {
         setError(e?.message || 'Failed to load inspections')
         setInspections([])
@@ -132,7 +138,7 @@ export default function InspectionsListPage() {
           const res = await fetch(buildInspectionsApiUrl(), { credentials: 'include', cache: 'no-store' })
           if (!res.ok) return
           const data = await res.json()
-          if (Array.isArray(data)) setInspections(data)
+          if (Array.isArray(data)) setInspections(normalizeInspectionListRows(data))
         } catch {
           /* ignore */
         }
@@ -1013,7 +1019,7 @@ export default function InspectionsListPage() {
                               href={`/actions?inspection_id=${encodeURIComponent(row.id)}`}
                               style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
                             >
-                              View Tasks
+                              View issues
                             </Link>
                           </div>
                         </td>

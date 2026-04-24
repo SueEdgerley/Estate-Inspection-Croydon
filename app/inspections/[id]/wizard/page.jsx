@@ -441,7 +441,7 @@ export default function InspectionWizardPage() {
             </p>
             <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>How we use your report</h2>
             <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
-              Your answers and photos are used to create tasks for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
+              Your answers and photos are used to create issues and actions for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
             </p>
           </div>
           <div style={{ position: 'sticky', bottom: 0, paddingTop: 16, display: 'flex', gap: 12, justifyContent: 'flex-end', backgroundColor: nv.bg }}>

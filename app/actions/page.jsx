@@ -45,16 +45,16 @@ export default function ActionsPage() {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-          Manage Tasks
+          Issues / Actions
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Tasks raised from inspection forms
+          Issues and actions raised from inspection forms
         </p>
       </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
-          Loading tasks...
+          Loading issues…
         </div>
       ) : actions.length === 0 ? (
         <div style={{
@@ -65,7 +65,7 @@ export default function ActionsPage() {
           textAlign: 'center'
         }}>
           <p style={{ fontSize: '1.125rem', color: '#6b7280' }}>
-            No tasks found
+            No issues found
           </p>
         </div>
       ) : (
@@ -73,7 +73,7 @@ export default function ActionsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#f9fafb' }}>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem' }}>Task Type</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem' }}>Category</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem' }}>Created by</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem' }}>Assigned to</th>
                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem' }}>Location</th>

@@ -20,7 +20,7 @@ import {
   formatDateGb,
 } from '@/lib/issue-job-card-upload'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
-import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 import {
   getAppRoleContextForClerkUser,
   roleMayCreateAdHocInspection,
@@ -193,9 +193,18 @@ export async function GET(request) {
     const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const limit = canListAll ? 200 : 100
     const limitPlaceholder = whereParams.length + 1
-    const result = await getNeonQuery()(
-      `SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-             i.due_date, i.submitted_at, i.grading, i.pdf_url, i.full_pdf_url, i.poster_pdf_url, i.pdf_generation_error,
+    const listPdfFragments = [
+      'i.pdf_url, i.full_pdf_url, i.poster_pdf_url, i.pdf_generation_error',
+      'i.pdf_url, i.full_pdf_url, i.poster_pdf_url',
+      'i.pdf_url, i.full_pdf_url',
+      'i.pdf_url',
+    ]
+    const rows = await queryInspectionRowsWithPdfColumnFallback(
+      getNeonQuery(),
+      listPdfFragments,
+      (pdfCols) =>
+        `SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+             i.due_date, i.submitted_at, i.grading, ${pdfCols},
              i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
              e.name AS estate_name, b.name AS block_name,
              (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
@@ -207,7 +216,7 @@ export async function GET(request) {
       LIMIT $${limitPlaceholder}`,
       [...whereParams, limit]
     )
-    return NextResponse.json((result.rows || []).map((r) => withInspectionPdfDefaults(r)))
+    return NextResponse.json(rows)
   } catch (error) {
     console.error('Error listing inspections:', error)
     return NextResponse.json(
