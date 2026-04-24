@@ -649,7 +649,7 @@ export default function DashboardHome() {
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                     <InspectionFullPdfControls
                       inspectionId={inspection.id}
-                      savedPdfUrl={inspection.full_pdf_url || inspection.pdf_url}
+                      inspection={inspection}
                       pdfGenerationError={inspection.pdf_generation_error}
                       onAfterGenerate={loadDashboardData}
                       variant="icons"
