@@ -1360,6 +1360,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setSubmitError(data.error || data.details || 'Save failed')
         return
       }
+      if (data.pdfError) {
+        window.alert(
+          `Inspection was saved, but the full PDF could not be generated or uploaded:\n\n${String(data.pdfError).slice(0, 500)}`
+        )
+      }
       const inspectionId = data.inspectionId ?? data.id
       if (inspectionId) {
         router.push(`/inspections/${inspectionId}`)

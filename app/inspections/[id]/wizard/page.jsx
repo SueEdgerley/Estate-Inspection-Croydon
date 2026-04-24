@@ -551,7 +551,12 @@ export default function InspectionWizardPage() {
                 try {
                   const res = await fetch(`/api/inspections/${id}/submit`, { method: 'POST', credentials: 'include' })
                   if (res.ok) {
-                    await res.json().catch(() => ({}))
+                    const submitData = await res.json().catch(() => ({}))
+                    if (submitData.pdfError) {
+                      window.alert(
+                        `Inspection was submitted, but the full PDF could not be generated or saved:\n\n${String(submitData.pdfError).slice(0, 500)}`
+                      )
+                    }
                     router.push('/dashboard')
                   } else {
                     const data = await res.json().catch(() => ({}))

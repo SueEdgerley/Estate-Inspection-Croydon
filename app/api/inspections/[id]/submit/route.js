@@ -365,7 +365,11 @@ export async function POST(request, { params }) {
       const fullPdfBytes = await buildInspectionReportPdf({
         inspectionId: id,
         templateName: inspectionLive.template_name || pdfVersion.name || 'Template',
-        blockName: inspectionLive.title || inspectionLive.location_label || 'Block',
+        blockName:
+          estateBlockLine ||
+          inspectionLive.title ||
+          inspectionLive.location_label ||
+          'Block',
         completedAt: inspectionLive.submitted_at || new Date().toISOString(),
         officerName: inspectionLive.inspector_name || 'Officer',
         sections: pdfSections,
@@ -378,12 +382,16 @@ export async function POST(request, { params }) {
       })
 
       if (allActions.length > 0) {
-        const posterPdfBytes = await generatePosterPdfBuffer(inspectionLive, allActions)
-        posterPdfUrl = await uploadInspectionPdfToBlob({
-          inspectionId: id,
-          pdfBytes: posterPdfBytes,
-          kind: 'poster',
-        })
+        try {
+          const posterPdfBytes = await generatePosterPdfBuffer(inspectionLive, allActions)
+          posterPdfUrl = await uploadInspectionPdfToBlob({
+            inspectionId: id,
+            pdfBytes: posterPdfBytes,
+            kind: 'poster',
+          })
+        } catch (posterErr) {
+          console.error('[inspections/submit] poster PDF failed (full report still saved):', posterErr)
+        }
       }
 
       await sql`

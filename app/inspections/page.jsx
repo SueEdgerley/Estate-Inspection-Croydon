@@ -178,8 +178,8 @@ export default function InspectionsListPage() {
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' })
   }
 
-  const pdfUrl = (row) =>
-    row.poster_pdf_url || row.full_pdf_url || row.pdf_url || null
+  /** Saved full inspection PDF only (poster is separate). */
+  const pdfUrl = (row) => row.full_pdf_url || row.pdf_url || null
 
   const locationDisplay = (row) =>
     row.location_label?.trim() ||
@@ -994,16 +994,32 @@ export default function InspectionsListPage() {
                               View
                             </Link>
                             {pdfUrl(row) ? (
-                              <a
-                                href={pdfUrl(row)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
+                              <>
+                                <a
+                                  href={pdfUrl(row)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
+                                >
+                                  View PDF
+                                </a>
+                                <a
+                                  href={pdfUrl(row)}
+                                  download={`inspection-${row.id}.pdf`}
+                                  style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
+                                >
+                                  Download PDF
+                                </a>
+                              </>
+                            ) : row.pdf_generation_error ? (
+                              <span
+                                title={String(row.pdf_generation_error)}
+                                style={{ color: '#d97706', fontSize: '0.8125rem', cursor: 'help' }}
                               >
-                                Download PDF
-                              </a>
+                                PDF failed
+                              </span>
                             ) : (
-                              <span style={{ color: '#9ca3af', fontSize: '0.8125rem' }}>Download PDF</span>
+                              <span style={{ color: '#9ca3af', fontSize: '0.8125rem' }}>PDF</span>
                             )}
                             <Link
                               href={`/actions?inspection_id=${encodeURIComponent(row.id)}`}

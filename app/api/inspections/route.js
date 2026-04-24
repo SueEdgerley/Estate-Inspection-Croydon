@@ -191,7 +191,8 @@ export async function GET(request) {
     const limitPlaceholder = whereParams.length + 1
     const result = await getNeonQuery()(
       `SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
-             i.due_date, i.submitted_at, i.grading, i.pdf_url, i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
+             i.due_date, i.submitted_at, i.grading, i.pdf_url, i.full_pdf_url, i.poster_pdf_url, i.pdf_generation_error,
+             i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
              e.name AS estate_name, b.name AS block_name,
              (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
       FROM inspections i
@@ -765,6 +766,7 @@ export async function POST(request) {
 
     let fullPdfUrl = null
     let posterPdfUrl = null
+    let pdfErrorMessage = null
     try {
       const pdfSections = []
       const pdfPhotos = []
@@ -853,7 +855,19 @@ export async function POST(request) {
         WHERE id = ${inspectionId}
       `
     } catch (pdfErr) {
+      pdfErrorMessage = pdfErr?.message || String(pdfErr)
       console.error('[Inspections] Error generating PDFs:', pdfErr)
+      try {
+        const truncated =
+          pdfErrorMessage.length > 2000 ? pdfErrorMessage.slice(0, 2000) : pdfErrorMessage
+        await sql`
+          UPDATE inspections
+          SET pdf_generation_error = ${truncated}
+          WHERE id = ${inspectionId}
+        `
+      } catch (updErr) {
+        console.error('[Inspections] Could not persist pdf_generation_error:', updErr)
+      }
     }
 
     return NextResponse.json({
@@ -876,6 +890,7 @@ export async function POST(request) {
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,
+      ...(pdfErrorMessage ? { pdfError: pdfErrorMessage } : {}),
     }, { status: 201 })
   } catch (error) {
     console.error('Error creating inspection:', error)

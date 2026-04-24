@@ -201,24 +201,48 @@ export default function InspectionDetail() {
         </h2>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {id && <GeneratePosterButton inspectionId={id} />}
-          {inspection.pdf_url && (
-            <a
-              href={inspection.pdf_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'inline-block',
-                padding: '0.75rem 1.5rem',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: '0.5rem',
-                fontWeight: '500'
-              }}
-            >
-              View PDF
-            </a>
+          {(inspection.full_pdf_url || inspection.pdf_url) && (
+            <>
+              <a
+                href={inspection.full_pdf_url || inspection.pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  textDecoration: 'none',
+                  borderRadius: '0.5rem',
+                  fontWeight: '500',
+                  marginRight: 8,
+                }}
+              >
+                View full PDF
+              </a>
+              <a
+                href={inspection.full_pdf_url || inspection.pdf_url}
+                download={`inspection-${inspection.id}.pdf`}
+                style={{
+                  display: 'inline-block',
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#1d4ed8',
+                  color: 'white',
+                  textDecoration: 'none',
+                  borderRadius: '0.5rem',
+                  fontWeight: '500',
+                }}
+              >
+                Download full PDF
+              </a>
+            </>
           )}
+          {inspection.pdf_generation_error &&
+            !(inspection.full_pdf_url || inspection.pdf_url) && (
+              <p style={{ color: '#b45309', fontSize: '0.875rem', marginTop: 8 }}>
+                Full PDF could not be generated: {String(inspection.pdf_generation_error)}
+              </p>
+            )}
         </div>
       </div>
     </div>

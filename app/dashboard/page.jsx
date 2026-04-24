@@ -113,15 +113,15 @@ export default function DashboardHome() {
       }
 
       const selectedRows = inspections.filter((i) => selectedInspectionIds.includes(i.id))
-      const rowsWithPdf = selectedRows.filter((i) => i.full_pdf_url || i.pdf_url || i.poster_pdf_url)
+      const rowsWithPdf = selectedRows.filter((i) => i.full_pdf_url || i.pdf_url)
 
       if (rowsWithPdf.length === 0) {
-        alert('Selected inspections do not have a PDF available yet.')
+        alert('Selected inspections do not have a full inspection PDF available yet.')
         return
       }
 
       rowsWithPdf.forEach((inspection, index) => {
-        const pdfUrl = inspection.full_pdf_url || inspection.pdf_url || inspection.poster_pdf_url
+        const pdfUrl = inspection.full_pdf_url || inspection.pdf_url
         const a = document.createElement('a')
         a.href = pdfUrl
         a.target = '_blank'
@@ -162,7 +162,7 @@ export default function DashboardHome() {
         i.due_date || '',
         i.submitted_at || '',
         i.grading || '',
-        i.full_pdf_url || i.pdf_url || i.poster_pdf_url || '',
+        i.full_pdf_url || i.pdf_url || '',
       ])
 
       const csv = [headers.map(escapeCell).join(','), ...rows.map((r) => r.map(escapeCell).join(','))].join('\n')
@@ -638,22 +638,53 @@ export default function DashboardHome() {
                     {inspection.grading || '-'}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                    {inspection.pdf_url ? (
-                      <a
-                        href={inspection.pdf_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: photobook.link,
-                          textDecoration: 'none',
-                          fontSize: '1.25rem'
-                        }}
-                      >
-                        👁️
-                      </a>
-                    ) : (
-                      <span style={{ color: '#9ca3af' }}>-</span>
-                    )}
+                    {(() => {
+                      const reportUrl = inspection.full_pdf_url || inspection.pdf_url
+                      if (reportUrl) {
+                        const fileName = `inspection-${inspection.id}.pdf`
+                        return (
+                          <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
+                            <a
+                              href={reportUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="View saved full PDF"
+                              style={{
+                                color: photobook.link,
+                                textDecoration: 'none',
+                                fontSize: '1.25rem',
+                              }}
+                            >
+                              👁️
+                            </a>
+                            <a
+                              href={reportUrl}
+                              download={fileName}
+                              title="Download saved full PDF"
+                              style={{
+                                color: photobook.link,
+                                textDecoration: 'none',
+                                fontSize: '0.8125rem',
+                                fontWeight: 600,
+                              }}
+                            >
+                              ⬇
+                            </a>
+                          </span>
+                        )
+                      }
+                      if (inspection.pdf_generation_error) {
+                        return (
+                          <span
+                            title={String(inspection.pdf_generation_error)}
+                            style={{ color: '#d97706', fontSize: '1.1rem', cursor: 'help' }}
+                          >
+                            ⚠️
+                          </span>
+                        )
+                      }
+                      return <span style={{ color: '#9ca3af' }}>-</span>
+                    })()}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                     <input

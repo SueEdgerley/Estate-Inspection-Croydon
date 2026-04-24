@@ -196,7 +196,8 @@ export async function GET(request) {
     const inspectionsResult = await run(
       `SELECT
         id, type, location_label, inspector_name, inspector_id,
-        template_id, template_name, due_date, submitted_at, grading, pdf_url
+        template_id, template_name, due_date, submitted_at, grading,
+        pdf_url, full_pdf_url, poster_pdf_url, pdf_generation_error
       FROM inspections
       WHERE ${whereText}
       ORDER BY submitted_at DESC
