@@ -18,7 +18,10 @@ export async function GET() {
   try {
     await ensureDatabase()
     const result = await sql`
-      SELECT id, estate_id, name FROM blocks ORDER BY name
+      SELECT id, estate_id, name, active
+      FROM blocks
+      WHERE COALESCE(active, true) = true
+      ORDER BY name
     `
     return NextResponse.json(
       { blocks: result.rows },

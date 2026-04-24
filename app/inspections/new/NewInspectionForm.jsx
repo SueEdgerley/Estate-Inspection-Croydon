@@ -916,7 +916,7 @@ function InspectionQuestion({
   )
 }
 
-export default function NewInspectionForm({ initialEstates = [], initialBlocks = [] }) {
+export default function NewInspectionForm({ initialBlocks = [] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isMobile, setIsMobile] = useState(false)
@@ -924,24 +924,23 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   const debugTemplateVersion = searchParams?.get('debug') === '1'
   const isTemplateLocked = !!templateFromUrl
   const [apiPayload, setApiPayload] = useState({ templates: [] })
-  const estates = Array.isArray(initialEstates) ? initialEstates : []
   const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
-  const [estateId, setEstateId] = useState('')
   const [postgresBlockId, setPostgresBlockId] = useState('')
 
-  const blocksForEstate = useMemo(
-    () => blocks.filter((b) => b.estate_id && b.estate_id === estateId),
-    [blocks, estateId]
+  /** Active blocks = live location list (estates not used in UI yet). */
+  const locationBlocks = useMemo(
+    () => blocks.filter((b) => b == null || b.active !== false),
+    [blocks]
   )
 
   useEffect(() => {
     if (!postgresBlockId) return
-    const stillValid = blocksForEstate.some((b) => b.id === postgresBlockId)
+    const stillValid = locationBlocks.some((b) => b.id === postgresBlockId)
     if (!stillValid) setPostgresBlockId('')
-  }, [estateId, postgresBlockId, blocksForEstate])
+  }, [postgresBlockId, locationBlocks])
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
   const [answers, setAnswers] = useState({})
@@ -996,10 +995,6 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
 
   const startWizard = async () => {
     if (!templateId || !selectedTemplate) return
-    if (!estateId || !String(estateId).trim()) {
-      setSubmitError('Select an estate before starting the guided inspection.')
-      return
-    }
     setStartingWizard(true)
     setSubmitError(null)
     try {
@@ -1013,7 +1008,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           title: selectedTemplate.name || 'Neighbourhood Voice Inspection',
           location: location.trim() || undefined,
           description: description.trim() || undefined,
-          estate_id: estateId.trim(),
+          estate_id: undefined,
           block_id: postgresBlockId.trim() || undefined,
         }),
       })
@@ -1164,10 +1159,9 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
 
   const validate = () => {
     const errs = {}
-    if (!estateId || !String(estateId).trim()) errs.estate_id = 'Select an estate'
     if (postgresBlockId) {
-      const b = blocksForEstate.find((x) => x.id === postgresBlockId)
-      if (!b) errs.block_id = 'Select a block for this estate or choose whole estate'
+      const b = locationBlocks.find((x) => x.id === postgresBlockId)
+      if (!b) errs.block_id = 'Choose a valid location or clear the selection'
     }
     if (!templateId) errs.template_id = 'Select a template'
     if (!selectedTemplate) return { ...errs }
@@ -1323,7 +1317,7 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
         credentials: 'include',
         body: JSON.stringify({
           template_id: templateId,
-          estate_id: estateId.trim(),
+          estate_id: undefined,
           block_id: postgresBlockId.trim() || undefined,
           location: location.trim() || undefined,
           description: description.trim() || undefined,
@@ -1384,7 +1378,6 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
   if (selectedTemplate && isEstateWalkaboutTemplate(selectedTemplate)) {
     return (
       <EstateWalkaboutNewInspectionForm
-        estates={estates}
         blocks={blocks}
         templates={templates}
         templateId={templateId}
@@ -1454,76 +1447,45 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
 
         <div style={{ marginBottom: '1.5rem' }}>
           <label
-            htmlFor="estate_id"
-            style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
-          >
-            Estate <span style={{ color: '#ef4444' }}>*</span>
-          </label>
-          <select
-            id="estate_id"
-            name="estate_id"
-            value={estateId}
-            onChange={(e) => {
-              setEstateId(e.target.value)
-              setValidationErrors((prev) => ({ ...prev, estate_id: undefined, block_id: undefined }))
-            }}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: validationErrors.estate_id ? '1px solid #ef4444' : '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              fontSize: '1rem',
-              backgroundColor: 'white',
-              minHeight: 44,
-            }}
-          >
-            <option value="">— Select estate —</option>
-            {estates.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-          {validationErrors.estate_id && (
-            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.estate_id}</p>
-          )}
-          {estates.length === 0 && (
-            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
-              No estates in Postgres. Add them in Admin before creating an inspection.
-            </p>
-          )}
-        </div>
-
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label
             htmlFor="postgres_block_id"
             style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
-            Block (optional)
+            Location
           </label>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
+            Blocks list is the current location data (Admin → Blocks). Optional — add a free-text location note
+            below if needed. Estates are not used in this form yet.
+          </p>
           <select
             id="postgres_block_id"
             name="postgres_block_id"
             value={postgresBlockId}
-            onChange={(e) => setPostgresBlockId(e.target.value)}
-            disabled={!estateId}
+            onChange={(e) => {
+              setPostgresBlockId(e.target.value)
+              setValidationErrors((prev) => ({ ...prev, block_id: undefined }))
+            }}
             style={{
               width: '100%',
               padding: '0.75rem',
               border: validationErrors.block_id ? '1px solid #ef4444' : '1px solid #d1d5db',
               borderRadius: '0.375rem',
               fontSize: '1rem',
-              backgroundColor: estateId ? 'white' : '#f3f4f6',
+              backgroundColor: 'white',
               minHeight: 44,
             }}
           >
-            <option value="">Whole estate (no specific block)</option>
-            {blocksForEstate.map((b) => (
+            <option value="">— None selected —</option>
+            {locationBlocks.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
           </select>
+          {locationBlocks.length === 0 && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
+              No active blocks in Postgres. Add them under Admin → Blocks.
+            </p>
+          )}
           {validationErrors.block_id && (
             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>{validationErrors.block_id}</p>
           )}

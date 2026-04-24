@@ -4,9 +4,9 @@ import NewInspectionForm from './NewInspectionForm'
 export const dynamic = 'force-dynamic'
 
 /**
- * New inspection — estates/blocks from Neon/Postgres only. Templates still from Airtable via client fetch.
+ * New inspection — active blocks from Neon/Postgres as the location list. Templates from Airtable via client fetch.
  */
 export default async function NewInspectionPage() {
-  const { estates, blocks } = await loadEstatesAndBlocksForInspectionForm()
-  return <NewInspectionForm initialEstates={estates} initialBlocks={blocks} />
+  const { blocks } = await loadEstatesAndBlocksForInspectionForm()
+  return <NewInspectionForm initialBlocks={blocks} />
 }

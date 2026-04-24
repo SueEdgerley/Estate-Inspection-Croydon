@@ -66,7 +66,11 @@ export default function AdminBlocksPage() {
       </form>
       <ul>
         {blocks.map((b) => (
-          <li key={b.id}>{b.name} {b.estate_name && `(${b.estate_name})`}</li>
+          <li key={b.id} style={{ opacity: b.active === false ? 0.5 : 1 }}>
+            {b.name}
+            {b.active === false && <span style={{ color: '#9ca3af' }}> (inactive)</span>}
+            {b.estate_name && ` — ${b.estate_name}`}
+          </li>
         ))}
       </ul>
     </div>

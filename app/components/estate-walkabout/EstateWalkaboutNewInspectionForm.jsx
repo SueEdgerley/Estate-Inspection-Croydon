@@ -84,7 +84,6 @@ function newChecklistItem() {
 }
 
 export default function EstateWalkaboutNewInspectionForm({
-  estates = [],
   blocks = [],
   templates = [],
   templateId,
@@ -92,7 +91,6 @@ export default function EstateWalkaboutNewInspectionForm({
   templateLocked = false,
 }) {
   const router = useRouter()
-  const [estateId, setEstateId] = useState('')
   const [postgresBlockId, setPostgresBlockId] = useState('')
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
@@ -106,9 +104,9 @@ export default function EstateWalkaboutNewInspectionForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
 
-  const blocksForEstate = useMemo(
-    () => blocks.filter((b) => b.estate_id && b.estate_id === estateId),
-    [blocks, estateId]
+  const locationBlocks = useMemo(
+    () => blocks.filter((b) => b == null || b.active !== false),
+    [blocks]
   )
 
   useEffect(() => {
@@ -162,10 +160,9 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const validate = () => {
     const errs = {}
-    if (!estateId?.trim()) errs.estate_id = 'Select an estate'
     if (postgresBlockId) {
-      const b = blocksForEstate.find((x) => x.id === postgresBlockId)
-      if (!b) errs.block_id = 'Invalid block for this estate'
+      const b = locationBlocks.find((x) => x.id === postgresBlockId)
+      if (!b) errs.block_id = 'Choose a valid location or clear the selection'
     }
     if (!templateLocked && (!templateId || templateId !== ESTATE_WALKABOUT_TEMPLATE_ID)) {
       errs.template_id = 'Select Estate Walkabout'
@@ -255,7 +252,7 @@ export default function EstateWalkaboutNewInspectionForm({
         credentials: 'include',
         body: JSON.stringify({
           template_id: ESTATE_WALKABOUT_TEMPLATE_ID,
-          estate_id: estateId.trim(),
+          estate_id: undefined,
           block_id: postgresBlockId.trim() || undefined,
           location: location.trim() || undefined,
           description: description.trim() || undefined,
@@ -415,40 +412,24 @@ export default function EstateWalkaboutNewInspectionForm({
 
           <section style={cardStyle}>
             <h2 style={h2Style}>Location</h2>
+            <p style={{ margin: '0 0 12px', fontSize: 14, color: EW.muted }}>
+              Blocks (Admin → Blocks) are the location list for now. Estates are not used yet.
+            </p>
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Estate *</label>
-              <select
-                value={estateId}
-                onChange={(e) => {
-                  setEstateId(e.target.value)
-                  setPostgresBlockId('')
-                }}
-                style={selectStyle(!!validationErrors.estate_id)}
-              >
-                <option value="">— Select estate —</option>
-                {estates.map((est) => (
-                  <option key={est.id} value={est.id}>
-                    {est.name}
-                  </option>
-                ))}
-              </select>
-              {validationErrors.estate_id && <p style={errStyle}>{validationErrors.estate_id}</p>}
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Block (optional)</label>
+              <label style={labelStyle}>Location (optional)</label>
               <select
                 value={postgresBlockId}
                 onChange={(e) => setPostgresBlockId(e.target.value)}
-                disabled={!estateId}
-                style={{ ...selectStyle(!!validationErrors.block_id), background: estateId ? '#fff' : '#f1f5f9' }}
+                style={selectStyle(!!validationErrors.block_id)}
               >
-                <option value="">Whole estate</option>
-                {blocksForEstate.map((b) => (
+                <option value="">— None selected —</option>
+                {locationBlocks.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
                   </option>
                 ))}
               </select>
+              {validationErrors.block_id && <p style={errStyle}>{validationErrors.block_id}</p>}
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle}>Location note (optional)</label>
