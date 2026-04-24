@@ -339,7 +339,7 @@ export default function InspectionsReportPage() {
               <span style={{ fontWeight: 600, color: '#374151' }}>Area (estate)</span>
               <select value={area} onChange={(e) => setArea(e.target.value)} style={{ padding: '0.45rem' }}>
                 <option value="all">All areas</option>
-                {options.areas.map((a) => (
+                {(options.areas || []).map((a) => (
                   <option key={a} value={a}>
                     {a}
                   </option>
@@ -358,10 +358,10 @@ export default function InspectionsReportPage() {
                 style={{ padding: '0.45rem' }}
               >
                 <option value="all">All estates</option>
-                {options.estates.map((e) => (
+                {(options.estates || []).map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name}
-                    {e.area ? ` (${e.area})` : ''}
+                    {e?.area ? ` (${e.area})` : ''}
                   </option>
                 ))}
               </select>

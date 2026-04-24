@@ -60,6 +60,25 @@ async function resolveAuth() {
   return { userId, internalUser, admin, roleCtx }
 }
 
+function responseIfMissingEstatesAreaColumn(message) {
+  const m = String(message || '')
+  if (
+    /column\s+e\.area\s+does\s+not\s+exist/i.test(m) ||
+    /column\s+["']?area["']?\s+of\s+relation\s+["']?estates["']?\s+does\s+not\s+exist/i.test(m)
+  ) {
+    return NextResponse.json(
+      {
+        error: 'Database schema out of date',
+        details:
+          'The estates.area column is missing. Apply Prisma migrations (e.g. npm run db:migrate or prisma migrate deploy).',
+        code: 'MISSING_ESTATES_AREA',
+      },
+      { status: 503 }
+    )
+  }
+  return null
+}
+
 function mergeExtraFilters(baseWhere, baseParams, extras) {
   let w = `(${baseWhere})`
   const p = [...baseParams]
@@ -130,6 +149,8 @@ export async function GET(request) {
       })
     } catch (e) {
       console.error('[reports/inspections] options:', e)
+      const missing = responseIfMissingEstatesAreaColumn(e?.message)
+      if (missing) return missing
       return NextResponse.json({ error: 'Failed to load filter options', details: e.message }, { status: 500 })
     }
   }
@@ -280,6 +301,8 @@ export async function GET(request) {
     })
   } catch (e) {
     console.error('[reports/inspections] query:', e)
+    const missing = responseIfMissingEstatesAreaColumn(e?.message)
+    if (missing) return missing
     return NextResponse.json(
       { error: 'Report query failed', details: e.message },
       { status: 500 }
