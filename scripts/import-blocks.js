@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Import ./blocks.csv (from current working directory) into public.blocks.
+ * Import blocks.csv into public.blocks (Neon Postgres via DATABASE_URL from .env or env).
  *
  * - IDs: blk_000001, blk_000016, … (6 digits). Next id = 1 + max existing blk_NNNNNN in the table
  *   (e.g. 15 existing rows → next is blk_000016).
@@ -178,11 +178,15 @@ async function main() {
 
   const argv = process.argv.slice(2)
   const { csvPath, apply } = parseArgs(argv)
-  const csvFile = resolve(csvPath || join(process.cwd(), 'blocks.csv'))
+  let csvFile = resolve(csvPath || join(process.cwd(), 'blocks.csv'))
+  if (!existsSync(csvFile) && !csvPath) {
+    const atProjectRoot = join(projectRoot, 'blocks.csv')
+    if (existsSync(atProjectRoot)) csvFile = atProjectRoot
+  }
 
   if (!existsSync(csvFile)) {
     console.error('CSV not found:', csvFile)
-    console.error('Place blocks.csv in the current directory, or pass an explicit path.')
+    console.error('Place blocks.csv in the project root or current directory, or pass an explicit path.')
     process.exit(1)
   }
 
