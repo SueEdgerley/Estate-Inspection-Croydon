@@ -282,6 +282,7 @@ model Action {
   costCode             String?  @map("cost_code") @db.VarChar(100)
   autoCreated           Boolean? @default(false) @map("auto_created")
   photoUrls             Json?    @default("[]") @map("photo_urls") @db.JsonB
+  issuePdfUrl           String?  @map("issue_pdf_url") @db.Text
   jobNumber             String?  @map("job_number") @db.VarChar(100)
   expectedCompletionDate DateTime? @map("expected_completion_date") @db.Date
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz

@@ -9,16 +9,20 @@ import { put } from "@vercel/blob";
 
 export async function uploadInspectionPdfToBlob(opts: {
   inspectionId: string;
+  /** Required when kind is "issue" (one PDF per action) */
+  actionId?: string;
   pdfBytes: Uint8Array;
-  /** "report" = full PDF, "poster" = issues-only poster */
-  kind?: "report" | "poster";
+  /** "report" = full PDF, "poster" = issues-only poster, "issue" = single-action job card */
+  kind?: "report" | "poster" | "issue";
 }) {
-  const { inspectionId, pdfBytes, kind = "report" } = opts;
+  const { inspectionId, actionId, pdfBytes, kind = "report" } = opts;
 
   const pathname =
     kind === "poster"
       ? `inspections/${inspectionId}/poster.pdf`
-      : `inspections/${inspectionId}/report.pdf`;
+      : kind === "issue" && actionId
+        ? `inspections/${inspectionId}/actions/${actionId}/issue-job-card.pdf`
+        : `inspections/${inspectionId}/report.pdf`;
 
   const blob = await put(pathname, pdfBytes, {
     access: "public",
