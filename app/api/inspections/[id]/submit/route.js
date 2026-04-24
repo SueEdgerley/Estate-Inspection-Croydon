@@ -382,9 +382,17 @@ export async function POST(request, { params }) {
                     ${inspectionBlockId}, ${costCode}
                   )
                 `
+              } catch (insertErr) {
+                console.error('[inspections/submit] graded caretaker action insert failed:', insertErr)
+                actionCreationWarnings.push(
+                  `Could not create graded action for question ${q.id}: ${insertErr?.message || insertErr}`
+                )
+                continue
+              }
+              try {
                 const teamG = await formatAssignedTeamLabel(sql, actionRecipient)
                 const detailG = [comment, description, `Grade: ${answerLabel}`].filter(Boolean).join('\n\n').slice(0, 2500)
-                await tryGenerateAndStoreIssueJobCardPdf(sql, {
+                const pdfG = await tryGenerateAndStoreIssueJobCardPdf(sql, {
                   actionId,
                   inspectionId: id,
                   inspectionType: inspectionLive.template_name || 'Inspection',
@@ -397,10 +405,15 @@ export async function POST(request, { params }) {
                   status: 'Open',
                   photoUrls: photoUrlsArr,
                 })
-              } catch (insertErr) {
-                console.error('[inspections/submit] graded caretaker action insert failed:', insertErr)
+                if (!pdfG?.ok) {
+                  actionCreationWarnings.push(
+                    `Issue job card PDF not saved for action ${actionId}: ${pdfG?.error || 'unknown'}`
+                  )
+                }
+              } catch (pdfErr) {
+                console.error('[inspections/submit] graded issue job card PDF:', pdfErr)
                 actionCreationWarnings.push(
-                  `Could not create graded action for question ${q.id}: ${insertErr?.message || insertErr}`
+                  `Issue job card PDF failed for ${actionId}: ${pdfErr?.message || String(pdfErr)}`
                 )
               }
             }
