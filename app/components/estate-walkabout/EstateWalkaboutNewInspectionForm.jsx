@@ -28,6 +28,7 @@ const STAFF_YN = [
 ]
 
 const ITEM_YN = [
+  ['ew_it_roof_access', 'Is the roof access secure?'],
   ['ew_it_tank_secure', 'Is the tank room secure?'],
   ['ew_it_communal_lighting', 'Have you inspected the communal lighting?'],
   ['ew_it_glazing', 'Have you inspected the communal glazing and window frames?'],
@@ -53,6 +54,7 @@ const PHOTO_EXTRA_IDS = new Set([
   'ew_st_comments',
   'ew_ec_paving_grade',
   'ew_ec_comments',
+  'ew_os_overall_grade',
   'ew_os_comments',
   'ew_it_roof_access',
   'ew_it_comments',
@@ -68,8 +70,8 @@ function emptyAnswers() {
     'ew_st_comments',
     'ew_ec_paving_grade',
     'ew_ec_comments',
+    'ew_os_overall_grade',
     'ew_os_comments',
-    'ew_it_roof_access',
     ...ITEM_YN.map(([id]) => id),
     'ew_it_comments',
     'ew_sig_inspection_date',
@@ -199,9 +201,9 @@ export default function EstateWalkaboutNewInspectionForm({
       errs.ew_ec_paving_grade = 'Select A, B, C, D, or NA'
     }
 
-    const g2 = String(answers.ew_it_roof_access || '').trim()
-    if (!g2 || !['A', 'B', 'C', 'D', 'NA'].includes(g2)) {
-      errs.ew_it_roof_access = 'Select A, B, C, D, or NA'
+    const gOs = String(answers.ew_os_overall_grade || '').trim()
+    if (!gOs || !['A', 'B', 'C', 'D', 'NA'].includes(gOs)) {
+      errs.ew_os_overall_grade = 'Select A, B, C, D, or NA'
     }
 
     for (const [id] of ITEM_YN) {
@@ -584,17 +586,17 @@ export default function EstateWalkaboutNewInspectionForm({
           {/* 3. Overall */}
           <section style={cardStyle}>
             <h2 style={h2Style}>3. Overall standards</h2>
+            {gradeAbcdNa(
+              'ew_os_overall_grade',
+              'What is the overall standard of the estate?',
+              'Croydon NV Grading – Final'
+            )}
             {commentBlock('ew_os_comments', 'Comments')}
           </section>
 
           {/* 4. Item inspections */}
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
-            {gradeAbcdNa(
-              'ew_it_roof_access',
-              'Is the roof access secure?',
-              'Croydon NV Grading – Final'
-            )}
             {ITEM_YN.map(([id, lab]) => yna(id, lab))}
             {commentBlock('ew_it_comments', 'Comments')}
           </section>
@@ -602,7 +604,10 @@ export default function EstateWalkaboutNewInspectionForm({
           {/* 5. Signature */}
           <section style={cardStyle}>
             <h2 style={h2Style}>5. Signature and date</h2>
-            <label style={labelStyle}>Please can you provide the date of the inspection completed today. *</label>
+            <p style={{ margin: '0 0 8px', fontSize: 15, color: EW.text, lineHeight: 1.5 }}>
+              Please can the housing officer sign to certify this is a true record of the inspection completed today. *
+            </p>
+            <label style={labelStyle}>Date of inspection</label>
             <input
               type="date"
               value={answers.ew_sig_inspection_date}
