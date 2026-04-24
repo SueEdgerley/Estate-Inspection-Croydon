@@ -459,7 +459,7 @@ export async function POST(request, { params }) {
     }
 
     // Full inspection report PDF is generated on demand (Home / report-pdf API), not on submit.
-    const fullPdfUrl = String(inspectionLive.full_pdf_url ?? inspectionLive.pdf_url ?? '').trim() || null
+    const fullPdfUrl = getInspectionFullReportPdfUrl(inspectionLive)
     let posterPdfUrl = inspectionLive.poster_pdf_url || null
     let pdfError = null
     try {
