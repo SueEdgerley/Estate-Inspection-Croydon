@@ -127,14 +127,20 @@ export default function FormsPage() {
     ])
       .then(([d, me]) => {
         if (cancelled) return
-        setData(d)
+        const safe =
+          d && typeof d === 'object' && !Array.isArray(d) ? d : { templates: [] }
+        if (!Array.isArray(safe.templates)) safe.templates = []
+        setData(safe)
         setViewer({
           appRole: typeof me?.role === 'string' ? me.role : null,
           clerkIsAdmin: me?.clerkIsAdmin === true,
         })
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message)
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setError(msg || 'Failed to load forms')
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -149,7 +155,8 @@ export default function FormsPage() {
     [viewer.appRole, viewer.clerkIsAdmin]
   )
 
-  const templates = data.templates || []
+  const templates = Array.isArray(data?.templates) ? data.templates : []
+  const errText = error == null ? '' : String(error)
 
   return (
     <div>
@@ -171,7 +178,7 @@ export default function FormsPage() {
         <p style={{ color: '#6b7280' }}>Loading forms…</p>
       )}
 
-      {error && (
+      {errText && (
         <div style={{
           padding: '1rem',
           backgroundColor: '#fee2e2',
@@ -179,8 +186,8 @@ export default function FormsPage() {
           borderRadius: '0.5rem',
           marginBottom: '1rem',
         }}>
-          <p style={{ margin: 0, fontWeight: 500 }}>{error}</p>
-          {error.toLowerCase().includes('airtable') && (
+          <p style={{ margin: 0, fontWeight: 500 }}>{errText}</p>
+          {errText.toLowerCase().includes('airtable') && (
             <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
               In Vercel: Settings → Environment Variables. Set <strong>AIRTABLE_BASE_ID</strong> and <strong>AIRTABLE_API_TOKEN</strong> (or <strong>AIRTABLE_API_KEY</strong>) for <strong>Production</strong>, then redeploy.
               {' '}
@@ -189,7 +196,7 @@ export default function FormsPage() {
               </a>
             </p>
           )}
-          {error && !error.toLowerCase().includes('airtable not configured') && (
+          {!errText.toLowerCase().includes('airtable not configured') && (
             <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
               Check: correct base ID, token has access to the base, and the base has Airtable tables for forms (often named <strong>Templates</strong>, <strong>Template Sections</strong>, <strong>Template Questions</strong>) or set AIRTABLE_TEMPLATES_TABLE etc. in env.
             </p>
