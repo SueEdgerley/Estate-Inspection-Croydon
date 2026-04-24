@@ -10,7 +10,11 @@ import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
-import { isEstateWalkaboutTemplate, ESTATE_WALKABOUT_CHECKLIST_QID } from '@/lib/estate-walkabout-template'
+import {
+  isEstateWalkaboutTemplate,
+  ESTATE_WALKABOUT_CHECKLIST_QID,
+  getCanonicalEstateWalkaboutTemplateForInsert,
+} from '@/lib/estate-walkabout-template'
 import { createEstateWalkaboutActionsFromPayload } from '@/lib/estate-walkabout-actions'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 import {
@@ -368,12 +372,15 @@ export async function POST(request) {
 
   try {
     const nested = await getTemplatesNested()
-    const template = nested.find((t) => t.id === template_id)
+    let template = nested.find((t) => t.id === template_id)
     if (!template) {
       return NextResponse.json(
         { error: 'Template not found' },
         { status: 400 }
       )
+    }
+    if (isEstateWalkaboutTemplate(template)) {
+      template = getCanonicalEstateWalkaboutTemplateForInsert(template)
     }
 
     if (isEstateInspectionFormTemplate(template)) {

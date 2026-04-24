@@ -243,7 +243,7 @@ export default function WizardQuestionFields({
                   value={(ext.photo_urls || []).slice(0, maxPhotos)}
                   onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
                   label="Add photo"
-                  multiple
+                  multiple={maxPhotos > 1}
                 />
               </>
             )}

@@ -28,7 +28,11 @@ import {
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import { getSectionsWithOrderedQuestions } from '@/lib/inspection-template-render-sections'
 import { buildEstateInspectionFormSections } from '@/lib/estate-inspection-form-sections'
-import { isEstateWalkaboutTemplate } from '@/lib/estate-walkabout-template'
+import {
+  isEstateWalkaboutTemplate,
+  ESTATE_WALKABOUT_TEMPLATE_ID,
+  buildEstateWalkaboutTemplate,
+} from '@/lib/estate-walkabout-template'
 import EstateWalkaboutNewInspectionForm from '@/app/components/estate-walkabout/EstateWalkaboutNewInspectionForm'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
 import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@/lib/template-version-debug'
@@ -920,9 +924,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isMobile, setIsMobile] = useState(false)
-  const templateFromUrl = String(searchParams?.get('template_id') || '').trim()
+  const templateIdFromUrl = String(searchParams?.get('template_id') || '').trim()
+  const walkaboutFromUrl = searchParams.get('walkabout') === '1'
+  const effectiveLockedTemplateId = walkaboutFromUrl
+    ? ESTATE_WALKABOUT_TEMPLATE_ID
+    : templateIdFromUrl
   const debugTemplateVersion = searchParams?.get('debug') === '1'
-  const isTemplateLocked = !!templateFromUrl
+  const isTemplateLocked = !!effectiveLockedTemplateId
   const [apiPayload, setApiPayload] = useState({ templates: [] })
   const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
   const [loading, setLoading] = useState(true)
@@ -1072,13 +1080,17 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           setApiPayload(templatesData)
           const list = templatesData.templates || []
           if (list.length > 0) {
-            if (templateFromUrl) {
-              const hasRequestedTemplate = list.some((t) => t.id === templateFromUrl)
-              if (hasRequestedTemplate) setTemplateId(templateFromUrl)
-              else if (!templateId) setTemplateId(list[0].id)
+            if (effectiveLockedTemplateId) {
+              const hasRequestedTemplate = list.some((t) => t.id === effectiveLockedTemplateId)
+              if (hasRequestedTemplate) setTemplateId(effectiveLockedTemplateId)
+              else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
+                setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
+              } else if (!templateId) setTemplateId(list[0].id)
             } else if (!templateId) {
               setTemplateId(list[0].id)
             }
+          } else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
+            setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
           }
         }
       } catch (err) {
@@ -1092,10 +1104,17 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     return () => {
       cancelled = true
     }
-  }, [templateFromUrl])
+  }, [effectiveLockedTemplateId])
 
   const templates = apiPayload.templates || []
-  const selectedTemplate = templates.find((t) => t.id === templateId)
+  const selectedTemplate = useMemo(() => {
+    const fromList = templates.find((t) => t.id === templateId)
+    if (fromList) return fromList
+    if (templateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
+      return buildEstateWalkaboutTemplate()
+    }
+    return undefined
+  }, [templates, templateId])
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []

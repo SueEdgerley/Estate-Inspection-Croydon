@@ -8,12 +8,14 @@ import {
   countQuestionsInTemplate,
   logInspectionQuestionPipeline,
 } from '@/lib/estate-inspection-question-pipeline-diag'
+import { auditEstateWalkaboutSnapshot } from '@/lib/estate-walkabout-snapshot-audit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request, { params }) {
   const includeQuestionPipelineInBody = request.nextUrl?.searchParams?.get('debug') === '1'
+  const walkaboutAudit = request.nextUrl?.searchParams?.get('walkabout_audit') === '1'
   try {
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -58,6 +60,11 @@ export async function GET(request, { params }) {
       } catch {
         tv = null
       }
+    }
+    if (walkaboutAudit && tv && typeof tv === 'object') {
+      row.walkaboutSnapshotAudit = auditEstateWalkaboutSnapshot(JSON.parse(JSON.stringify(tv)), {
+        template_version_id: row.template_version_id ?? null,
+      })
     }
     if (tv && typeof tv === 'object') {
       const patched = applyGroundsMaintenanceTemplateToSnapshot(tv)

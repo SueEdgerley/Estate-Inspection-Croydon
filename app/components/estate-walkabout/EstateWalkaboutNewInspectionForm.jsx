@@ -47,8 +47,8 @@ const ITEM_YN = [
   ['ew_it_signs', 'Have you inspected the estate signs?'],
 ]
 
-/** Question ids for answer_extras photo_urls: one control per id (graded rows + one comment line where evidence helps). */
-const PHOTO_EXTRA_IDS = new Set(['ew_ec_paving_grade', 'ew_os_overall_grade', 'ew_it_comments'])
+/** Question ids for answer_extras photo_urls: Section 3 grade (one photo) + item-inspection comments evidence. */
+const PHOTO_EXTRA_IDS = new Set(['ew_os_overall_grade', 'ew_it_comments'])
 
 function emptyAnswers() {
   const keys = [
@@ -308,42 +308,54 @@ export default function EstateWalkaboutNewInspectionForm({
     </div>
   )
 
-  const gradeAbcdNa = (qid, label, sub) => (
-    <div style={{ marginBottom: 18 }}>
-      <span style={{ fontWeight: 600, display: 'block', marginBottom: 4, color: EW.text }}>{label}</span>
-      {sub ? (
-        <p style={{ margin: '0 0 8px', fontSize: 13, color: EW.muted }}>{sub}</p>
-      ) : null}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {['A', 'B', 'C', 'D', 'NA'].map((L) => {
-          const sel = answers[qid] === L
-          return (
-            <button
-              key={L}
-              type="button"
-              onClick={() => setField(qid, L)}
-              style={{
-                minWidth: 44,
-                minHeight: 44,
-                padding: '0 12px',
-                borderRadius: 8,
-                border: sel ? `2px solid ${EW.accent}` : `1px solid ${EW.border}`,
-                background: sel ? EW.accentMuted : '#fff',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              {L}
-            </button>
-          )
-        })}
+  const gradeAbcdNa = (qid, label, sub, opts = {}) => {
+    const withPhoto = !!opts.withPhoto
+    const maxSlot = typeof opts.maxPhotos === 'number' ? opts.maxPhotos : 3
+    return (
+      <div style={{ marginBottom: 18 }}>
+        <span style={{ fontWeight: 600, display: 'block', marginBottom: 4, color: EW.text }}>{label}</span>
+        {sub ? (
+          <p style={{ margin: '0 0 8px', fontSize: 13, color: EW.muted }}>{sub}</p>
+        ) : null}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {['A', 'B', 'C', 'D', 'NA'].map((L) => {
+            const sel = answers[qid] === L
+            return (
+              <button
+                key={L}
+                type="button"
+                onClick={() => setField(qid, L)}
+                style={{
+                  minWidth: 44,
+                  minHeight: 44,
+                  padding: '0 12px',
+                  borderRadius: 8,
+                  border: sel ? `2px solid ${EW.accent}` : `1px solid ${EW.border}`,
+                  background: sel ? EW.accentMuted : '#fff',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {L}
+              </button>
+            )
+          })}
+        </div>
+        {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
+        {withPhoto ? (
+          <div style={{ marginTop: 10 }}>
+            <PhotoUploadControl
+              id={`ph-${qid}`}
+              value={getPhotos(qid).slice(0, maxSlot)}
+              onChange={(urls) => setPhotos(qid, urls.slice(0, maxSlot))}
+              label="Add photo"
+              multiple={maxSlot > 1}
+            />
+          </div>
+        ) : null}
       </div>
-      {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
-      <div style={{ marginTop: 10 }}>
-        <PhotoUploadControl id={`ph-${qid}`} value={getPhotos(qid)} onChange={(urls) => setPhotos(qid, urls)} label="Add photo" />
-      </div>
-    </div>
-  )
+    )
+  }
 
   const commentTextOnly = (qid, title) => (
     <div style={{ marginBottom: 18 }}>
@@ -379,7 +391,10 @@ export default function EstateWalkaboutNewInspectionForm({
   )
 
   return (
-    <div style={{ background: EW.pageBg, minHeight: '100vh', padding: '1.5rem' }}>
+    <div
+      data-ew-walkabout-form="canon-2026-04"
+      style={{ background: EW.pageBg, minHeight: '100vh', padding: '1.5rem' }}
+    >
       <div style={{ maxWidth: 880, margin: '0 auto' }}>
         <Link href="/" style={{ color: EW.accent, textDecoration: 'none', fontSize: 14 }}>
           ← Back to Inspections
@@ -391,6 +406,29 @@ export default function EstateWalkaboutNewInspectionForm({
           <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 16, maxWidth: 720 }}>
             Structured walkabout sections. Ratings and Y/N answers do not create actions by themselves. Use{' '}
             <strong>Additional items &amp; action plan</strong> at the end to log follow-up actions when needed.
+          </p>
+          <p
+            style={{
+              margin: '14px 0 0',
+              padding: '12px 14px',
+              background: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              borderRadius: 10,
+              fontSize: 14,
+              color: '#065f46',
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>Testing a change?</strong> This page is the dedicated Walkabout <em>create</em> form. After you submit, you
+            land on a read-only summary — not this screen. <strong>Old drafts</strong> keep the template snapshot from when
+            they were first saved. For a <strong>fresh snapshot</strong>, start a <strong>new</strong> inspection, e.g. open{' '}
+            <Link href="/inspections/new?walkabout=1" style={{ color: EW.accent, fontWeight: 600 }}>
+              /inspections/new?walkabout=1
+            </Link>
+            <span style={{ color: EW.muted, fontSize: 13, display: 'block', marginTop: 6 }}>
+              Form bundle marker: {ESTATE_WALKABOUT_TEMPLATE_ID} (if this does not match your deploy, the browser or server
+              is still serving an old build).
+            </span>
           </p>
         </header>
 
@@ -551,11 +589,9 @@ export default function EstateWalkaboutNewInspectionForm({
           {/* 2. Estate care */}
           <section style={cardStyle}>
             <h2 style={h2Style}>2. Estate care and communal repairs</h2>
-            {gradeAbcdNa(
-              'ew_ec_paving_grade',
-              'What is the quality of the paving/potholes and signage?',
-              'Croydon NV Grading – Final'
-            )}
+            {gradeAbcdNa('ew_ec_paving_grade', 'What is the quality of the paving/potholes and signage?', 'Croydon NV Grading – Final', {
+              withPhoto: false,
+            })}
             {commentTextOnly('ew_ec_comments', 'Comments')}
           </section>
 
@@ -565,7 +601,8 @@ export default function EstateWalkaboutNewInspectionForm({
             {gradeAbcdNa(
               'ew_os_overall_grade',
               'What is the quality of the internal cleanliness?',
-              'Croydon NV Grading – Final'
+              'Croydon NV Grading – Final',
+              { withPhoto: true, maxPhotos: 1 }
             )}
             {commentTextOnly('ew_os_comments', 'Comments')}
           </section>

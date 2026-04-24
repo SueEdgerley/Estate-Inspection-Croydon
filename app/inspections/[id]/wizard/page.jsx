@@ -14,6 +14,10 @@ import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
+import {
+  applyEstateWalkaboutWizardTemplatePatch,
+  isEstateWalkaboutTemplateVersion,
+} from '@/lib/estate-walkabout-template'
 
 // NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3
@@ -92,7 +96,7 @@ function questionUsesNvPackedNotes(q) {
 }
 
 /** When NV uses synthetic sections, answers must POST under each question's original Airtable section_id. */
-function groupNvSectionSaveBatches(sec, answers, extras) {
+function groupNvSectionSaveBatches(sec, answers, extras, estateWalkabout = false) {
   /** @type {Map<string, { answers: Record<string, unknown>, extras: Record<string, unknown> }>} */
   const m = new Map()
   for (const q of sec.questions || []) {
@@ -106,8 +110,9 @@ function groupNvSectionSaveBatches(sec, answers, extras) {
     if (v !== undefined && v !== null) bucket.answers[q.id] = v
     const comment = extras[q.id]?.comment
     if (comment != null) bucket.answers[`${q.id}_comment`] = comment
-    if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
-      bucket.extras[q.id] = extras[q.id]
+    const ex = extras[q.id]
+    if (ex && Object.keys(ex).length > 0 && (questionUsesNvPackedNotes(q) || estateWalkabout)) {
+      bucket.extras[q.id] = ex
     }
   }
   return Array.from(m.entries()).map(([section_id, payload]) => ({ section_id, ...payload }))
@@ -208,6 +213,7 @@ export default function InspectionWizardPage() {
           const beforeSummary = summarizeTemplateSnapshotForDebug(cloneForDebug)
           applyNeighbourhoodVoiceTemplatePatch(version)
           applyTemplateDisplayPatches(version)
+          applyEstateWalkaboutWizardTemplatePatch(version)
           const afterSummary = summarizeTemplateSnapshotForDebug(version)
           if (!cancelled) {
             setSnapshotDebugBeforePatches(beforeSummary)
@@ -268,12 +274,16 @@ export default function InspectionWizardPage() {
       const persistSid = (q && q._nv_answer_section_id) || sectionId
       const payload = { section_id: persistSid, answers: { [questionId]: value } }
       if (comment != null) payload.answers[`${questionId}_comment`] = comment
-      if (
-        q &&
-        questionUsesNvPackedNotes(q) &&
+      const walkabout = template && isEstateWalkaboutTemplateVersion(template)
+      const hasExtras =
         extrasSnapshot &&
         typeof extrasSnapshot === 'object' &&
         Object.keys(extrasSnapshot).length > 0
+      if (
+        q &&
+        hasExtras &&
+        (questionUsesNvPackedNotes(q) || walkabout) &&
+        extrasSnapshot
       ) {
         payload.extras = { [questionId]: extrasSnapshot }
       }
@@ -289,13 +299,18 @@ export default function InspectionWizardPage() {
     } finally {
       setSaving(false)
     }
-  }, [id, sections])
+  }, [id, sections, template])
 
   const saveSection = useCallback(async (sec) => {
     if (!id || !sec?.questions?.length) return
     setSaving(true)
     try {
-      const batches = groupNvSectionSaveBatches(sec, answers, extras)
+      const batches = groupNvSectionSaveBatches(
+        sec,
+        answers,
+        extras,
+        !!(template && isEstateWalkaboutTemplateVersion(template))
+      )
       for (const batch of batches) {
         const hasAns = Object.keys(batch.answers).length > 0
         const hasEx = Object.keys(batch.extras).length > 0
@@ -317,7 +332,7 @@ export default function InspectionWizardPage() {
     } finally {
       setSaving(false)
     }
-  }, [id, answers, extras])
+  }, [id, answers, extras, template])
 
   const templateVersionDebugPanel =
     showTemplateDebug && inspection ? (
@@ -356,8 +371,11 @@ export default function InspectionWizardPage() {
   const handleExtras = (questionId, sectionId, updates) => {
     setExtras((prev) => {
       const next = { ...prev, [questionId]: { ...(prev[questionId] || {}), ...updates } }
-      if (updates.photo_urls && Array.isArray(updates.photo_urls) && updates.photo_urls.length > MAX_PHOTOS_PER_QUESTION) {
-        next[questionId].photo_urls = updates.photo_urls.slice(0, MAX_PHOTOS_PER_QUESTION)
+      if (updates.photo_urls && Array.isArray(updates.photo_urls)) {
+        const cap = questionId === 'ew_os_overall_grade' ? 1 : MAX_PHOTOS_PER_QUESTION
+        if (updates.photo_urls.length > cap) {
+          next[questionId].photo_urls = updates.photo_urls.slice(0, cap)
+        }
       }
       const merged = next[questionId] || {}
       saveAnswer(sectionId, questionId, answers[questionId], merged.comment, merged)
@@ -654,7 +672,7 @@ export default function InspectionWizardPage() {
               extras={extras}
               handleAnswer={handleAnswer}
               handleExtras={handleExtras}
-              maxPhotos={MAX_PHOTOS_PER_QUESTION}
+              maxPhotos={q.id === 'ew_os_overall_grade' ? 1 : MAX_PHOTOS_PER_QUESTION}
               commentFocusRef={commentFocusRef}
               prefillResidentName={prefillResidentName}
             />
