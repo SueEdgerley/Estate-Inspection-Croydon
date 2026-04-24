@@ -121,6 +121,7 @@ model Block {
   id        String   @id @db.VarChar(255)
   estateId  String?  @map("estate_id") @db.VarChar(255)
   name      String   @db.VarChar(500)
+  postcode  String?  @map("postcode") @db.VarChar(20)
   /// When false, row is hidden from inspection location pickers; use for de-duplication or test data.
   active    Boolean  @default(true) @map("active")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz

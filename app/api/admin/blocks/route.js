@@ -21,7 +21,7 @@ export async function GET() {
   if (err) return err
   try {
     const result = await sql`
-      SELECT b.id, b.estate_id, b.name, b.active, b.created_at, e.name as estate_name
+      SELECT b.id, b.estate_id, b.name, b.postcode, b.active, b.created_at, e.name as estate_name
       FROM blocks b
       LEFT JOIN estates e ON e.id = b.estate_id
       ORDER BY b.active DESC, b.name
@@ -42,16 +42,21 @@ export async function POST(request) {
     if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 })
     const estateId = body.estate_id && String(body.estate_id).trim() ? String(body.estate_id).trim() : null
     const active = body.active === false ? false : true
+    const postcode =
+      body.postcode != null && String(body.postcode).trim()
+        ? String(body.postcode).trim().slice(0, 20)
+        : null
     const id = body.id && String(body.id).trim() ? String(body.id).trim() : `block_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
     await sql`
-      INSERT INTO blocks (id, estate_id, name, active) VALUES (${id}, ${estateId}, ${name}, ${active})
+      INSERT INTO blocks (id, estate_id, name, postcode, active) VALUES (${id}, ${estateId}, ${name}, ${postcode}, ${active})
       ON CONFLICT (id) DO UPDATE SET
         estate_id = EXCLUDED.estate_id,
         name = EXCLUDED.name,
+        postcode = EXCLUDED.postcode,
         active = EXCLUDED.active,
         updated_at = CURRENT_TIMESTAMP
     `
-    return NextResponse.json({ id, estate_id: estateId, name, active })
+    return NextResponse.json({ id, estate_id: estateId, name, postcode, active })
   } catch (e) {
     console.error('Admin blocks POST:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
