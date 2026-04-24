@@ -719,6 +719,27 @@ export async function POST(request) {
               photo_urls: allPhotoUrls,
               created_at: new Date(),
             })
+            try {
+              const locLine = displayTitle || String(location || '').trim() || '—'
+              const pdfR = await tryGenerateAndStoreIssueJobCardPdf(sql, {
+                actionId,
+                inspectionId,
+                inspectionType: template.name || 'Inspection',
+                blockEstate: locLine,
+                location: locLine,
+                dateRaised: formatDateGb(new Date()),
+                issueTitle: residentMessage,
+                issueDetail: [q.question_text || q.label, comment].filter(Boolean).join('\n\n').slice(0, 2500),
+                assignedTeam: '—',
+                status: 'Open',
+                photoUrls: allPhotoUrls,
+              })
+              if (!pdfR?.ok) {
+                console.warn('[Inspections] Issue job card PDF:', actionId, pdfR?.error)
+              }
+            } catch (issuePdfErr) {
+              console.warn('[Inspections] Issue job card PDF failed:', issuePdfErr?.message || issuePdfErr)
+            }
           } catch (pgErr) {
             console.warn('[Inspections] Could not create Postgres action for poster:', pgErr.message)
           }
