@@ -1,43 +1,49 @@
 import { NextResponse } from 'next/server'
+import { sendAppEmail } from '@/lib/send-app-email'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// POST - Send email
+// POST - Send email (same transport as inspection submit; optional for tests / admin tools)
 export async function POST(request) {
   try {
-    const { to, subject, template, data } = await request.json()
-    
-    // TODO: Implement actual email sending
-    // Options:
-    // 1. Use Resend, SendGrid, or similar service
-    // 2. Use Vercel's email service
-    // 3. Use SMTP directly
-    
-    // For now, log the email (in production, actually send it)
-    console.log('Email to send:', {
+    const body = await request.json()
+    const { to, subject, html, text, template, data } = body
+    const safe = (s) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+    const resolvedHtml =
+      html ||
+      (data
+        ? `<p><strong>${safe(template || 'notification')}</strong></p><pre style="white-space:pre-wrap;font-size:13px;">${safe(
+            JSON.stringify(data, null, 2).slice(0, 20000)
+          )}</pre>`
+        : `<pre style="white-space:pre-wrap;">${safe(text || '')}</pre>`)
+
+    const result = await sendAppEmail({
       to,
-      subject,
-      template,
-      data: {
-        ...data,
-        pdfUrl: data.pdfUrl // Log PDF URL
-      }
+      subject: subject || 'Message',
+      html: resolvedHtml,
+      text: text || undefined,
     })
-    
-    // TODO: Implement actual email sending
-    // Example with Resend:
-    // const resend = new Resend(process.env.RESEND_API_KEY)
-    // await resend.emails.send({
-    //   from: 'inspections@example.com',
-    //   to,
-    //   subject,
-    //   html: renderTemplate(template, data)
-    // })
-    
+
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error || 'send_failed',
+          provider: result.provider,
+        },
+        { status: result.error === 'no_email_provider' ? 503 : 502 }
+      )
+    }
+
     return NextResponse.json({
       success: true,
-      message: 'Email queued for sending (placeholder - implement actual email service)'
+      provider: result.provider,
+      id: result.id,
     })
   } catch (error) {
     console.error('Error sending email:', error)

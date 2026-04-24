@@ -168,6 +168,8 @@ export async function POST(request) {
         status,
         comment,
         recipient_person_id,
+        block_id,
+        cost_code,
         auto_created,
         expected_completion_date
       ) VALUES (
@@ -184,6 +186,8 @@ export async function POST(request) {
         ${data.status || 'open'},
         ${data.comment || null},
         ${data.recipient_person_id || null},
+        ${data.block_id || null},
+        ${data.cost_code || null},
         ${data.auto_created || false},
         ${expectedCompletionDate}
       )
