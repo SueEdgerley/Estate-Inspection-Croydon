@@ -548,8 +548,8 @@ export async function POST(request, { params }) {
         inspectionId: id,
         inspection: {
           ...inspectionLive,
-          full_pdf_url: fullPdfUrl ?? inspectionLive.full_pdf_url,
-          poster_pdf_url: posterPdfUrl ?? inspectionLive.poster_pdf_url,
+          full_pdf_url: fullPdfUrl ?? inspectionLive.full_pdf_url ?? null,
+          poster_pdf_url: posterPdfUrl ?? inspectionLive.poster_pdf_url ?? null,
         },
         estateBlockLine,
         fullPdfUrl,
