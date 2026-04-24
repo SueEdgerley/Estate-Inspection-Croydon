@@ -39,31 +39,10 @@ import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
+import { buildInspectionFormNvTokens } from '@/lib/inspection-form-ui'
 
-/** Minimal design tokens for NV reusable blocks outside the wizard page. */
-const NV_INLINE = {
-  helperSize: '0.875rem',
-  helperColor: '#6b7280',
-  primary: '#1E3A8A',
-  cardBg: '#fff',
-  cardBorder: '1px solid #E5E7EB',
-  text: '#111827',
-  baseSize: '1rem',
-  metaSize: '0.8125rem',
-  btnPx: 16,
-  font: 'inherit',
-  unansweredAmber: '#FEF3C7',
-  btnUnselectedBorder: '1px solid #d1d5db',
-  btnRadius: 8,
-  btnFontWeight: 600,
-  btnMinHeight: 48,
-  yesColor: '#16A34A',
-  noColor: '#DC2626',
-  naColor: '#6B7280',
-  primaryLight: '#EFF6FF',
-  muted: '#6B7280',
-  error: '#DC2626',
-}
+/** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
+const NV_INLINE = buildInspectionFormNvTokens()
 
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
