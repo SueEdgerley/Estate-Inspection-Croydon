@@ -20,7 +20,8 @@
     "db:studio": "prisma studio",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
     "import:blocks": "node scripts/import-blocks-from-csv.mjs",
-    "import:blocks:csv": "node scripts/import-blocks.js"
+    "import:blocks:csv": "node scripts/import-blocks.js",
+    "import:people": "node scripts/import-people.js"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
