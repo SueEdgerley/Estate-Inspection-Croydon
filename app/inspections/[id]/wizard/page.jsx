@@ -478,14 +478,51 @@ export default function InspectionWizardPage() {
 
           {issues.length > 0 && (
             <section style={{ marginBottom: nv.spaceSections }}>
-              <h2 style={{ fontSize: nv.questionSize, fontWeight: 600, color: nv.text, marginBottom: 8 }}>Issues raised ({issues.length})</h2>
-              <div style={{ backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, padding: nv.issuePad, borderRadius: nv.issueRadius, boxShadow: nv.cardShadow }}>
+              <h2 style={{ ...inspectionSectionHeadingStyle, marginBottom: 8 }}>Issues raised ({issues.length})</h2>
+              <div
+                style={{
+                  ...inspectionQuestionCardStyle,
+                  padding: '1rem',
+                  borderRadius: nv.cardRadius,
+                }}
+              >
                 {issues.map((s) => (
-                  <div key={s.question?.id} style={{ marginBottom: 12, fontSize: nv.baseSize }}>
-                    <span style={{ display: 'inline-block', marginBottom: 4, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>Issue raised</span>
-                    <p style={{ margin: '4px 0 0', fontWeight: 500 }}>{s.question?.resident_wording || s.question?.question_text}</p>
-                    {extras[s.question?.id]?.comment && <div style={{ color: nv.muted, marginTop: 4, fontSize: nv.helperSize }}>{extras[s.question?.id].comment}</div>}
-                    {extras[s.question?.id]?.severity && <div style={{ color: nv.muted, marginTop: 2, fontSize: nv.metaSize }}>Severity: {extras[s.question?.id].severity}</div>}
+                  <div
+                    key={s.question?.id}
+                    style={{
+                      marginBottom: 12,
+                      fontSize: nv.baseSize,
+                      paddingBottom: 12,
+                      borderBottom: '1px solid #e5e7eb',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        marginBottom: 4,
+                        padding: '2px 8px',
+                        fontSize: nv.metaSize,
+                        fontWeight: 600,
+                        backgroundColor: '#fee2e2',
+                        color: '#b91c1c',
+                        borderRadius: 999,
+                      }}
+                    >
+                      Issue raised
+                    </span>
+                    <p style={{ margin: '4px 0 0', fontWeight: 500, color: nv.text }}>
+                      {s.question?.resident_wording || s.question?.question_text}
+                    </p>
+                    {extras[s.question?.id]?.comment && (
+                      <div style={{ color: nv.muted, marginTop: 4, fontSize: nv.helperSize }}>
+                        {extras[s.question?.id].comment}
+                      </div>
+                    )}
+                    {extras[s.question?.id]?.severity && (
+                      <div style={{ color: nv.muted, marginTop: 2, fontSize: nv.metaSize }}>
+                        Severity: {extras[s.question?.id].severity}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
