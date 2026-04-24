@@ -28,6 +28,8 @@ import {
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import { getSectionsWithOrderedQuestions } from '@/lib/inspection-template-render-sections'
 import { buildEstateInspectionFormSections } from '@/lib/estate-inspection-form-sections'
+import { isEstateWalkaboutTemplate } from '@/lib/estate-walkabout-template'
+import EstateWalkaboutNewInspectionForm from '@/app/components/estate-walkabout/EstateWalkaboutNewInspectionForm'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
 import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@/lib/template-version-debug'
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
@@ -1376,6 +1378,19 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
           {loadError}
         </div>
       </div>
+    )
+  }
+
+  if (selectedTemplate && isEstateWalkaboutTemplate(selectedTemplate)) {
+    return (
+      <EstateWalkaboutNewInspectionForm
+        estates={estates}
+        blocks={blocks}
+        templates={templates}
+        templateId={templateId}
+        setTemplateId={setTemplateId}
+        templateLocked={isTemplateLocked}
+      />
     )
   }
 

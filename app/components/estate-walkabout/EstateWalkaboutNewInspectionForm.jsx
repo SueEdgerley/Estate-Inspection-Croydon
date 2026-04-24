@@ -47,19 +47,8 @@ const ITEM_YN = [
   ['ew_it_signs', 'Have you inspected the estate signs?'],
 ]
 
-/** Question ids that may carry photo_urls in answer_extras (matches on-form photo pickers). */
-const PHOTO_EXTRA_IDS = new Set([
-  'ew_st_repairs_officer_select',
-  'ew_st_resident_rep_name',
-  'ew_st_comments',
-  'ew_ec_paving_grade',
-  'ew_ec_comments',
-  'ew_os_overall_grade',
-  'ew_os_comments',
-  'ew_it_roof_access',
-  'ew_it_comments',
-  'ew_sig_inspection_date',
-])
+/** Question ids for answer_extras photo_urls: one control per id (graded rows + one comment line where evidence helps). */
+const PHOTO_EXTRA_IDS = new Set(['ew_ec_paving_grade', 'ew_os_overall_grade', 'ew_it_comments'])
 
 function emptyAnswers() {
   const keys = [
@@ -74,6 +63,7 @@ function emptyAnswers() {
     'ew_os_comments',
     ...ITEM_YN.map(([id]) => id),
     'ew_it_comments',
+    'ew_sig_signature',
     'ew_sig_inspection_date',
   ]
   return Object.fromEntries(keys.map((k) => [k, '']))
@@ -211,6 +201,9 @@ export default function EstateWalkaboutNewInspectionForm({
       if (!['Yes', 'No', 'NA'].includes(v)) errs[id] = 'Select Yes, No, or NA'
     }
 
+    if (!String(answers.ew_sig_signature || '').trim()) {
+      errs.ew_sig_signature = 'Enter a signature or signatory name'
+    }
     if (!String(answers.ew_sig_inspection_date || '').trim()) {
       errs.ew_sig_inspection_date = 'Enter the inspection date'
     }
@@ -355,7 +348,7 @@ export default function EstateWalkaboutNewInspectionForm({
     </div>
   )
 
-  const commentBlock = (qid, title) => (
+  const commentTextOnly = (qid, title) => (
     <div style={{ marginBottom: 18 }}>
       <label style={labelStyle}>{title}</label>
       <textarea
@@ -364,8 +357,26 @@ export default function EstateWalkaboutNewInspectionForm({
         rows={3}
         style={{ ...inputStyle, minHeight: 72 }}
       />
-      <div style={{ marginTop: 8 }}>
-        <PhotoUploadControl id={`ph-${qid}`} value={getPhotos(qid)} onChange={(urls) => setPhotos(qid, urls)} label="Add photo" />
+    </div>
+  )
+
+  /** Single photo control for the Item inspections comment row only. */
+  const itemInspectionsComment = () => (
+    <div style={{ marginBottom: 18 }}>
+      <label style={labelStyle}>Comments</label>
+      <textarea
+        value={answers.ew_it_comments || ''}
+        onChange={(e) => setField('ew_it_comments', e.target.value)}
+        rows={3}
+        style={{ ...inputStyle, minHeight: 72 }}
+      />
+      <div style={{ marginTop: 10 }}>
+        <PhotoUploadControl
+          id="ph-ew_it_comments"
+          value={getPhotos('ew_it_comments')}
+          onChange={(urls) => setPhotos('ew_it_comments', urls)}
+          label="Add photo"
+        />
       </div>
     </div>
   )
@@ -543,14 +554,6 @@ export default function EstateWalkaboutNewInspectionForm({
               {validationErrors.ew_st_repairs_officer_select && (
                 <p style={errStyle}>{validationErrors.ew_st_repairs_officer_select}</p>
               )}
-              <div style={{ marginTop: 8 }}>
-                <PhotoUploadControl
-                  id="ph-repairs-officer"
-                  value={getPhotos('ew_st_repairs_officer_select')}
-                  onChange={(urls) => setPhotos('ew_st_repairs_officer_select', urls)}
-                  label="Add photo"
-                />
-              </div>
             </div>
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>What is the name of the resident representative?</label>
@@ -560,16 +563,8 @@ export default function EstateWalkaboutNewInspectionForm({
                 style={inputStyle}
                 placeholder="Name (optional)"
               />
-              <div style={{ marginTop: 8 }}>
-                <PhotoUploadControl
-                  id="ph-resident-rep"
-                  value={getPhotos('ew_st_resident_rep_name')}
-                  onChange={(urls) => setPhotos('ew_st_resident_rep_name', urls)}
-                  label="Add photo"
-                />
-              </div>
             </div>
-            {commentBlock('ew_st_comments', 'Comments')}
+            {commentTextOnly('ew_st_comments', 'Comments')}
           </section>
 
           {/* 2. Estate care */}
@@ -580,7 +575,7 @@ export default function EstateWalkaboutNewInspectionForm({
               'What is the quality of the paving/potholes and signage?',
               'Croydon NV Grading – Final'
             )}
-            {commentBlock('ew_ec_comments', 'Comments')}
+            {commentTextOnly('ew_ec_comments', 'Comments')}
           </section>
 
           {/* 3. Overall */}
@@ -588,40 +583,45 @@ export default function EstateWalkaboutNewInspectionForm({
             <h2 style={h2Style}>3. Overall standards</h2>
             {gradeAbcdNa(
               'ew_os_overall_grade',
-              'What is the overall standard of the estate?',
+              'What is the quality of the internal cleanliness?',
               'Croydon NV Grading – Final'
             )}
-            {commentBlock('ew_os_comments', 'Comments')}
+            {commentTextOnly('ew_os_comments', 'Comments')}
           </section>
 
           {/* 4. Item inspections */}
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
             {ITEM_YN.map(([id, lab]) => yna(id, lab))}
-            {commentBlock('ew_it_comments', 'Comments')}
+            {itemInspectionsComment()}
           </section>
 
           {/* 5. Signature */}
           <section style={cardStyle}>
             <h2 style={h2Style}>5. Signature and date</h2>
-            <p style={{ margin: '0 0 8px', fontSize: 15, color: EW.text, lineHeight: 1.5 }}>
-              Please can the housing officer sign to certify this is a true record of the inspection completed today. *
+            <p style={{ margin: '0 0 16px', fontSize: 15, color: EW.text, lineHeight: 1.5 }}>
+              Please confirm this is a true record of the inspection completed today. *
             </p>
-            <label style={labelStyle}>Date of inspection</label>
-            <input
-              type="date"
-              value={answers.ew_sig_inspection_date}
-              onChange={(e) => setField('ew_sig_inspection_date', e.target.value)}
-              style={inputStyleErr(!!validationErrors.ew_sig_inspection_date)}
-            />
-            {validationErrors.ew_sig_inspection_date && <p style={errStyle}>{validationErrors.ew_sig_inspection_date}</p>}
-            <div style={{ marginTop: 10 }}>
-              <PhotoUploadControl
-                id="ph-sig"
-                value={getPhotos('ew_sig_inspection_date')}
-                onChange={(urls) => setPhotos('ew_sig_inspection_date', urls)}
-                label="Add photo"
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Signature *</label>
+              <input
+                value={answers.ew_sig_signature}
+                onChange={(e) => setField('ew_sig_signature', e.target.value)}
+                style={inputStyleErr(!!validationErrors.ew_sig_signature)}
+                placeholder="Type or print name as signature"
+                autoComplete="name"
               />
+              {validationErrors.ew_sig_signature && <p style={errStyle}>{validationErrors.ew_sig_signature}</p>}
+            </div>
+            <div>
+              <label style={labelStyle}>Date of inspection *</label>
+              <input
+                type="date"
+                value={answers.ew_sig_inspection_date}
+                onChange={(e) => setField('ew_sig_inspection_date', e.target.value)}
+                style={inputStyleErr(!!validationErrors.ew_sig_inspection_date)}
+              />
+              {validationErrors.ew_sig_inspection_date && <p style={errStyle}>{validationErrors.ew_sig_inspection_date}</p>}
             </div>
           </section>
 
