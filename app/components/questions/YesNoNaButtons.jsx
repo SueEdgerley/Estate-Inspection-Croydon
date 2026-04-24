@@ -1,12 +1,13 @@
 'use client'
 
-import { colours, yesColour, noColour, naColour } from '@/lib/nv-theme'
+import { colours, yesColour, noColour, naColour, minTapHeight } from '@/lib/nv-theme'
 
 /**
  * Reusable 3-button toggle for Yes / No / NA.
  * value: "Yes" | "No" | "NA" | "" (empty when none selected)
  * onChange: (val: "Yes" | "No" | "NA") => void
  * Uses theme: green (Yes), red (No), grey (NA); unselected = neutral outline.
+ * Sizing matches graded answer chips on the main inspection form (min tap 48px, 0.375rem radius).
  */
 const OPTIONS = ['Yes', 'No', 'NA']
 
@@ -34,12 +35,12 @@ export default function YesNoNaButtons({ id, value, onChange, disabled = false }
             disabled={disabled}
             onClick={() => onChange(opt)}
             style={{
-              padding: '0.5rem 1rem',
-              minHeight: 44,
+              padding: '12px 16px',
+              minHeight: minTapHeight,
               backgroundColor: bg,
               color,
               border: `2px solid ${border}`,
-              borderRadius: '0.5rem',
+              borderRadius: '0.375rem',
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontWeight: isSelected ? 600 : 500,
               fontSize: '0.9375rem',

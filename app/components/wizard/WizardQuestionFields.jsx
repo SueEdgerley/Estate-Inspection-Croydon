@@ -10,6 +10,13 @@ import IssuesReportSection from './IssuesReportSection'
 import SignOffSection from './SignOffSection'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
+import { shouldCreateActionOnNo } from '@/lib/yesno-action-handler'
+import {
+  inspectionFieldLabelStyle,
+  inspectionFollowUpActionStyle,
+  inspectionFollowUpNeutralStyle,
+  inspectionTextareaFieldStyle,
+} from '@/lib/inspection-form-ui'
 
 function parsePhotoAnswer(raw) {
   if (raw == null || raw === '') return []
@@ -211,11 +218,11 @@ export default function WizardQuestionFields({
           })}
         </div>
         {showGradedFollowUp && (
-          <div style={{ marginTop: 8, padding: nv.issuePad, backgroundColor: '#F9FAFB', borderRadius: nv.issueRadius, border: nv.cardBorder }}>
-            <p style={{ fontSize: nv.helperSize, fontWeight: 600, marginBottom: 8, color: nv.text }}>
+          <div style={inspectionFollowUpNeutralStyle}>
+            <p style={{ ...inspectionFieldLabelStyle, fontWeight: 600, marginBottom: 8 }}>
               {showPhoto ? 'Comment and photo' : 'Comment'}
             </p>
-            <label htmlFor={`g-comment-${q.id}`} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4 }}>
+            <label htmlFor={`g-comment-${q.id}`} style={inspectionFieldLabelStyle}>
               Comment
             </label>
             <textarea
@@ -225,11 +232,7 @@ export default function WizardQuestionFields({
               rows={2}
               style={{
                 ...NV_TEXTAREA_SURFACE,
-                width: '100%',
-                padding: 10,
-                border: nv.cardBorder,
-                borderRadius: 8,
-                fontSize: nv.baseSize,
+                ...inspectionTextareaFieldStyle,
                 marginBottom: showPhoto ? 12 : 0,
                 fontFamily: nv.font,
                 minHeight: 56,
@@ -237,7 +240,9 @@ export default function WizardQuestionFields({
             />
             {showPhoto && (
               <>
-                <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text, marginTop: 8 }}>Photo (up to {maxPhotos})</p>
+                <p style={{ ...inspectionFieldLabelStyle, marginTop: 8, marginBottom: 4 }}>
+                  Photo (up to {maxPhotos})
+                </p>
                 <PhotoUploadControl
                   id={`g-photo-${q.id}`}
                   value={(ext.photo_urls || []).slice(0, maxPhotos)}
@@ -421,6 +426,7 @@ export default function WizardQuestionFields({
   const severityId = `severity-${q.id}`
 
   const ynId = `answer-${q.id}`
+  const showActionBlock = isNo && shouldCreateActionOnNo(q)
 
   return (
     <>
@@ -431,8 +437,8 @@ export default function WizardQuestionFields({
       />
 
       {showAlwaysComment && (
-        <div style={{ marginTop: 16 }}>
-          <label htmlFor={`always-${commentId}`} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 6, color: nv.text }}>
+        <div style={inspectionFollowUpNeutralStyle}>
+          <label htmlFor={`always-${commentId}`} style={inspectionFieldLabelStyle}>
             Comment
           </label>
           <textarea
@@ -442,18 +448,14 @@ export default function WizardQuestionFields({
             rows={3}
             style={{
               ...NV_TEXTAREA_SURFACE,
-              width: '100%',
-              padding: 10,
-              border: nv.cardBorder,
-              borderRadius: 8,
-              fontSize: nv.baseSize,
+              ...inspectionTextareaFieldStyle,
               fontFamily: nv.font,
               minHeight: 72,
             }}
           />
           {isYes && pw === 'on_yes' && (
             <div style={{ marginTop: 12 }}>
-              <p style={{ fontSize: nv.helperSize, marginBottom: 6, color: nv.text }}>Photo (required when you answer Yes)</p>
+              <p style={inspectionFieldLabelStyle}>Photo (required when you answer Yes)</p>
               <PhotoUploadControl
                 id={`photo-always-${q.id}`}
                 value={(ext.photo_urls || []).slice(0, maxPhotos)}
@@ -467,21 +469,45 @@ export default function WizardQuestionFields({
       )}
 
       {isYes && (
-        <label htmlFor={`raise-issue-${q.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: nv.helperSize, cursor: 'pointer', color: nv.text }}>
-          <input id={`raise-issue-${q.id}`} type="checkbox" checked={!!ext.raise_issue} onChange={(e) => handleExtras(q.id, persistSecId, { raise_issue: e.target.checked })} />
+        <label
+          htmlFor={`raise-issue-${q.id}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 16,
+            fontSize: nv.helperSize,
+            cursor: 'pointer',
+            color: nv.text,
+          }}
+        >
+          <input
+            id={`raise-issue-${q.id}`}
+            type="checkbox"
+            checked={!!ext.raise_issue}
+            onChange={(e) => handleExtras(q.id, persistSecId, { raise_issue: e.target.checked })}
+          />
           Raise an issue anyway (e.g. still a concern)
         </label>
       )}
 
       {followUp && (
-        <div style={{ marginTop: 16, padding: nv.issuePad, backgroundColor: nv.issueBg, borderLeft: nv.issueBorder, borderRadius: nv.issueRadius }}>
-          <span style={{ display: 'inline-block', marginBottom: 8, padding: '2px 8px', fontSize: nv.metaSize, fontWeight: 600, backgroundColor: nv.error, color: '#fff', borderRadius: 999 }}>
-            {isYes && (pw === 'on_yes' || cw === 'on_yes') ? 'Details (Yes)' : 'Issue raised'}
-          </span>
-          <p style={{ fontWeight: 600, marginBottom: 8, fontSize: nv.helperSize, color: nv.text }}>Add details</p>
+        <div style={showActionBlock ? inspectionFollowUpActionStyle : inspectionFollowUpNeutralStyle}>
+          {showActionBlock && (
+            <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e', fontSize: nv.helperSize }}>
+              Action will be created automatically
+            </p>
+          )}
+          {!showActionBlock && (
+            <p style={{ ...inspectionFieldLabelStyle, fontWeight: 600, marginBottom: 8 }}>
+              {isYes && (pw === 'on_yes' || cw === 'on_yes') ? 'Details (Yes)' : 'Add details'}
+            </p>
+          )}
           {showCommentInFollowUp && (
             <>
-              <label htmlFor={commentId} style={{ display: 'block', fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Comment</label>
+              <label htmlFor={commentId} style={inspectionFieldLabelStyle}>
+                Comment
+              </label>
               <textarea
                 ref={commentFocusRef}
                 id={commentId}
@@ -492,11 +518,7 @@ export default function WizardQuestionFields({
                 rows={2}
                 style={{
                   ...NV_TEXTAREA_SURFACE,
-                  width: '100%',
-                  padding: 10,
-                  border: nv.cardBorder,
-                  borderRadius: 8,
-                  fontSize: nv.baseSize,
+                  ...inspectionTextareaFieldStyle,
                   marginBottom: 12,
                   fontFamily: nv.font,
                   minHeight: 56,
@@ -506,7 +528,9 @@ export default function WizardQuestionFields({
           )}
           {showPhotoInFollowUp && !(cw === 'always' && isYes && pw === 'on_yes') && (
             <>
-              <p style={{ fontSize: nv.helperSize, marginBottom: 4, color: nv.text }}>Photo (up to {maxPhotos})</p>
+              <p style={{ ...inspectionFieldLabelStyle, marginBottom: 4 }}>
+                Photo (up to {maxPhotos})
+              </p>
               <div style={{ width: '100%', minHeight: 52 }}>
                 <PhotoUploadControl
                   id={`photo-${q.id}`}
@@ -518,13 +542,24 @@ export default function WizardQuestionFields({
               </div>
             </>
           )}
-          <label htmlFor={severityId} style={{ display: 'block', fontSize: nv.helperSize, marginTop: 12, marginBottom: 4, color: nv.text }}>Severity (optional)</label>
+          <label htmlFor={severityId} style={{ ...inspectionFieldLabelStyle, marginTop: 12, marginBottom: 4 }}>
+            Severity (optional)
+          </label>
           <select
             id={severityId}
             name={severityId}
             value={ext.severity || ''}
             onChange={(e) => handleExtras(q.id, persistSecId, { severity: e.target.value })}
-            style={{ width: '100%', padding: 10, border: nv.cardBorder, borderRadius: 8, fontSize: nv.helperSize, minHeight: btnMinH, fontFamily: nv.font }}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: nv.baseSize,
+              minHeight: btnMinH,
+              fontFamily: nv.font,
+              backgroundColor: '#fff',
+            }}
           >
             <option value="">Optional</option>
             <option value="low">Low</option>

@@ -3,6 +3,7 @@
 import PhotoUploadControl from '../questions/PhotoUploadControl'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
+import { inspectionFieldLabelStyle, inspectionTextareaFieldStyle } from '@/lib/inspection-form-ui'
 
 const DEFAULT_GRADES = ['A', 'B', 'C', 'D', 'NA']
 
@@ -34,7 +35,7 @@ export default function InspectionQuestion({
         <p style={{ fontSize: nv.helperSize, color: nv.helperColor, margin: 0 }}>{q.grading_scheme_name}</p>
       ) : null}
       <div>
-        <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '0 0 8px', color: nv.text }}>Grade</p>
+        <p style={{ ...inspectionFieldLabelStyle, fontWeight: 600, margin: '0 0 8px' }}>Grade</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           {opts.map((opt) => {
             const label = typeof opt === 'string' ? opt : String(opt?.value ?? opt?.label ?? opt)
@@ -59,7 +60,7 @@ export default function InspectionQuestion({
       </div>
 
       <div>
-        <label htmlFor={`nv-std-comment-${q.id}`} style={{ fontSize: nv.helperSize, fontWeight: 600, marginBottom: 6, display: 'block', color: nv.text }}>
+        <label htmlFor={`nv-std-comment-${q.id}`} style={{ ...inspectionFieldLabelStyle, fontWeight: 600, marginBottom: 6 }}>
           Comment
         </label>
         <textarea
@@ -70,11 +71,7 @@ export default function InspectionQuestion({
           rows={3}
           style={{
             ...NV_TEXTAREA_SURFACE,
-            width: '100%',
-            padding: 10,
-            border: nv.cardBorder,
-            borderRadius: nv.btnRadius,
-            fontSize: nv.baseSize,
+            ...inspectionTextareaFieldStyle,
             fontFamily: nv.font,
             minHeight: 72,
           }}
@@ -82,7 +79,9 @@ export default function InspectionQuestion({
       </div>
 
       <div>
-        <p style={{ fontSize: nv.helperSize, fontWeight: 600, margin: '0 0 8px', color: nv.text }}>Add photo</p>
+        <label htmlFor={`nv-std-photo-${q.id}`} style={{ ...inspectionFieldLabelStyle, margin: '0 0 8px' }}>
+          Add photo
+        </label>
         <PhotoUploadControl
           id={`nv-std-photo-${q.id}`}
           value={photos}
