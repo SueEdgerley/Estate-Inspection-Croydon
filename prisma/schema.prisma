@@ -131,6 +131,7 @@ model Block {
 
   estate    Estate?  @relation(fields: [estateId], references: [id], onDelete: SetNull)
   inspections Inspection[]
+  actions     Action[]
   userAssignments UserAssignment[]
   appUserEstateAssignments AppUserEstateAssignment[]
 
@@ -277,6 +278,8 @@ model Action {
   status               String   @default("open") @db.VarChar(50)
   comment              String?  @db.Text
   recipientPersonId    String?  @map("recipient_person_id") @db.VarChar(255)
+  blockId              String?  @map("block_id") @db.VarChar(255)
+  costCode             String?  @map("cost_code") @db.VarChar(100)
   autoCreated           Boolean? @default(false) @map("auto_created")
   photoUrls             Json?    @default("[]") @map("photo_urls") @db.JsonB
   jobNumber             String?  @map("job_number") @db.VarChar(100)
@@ -285,6 +288,7 @@ model Action {
   updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  block       Block?     @relation(fields: [blockId], references: [id], onDelete: SetNull)
   recipient  Person?    @relation("RecipientActions", fields: [recipientPersonId], references: [id], onDelete: SetNull)
   actionPhotos ActionPhoto[]
 

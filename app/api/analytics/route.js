@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl, pgPublicTableExists } from '@/lib/db'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import { loadAnalyticsPayload } from '@/lib/analytics-payload'
-
-const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin']
+import {
+  getAppRoleContextForClerkUser,
+  isPrivilegedAdmin,
+  mayViewManagerAnalytics,
+} from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,6 +34,15 @@ export async function GET(request) {
   try {
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
+    }
+
+    const cu = await currentUser()
+    const roleCtx = await getAppRoleContextForClerkUser(
+      clerkUserId,
+      cu?.publicMetadata?.isAdmin === true
+    )
+    if (!mayViewManagerAnalytics(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+      return NextResponse.json({ error: 'Access denied', code: 'ROLE_NOT_PERMITTED' }, { status: 403 })
     }
 
     await ensureDatabase()
@@ -61,7 +73,10 @@ export async function GET(request) {
       userResult = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
     } catch (e) {
       if (isUsersTableMissing(e)) {
-        return NextResponse.json({ error: 'DB not migrated', code: 'DB_NOT_MIGRATED' }, { status: 500 })
+        return NextResponse.json(
+          { error: 'DB not migrated', code: 'DB_NOT_MIGRATED' },
+          { status: 500 }
+        )
       }
       throw e
     }
@@ -74,32 +89,18 @@ export async function GET(request) {
       return NextResponse.json({ error: 'User inactive', code: 'USER_INACTIVE' }, { status: 403 })
     }
 
-    const role = (internalUser.role || '').toLowerCase().trim()
-    if (!ALLOWED_DASHBOARD_ROLES.includes(role)) {
-      return NextResponse.json({ error: 'Access denied', code: 'ROLE_NOT_PERMITTED' }, { status: 403 })
-    }
-
-    const admin = role === 'admin' || role === 'owner'
-    let assignedEstateCount = 0
-    if (await pgPublicTableExists('user_estate_assignments')) {
-      const countResult = await sql`SELECT COUNT(*)::int AS c FROM user_estate_assignments WHERE user_id = ${internalUser.id}`
-      assignedEstateCount = countResult.rows[0]?.c ?? 0
-    }
-
-    if (!admin && assignedEstateCount === 0) {
-      return NextResponse.json({
-        overview: null,
-        estates: [],
-        blocks: [],
-        issues: null,
-        trends: null,
-        performance: null,
-        message: 'No estates assigned yet.',
-      })
-    }
+    /** Broaden inspection/inspector filters for ESM and HOS; caretakers stay scoped when estate scoping is on. */
+    const adminForFilters =
+      isPrivilegedAdmin(roleCtx.normalized, roleCtx.clerkIsAdmin) ||
+      roleCtx.normalized === 'esm' ||
+      roleCtx.normalized === 'housing_officer'
 
     const { searchParams } = new URL(request.url)
-    const { body } = await loadAnalyticsPayload({ searchParams, admin, internalUser })
+    const { body } = await loadAnalyticsPayload({
+      searchParams,
+      admin: adminForFilters,
+      internalUser,
+    })
     return NextResponse.json(body)
   } catch (error) {
     console.error('[Analytics]', error)
