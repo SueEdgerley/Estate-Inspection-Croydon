@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { GeneratePosterButton } from '@/app/components/GeneratePosterButton'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
+import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 export default function InspectionDetail() {
   const params = useParams()
@@ -216,12 +217,12 @@ export default function InspectionDetail() {
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <InspectionFullPdfControls
               inspectionId={inspection.id}
-              savedPdfUrl={inspection.full_pdf_url || inspection.pdf_url}
+              inspection={inspection}
               pdfGenerationError={inspection.pdf_generation_error}
               onAfterGenerate={reloadInspection}
             />
           </div>
-          {inspection.pdf_generation_error && !(inspection.full_pdf_url || inspection.pdf_url) && (
+          {inspection.pdf_generation_error && !getInspectionFullReportPdfUrl(inspection) && (
             <p style={{ color: '#b45309', fontSize: '0.875rem', marginTop: 8 }}>
               Last PDF error: {String(inspection.pdf_generation_error)}
             </p>

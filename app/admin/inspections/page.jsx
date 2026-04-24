@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 export default function AdminInspectionsPage() {
   const [inspections, setInspections] = useState([])
@@ -38,7 +39,9 @@ export default function AdminInspectionsPage() {
           </tr>
         </thead>
         <tbody>
-          {inspections.map((i) => (
+          {inspections.map((i) => {
+            const fullUrl = getInspectionFullReportPdfUrl(i)
+            return (
             <tr key={i.id}>
               <td style={{ border: '1px solid #ccc', padding: '6px 8px', fontFamily: 'monospace' }} title={i.id}>
                 {i.id.slice(0, 8)}…
@@ -51,17 +54,18 @@ export default function AdminInspectionsPage() {
               <td style={{ border: '1px solid #ccc', padding: '6px 8px' }}>{i.status || '—'}</td>
               <td style={{ border: '1px solid #ccc', padding: '6px 8px' }}>{i.has_template_snapshot ? 'Yes' : 'No'}</td>
               <td style={{ border: '1px solid #ccc', padding: '6px 8px' }}>
-                {(i.full_pdf_url || i.pdf_url) && (
-                  <a href={i.full_pdf_url || i.pdf_url} target="_blank" rel="noopener noreferrer">Full</a>
+                {fullUrl && (
+                  <a href={fullUrl} target="_blank" rel="noopener noreferrer">Full</a>
                 )}
-                {(i.full_pdf_url || i.pdf_url) && i.poster_pdf_url && ' · '}
+                {fullUrl && i.poster_pdf_url && ' · '}
                 {i.poster_pdf_url && (
                   <a href={i.poster_pdf_url} target="_blank" rel="noopener noreferrer">Poster</a>
                 )}
-                {!i.full_pdf_url && !i.pdf_url && !i.poster_pdf_url && '—'}
+                {!fullUrl && !i.poster_pdf_url && '—'}
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
       {inspections.length === 0 && <p>No inspections in Postgres yet. Submit one from the app and check the response for <code>201</code> and <code>inspectionId</code>.</p>}

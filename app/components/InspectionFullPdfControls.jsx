@@ -20,7 +20,7 @@ export default function InspectionFullPdfControls({
   const fromProp =
     savedPdfUrl != null && String(savedPdfUrl).trim() !== '' ? String(savedPdfUrl).trim() : null
   const fromRow = inspection ? getInspectionFullReportPdfUrl(inspection) : null
-  const url = (fromProp ?? fromRow ?? '') || ''
+  const url = fromProp ?? fromRow ?? ''
 
   const openInBrowser = (href, download) => {
     const a = document.createElement('a')

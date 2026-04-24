@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
-import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },
@@ -1006,7 +1005,7 @@ export default function InspectionsListPage() {
                             </Link>
                             <InspectionFullPdfControls
                               inspectionId={row.id}
-                              savedPdfUrl={row.full_pdf_url || row.pdf_url}
+                              inspection={row}
                               pdfGenerationError={row.pdf_generation_error}
                               onAfterGenerate={reloadInspections}
                             />
