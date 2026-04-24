@@ -46,6 +46,7 @@ export async function GET(request) {
           a.category, a.priority, a.title, a.description,
           COALESCE(a.location, NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location,
           a.status, a.comment, a.recipient_person_id, a.auto_created,
+          a.block_id, a.cost_code,
           a.created_at, a.updated_at, a.expected_completion_date,
           COALESCE(i.inspector_name, u.email, i.inspector_id) AS created_by,
           rp.name AS assigned_to
@@ -65,6 +66,7 @@ export async function GET(request) {
           a.category, a.priority, a.title, a.description,
           COALESCE(a.location, NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location,
           a.status, a.comment, a.recipient_person_id, a.auto_created,
+          a.block_id, a.cost_code,
           a.created_at, a.updated_at, a.expected_completion_date,
           COALESCE(i.inspector_name, u.email, i.inspector_id) AS created_by,
           rp.name AS assigned_to
@@ -84,6 +86,7 @@ export async function GET(request) {
           a.category, a.priority, a.title, a.description,
           COALESCE(a.location, NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label) AS location,
           a.status, a.comment, a.recipient_person_id, a.auto_created,
+          a.block_id, a.cost_code,
           a.created_at, a.updated_at, a.expected_completion_date,
           COALESCE(i.inspector_name, u.email, i.inspector_id) AS created_by,
           rp.name AS assigned_to

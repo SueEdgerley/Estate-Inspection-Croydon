@@ -332,7 +332,7 @@ export default function QuestionRenderer({
               .split(/\r?\n|,/)
               .map((p) => p.trim())
               .filter(Boolean)
-        // Recipient selectors always use Postgres issue_recipients; ignore static Airtable options so the dropdown is not stuck on placeholders.
+        // Recipient selectors use GET /api/people (Neon); ignore static Airtable options.
         const options = isRecipientField
           ? recipientOptions
           : optionsFromQuestion.length > 0

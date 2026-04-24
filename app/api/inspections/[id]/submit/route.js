@@ -11,8 +11,13 @@ import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch
 import {
   buildCaretakerActionDescription,
   shouldAutocreateCaretakerAction,
+  shouldAutocreateCaretakerGradedAction,
   normalizeYesNoAnswer,
 } from '@/lib/caretaker-action-details'
+import { parseCaretakerAnswerNotes } from '@/lib/caretaker-answer-extras'
+import { findSectionCostCodeAnswer } from '@/lib/caretaker-section-cost-code'
+import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
+import { resolveIssueRoutingRecipient } from '@/lib/resolve-issue-routing'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
@@ -186,12 +191,15 @@ export async function POST(request, { params }) {
         } else {
           const sections = (templateVersion && templateVersion.sections) || []
           const completedAt = new Date().toISOString()
+          const inspectionBlockId = inspectionLive.block_id || inspection.block_id || null
           for (const sec of sections) {
             const recipientQ = findRecipientQuestion(sec.questions || [])
             const recipientId =
               recipientQ && answers[recipientQ.id] != null && answers[recipientQ.id] !== ''
                 ? answers[recipientQ.id]
                 : null
+            const sectionCostCode = findSectionCostCodeAnswer(sec, answers)
+
             for (const q of sec.questions || []) {
               if (!q || !q.id) continue
               const val = answers[q.id]
@@ -203,7 +211,8 @@ export async function POST(request, { params }) {
               `
               if (existing.rows.length > 0) continue
               const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
-              const comment = (answerRow && answerRow.notes) || ''
+              const extras = parseCaretakerAnswerNotes(answerRow?.notes)
+              const comment = extras.comment || ''
               const category = q.action_category || q.category || 'other'
               const qText = q.question_text || q.label || q.id
               const norm = normalizeYesNoAnswer(val)
@@ -212,8 +221,24 @@ export async function POST(request, { params }) {
                 SELECT id, blob_url FROM inspection_photos
                 WHERE inspection_id = ${id} AND question_id = ${q.id}
               `
-              const photoUrlsArr = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
-              const photoRefs = photosResult.rows.map((p) => p.blob_url || p.id).filter(Boolean).join('; ')
+              const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
+              const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls])]
+              const photoRefs = photoUrlsArr.join('; ')
+              const costCode = extras.costCode || sectionCostCode || null
+              let actionRecipient =
+                (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
+                (recipientId != null ? String(recipientId).trim() : '') ||
+                null
+              if (!actionRecipient) {
+                const routed = await resolveIssueRoutingRecipient(sql, {
+                  issueCategory: category,
+                  issueType: q.issue_type ? String(q.issue_type) : null,
+                  estateId: inspectionLive.estate_id || inspection.estate_id || null,
+                  assignToRoleFallback: null,
+                })
+                actionRecipient = routed?.personId || null
+              }
+              const priorityVal = extras.priority || q.action_priority || null
               const title = `${sec.title || sec.name || 'Section'} – ${qText}`
               const description = buildCaretakerActionDescription({
                 inspectionId: id,
@@ -225,7 +250,7 @@ export async function POST(request, { params }) {
                 comment,
                 photoRefs,
                 category,
-                assigneeLabel: recipientId ? `Person id ${recipientId}` : '',
+                assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
                 submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
               })
               const actionId = `action_${id}_${q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
@@ -234,18 +259,97 @@ export async function POST(request, { params }) {
                   INSERT INTO actions (
                     id, inspection_id, section_id, section_name, question_id,
                     category, priority, title, description, location, status,
-                    comment, recipient_person_id, auto_created, photo_urls
+                    comment, recipient_person_id, auto_created, photo_urls,
+                    block_id, cost_code
                   )
                   VALUES (
                     ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
-                    ${category}, null, ${title}, ${description}, null, 'open',
-                    ${comment || null}, ${recipientId}, true, ${JSON.stringify(photoUrlsArr)}
+                    ${category}, ${priorityVal}, ${title}, ${description}, ${estateBlockLine || null}, 'open',
+                    ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(photoUrlsArr)},
+                    ${inspectionBlockId}, ${costCode}
                   )
                 `
               } catch (insertErr) {
                 console.error('[inspections/submit] caretaker action insert failed:', insertErr)
                 actionCreationWarnings.push(
                   `Could not create action for question ${q.id}: ${insertErr?.message || insertErr}`
+                )
+              }
+            }
+
+            for (const q of sec.questions || []) {
+              if (!q || !q.id) continue
+              if (resolveStoredQuestionType(q) !== 'graded') continue
+              const gradeVal = answers[q.id]
+              if (!shouldAutocreateCaretakerGradedAction(q, gradeVal)) continue
+              const existingG = await sql`
+                SELECT id FROM actions
+                WHERE inspection_id = ${id} AND question_id = ${q.id} AND status = 'open'
+                LIMIT 1
+              `
+              if (existingG.rows.length > 0) continue
+              const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
+              const extras = parseCaretakerAnswerNotes(answerRow?.notes)
+              const comment = extras.comment || ''
+              const category = q.action_category || q.category || 'other'
+              const qText = q.question_text || q.label || q.id
+              const answerLabel = String(gradeVal ?? '').trim() || '—'
+              const photosResult = await sql`
+                SELECT id, blob_url FROM inspection_photos
+                WHERE inspection_id = ${id} AND question_id = ${q.id}
+              `
+              const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
+              const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls])]
+              const photoRefs = photoUrlsArr.join('; ')
+              const costCode = extras.costCode || sectionCostCode || null
+              let actionRecipient =
+                (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
+                (recipientId != null ? String(recipientId).trim() : '') ||
+                null
+              if (!actionRecipient) {
+                const routed = await resolveIssueRoutingRecipient(sql, {
+                  issueCategory: category,
+                  issueType: q.issue_type ? String(q.issue_type) : null,
+                  estateId: inspectionLive.estate_id || inspection.estate_id || null,
+                  assignToRoleFallback: null,
+                })
+                actionRecipient = routed?.personId || null
+              }
+              const priorityVal = extras.priority || q.action_priority || null
+              const title = `${sec.title || sec.name || 'Section'} – ${qText} (grade ${answerLabel})`
+              const description = buildCaretakerActionDescription({
+                inspectionId: id,
+                completedAtIso: completedAt,
+                estateBlockLine,
+                sectionName: sec.title || sec.name || '',
+                questionText: qText,
+                answerLabel,
+                comment,
+                photoRefs,
+                category,
+                assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
+                submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
+              })
+              const actionId = `action_${id}_${q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+              try {
+                await sql`
+                  INSERT INTO actions (
+                    id, inspection_id, section_id, section_name, question_id,
+                    category, priority, title, description, location, status,
+                    comment, recipient_person_id, auto_created, photo_urls,
+                    block_id, cost_code
+                  )
+                  VALUES (
+                    ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
+                    ${category}, ${priorityVal}, ${title}, ${description}, ${estateBlockLine || null}, 'open',
+                    ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(photoUrlsArr)},
+                    ${inspectionBlockId}, ${costCode}
+                  )
+                `
+              } catch (insertErr) {
+                console.error('[inspections/submit] graded caretaker action insert failed:', insertErr)
+                actionCreationWarnings.push(
+                  `Could not create graded action for question ${q.id}: ${insertErr?.message || insertErr}`
                 )
               }
             }
@@ -474,11 +578,19 @@ export async function POST(request, { params }) {
     let emailResults = { sent: [], failed: [] }
     try {
       emailResults = await sendEmails({
-        inspection: inspectionLive,
+        sql,
+        inspectionId: id,
+        inspection: {
+          ...inspectionLive,
+          full_pdf_url: fullPdfUrl ?? inspectionLive.full_pdf_url,
+          poster_pdf_url: posterPdfUrl ?? inspectionLive.poster_pdf_url,
+        },
+        estateBlockLine,
+        fullPdfUrl,
+        posterPdfUrl,
         recipients,
         actionCategories: actionsResult.rows,
         allActions,
-        pdfUrl: fullPdfUrl,
       })
     } catch (emailErr) {
       console.error('[inspections/submit] sendEmails threw:', emailErr)
