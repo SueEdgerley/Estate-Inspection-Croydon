@@ -18,6 +18,9 @@ function normalizeQuestionType(v) {
 }
 
 function QuestionPreview({ q }) {
+  if (q == null || typeof q !== 'object') {
+    return <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>(invalid question)</span>
+  }
   const hasYesNoBehavior = (q.comment_required_when === 'on_no' || q.photo_required_when === 'on_no') && !q.question_type
   const qType = normalizeQuestionType(q.question_type || (hasYesNoBehavior ? 'yes_no' : 'text'))
   const opts = q.options || []
@@ -127,10 +130,11 @@ export default function FormsPage() {
     ])
       .then(([d, me]) => {
         if (cancelled) return
-        const safe =
-          d && typeof d === 'object' && !Array.isArray(d) ? d : { templates: [] }
-        if (!Array.isArray(safe.templates)) safe.templates = []
-        setData(safe)
+        const base = d && typeof d === 'object' && !Array.isArray(d) ? { ...d } : { templates: [] }
+        setData({
+          ...base,
+          templates: Array.isArray(base.templates) ? base.templates : [],
+        })
         setViewer({
           appRole: typeof me?.role === 'string' ? me.role : null,
           clerkIsAdmin: me?.clerkIsAdmin === true,
@@ -204,7 +208,7 @@ export default function FormsPage() {
         </div>
       )}
 
-      {!loading && !error && templates.length === 0 && (
+      {!loading && !errText && templates.length === 0 && (
         <div style={{
           backgroundColor: 'white',
           padding: '2rem',
@@ -217,7 +221,7 @@ export default function FormsPage() {
         </div>
       )}
 
-      {!loading && !error && templates.length > 0 && (
+      {!loading && !errText && templates.length > 0 && (
         <div style={{
           backgroundColor: 'white',
           borderRadius: '0.5rem',
@@ -327,9 +331,12 @@ export default function FormsPage() {
                           )}
                         </div>
                         <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#4b5563', fontSize: '0.875rem' }}>
-                          {(sec.questions || []).map((q) => (
-                            <li key={q.id} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span>{q.question_text}</span>
+                          {(sec.questions || []).map((q, qi) => (
+                            <li
+                              key={q && q.id != null ? String(q.id) : `q-${String(sec.id)}-${qi}`}
+                              style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}
+                            >
+                              <span>{q?.question_text != null ? q.question_text : '—'}</span>
                               <QuestionPreview q={q} />
                             </li>
                           ))}
