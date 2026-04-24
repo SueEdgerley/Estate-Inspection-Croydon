@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },
@@ -57,6 +58,7 @@ export default function InspectionsListPage() {
 
   const pathname = usePathname()
   const prevPathRef = useRef(null)
+
   const buildInspectionsApiUrl = () => {
     const params = new URLSearchParams()
     if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
@@ -68,6 +70,17 @@ export default function InspectionsListPage() {
     const qs = params.toString()
     return qs ? `/api/inspections?${qs}` : '/api/inspections'
   }
+
+  const reloadInspections = useCallback(async () => {
+    try {
+      const res = await fetch(buildInspectionsApiUrl(), { credentials: 'include', cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data)) setInspections(data)
+    } catch {
+      /* ignore */
+    }
+  }, [filters])
 
   useEffect(() => {
     const isList = pathname === '/inspections' || pathname === '/inspections/'
@@ -177,9 +190,6 @@ export default function InspectionsListPage() {
     const d = new Date(dateString)
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric', year: 'numeric' })
   }
-
-  /** Saved full inspection PDF only (poster is separate). */
-  const pdfUrl = (row) => row.full_pdf_url || row.pdf_url || null
 
   const locationDisplay = (row) =>
     row.location_label?.trim() ||
@@ -993,34 +1003,12 @@ export default function InspectionsListPage() {
                             >
                               View
                             </Link>
-                            {pdfUrl(row) ? (
-                              <>
-                                <a
-                                  href={pdfUrl(row)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
-                                >
-                                  View PDF
-                                </a>
-                                <a
-                                  href={pdfUrl(row)}
-                                  download={`inspection-${row.id}.pdf`}
-                                  style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
-                                >
-                                  Download PDF
-                                </a>
-                              </>
-                            ) : row.pdf_generation_error ? (
-                              <span
-                                title={String(row.pdf_generation_error)}
-                                style={{ color: '#d97706', fontSize: '0.8125rem', cursor: 'help' }}
-                              >
-                                PDF failed
-                              </span>
-                            ) : (
-                              <span style={{ color: '#9ca3af', fontSize: '0.8125rem' }}>PDF</span>
-                            )}
+                            <InspectionFullPdfControls
+                              inspectionId={row.id}
+                              savedPdfUrl={row.full_pdf_url || row.pdf_url}
+                              pdfGenerationError={row.pdf_generation_error}
+                              onAfterGenerate={reloadInspections}
+                            />
                             <Link
                               href={`/actions?inspection_id=${encodeURIComponent(row.id)}`}
                               style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 500, fontSize: '0.8125rem' }}
