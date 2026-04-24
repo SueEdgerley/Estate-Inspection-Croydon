@@ -106,6 +106,8 @@ model AppUserEstateAssignment {
 model Estate {
   id        String   @id @db.VarChar(255)
   name      String   @db.VarChar(500)
+  /// Optional area label for reporting (e.g. North, South) — set via admin/import.
+  area      String?  @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

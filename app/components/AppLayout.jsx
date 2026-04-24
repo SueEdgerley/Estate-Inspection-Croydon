@@ -20,6 +20,7 @@ const ALL_NAV_ITEMS = [
   { href: '/inspections/ad-hoc', label: 'Create Inspections', navKey: 'inspectionsAdHoc' },
   { href: '/actions', label: 'Manage Tasks', navKey: 'actions' },
   { href: '/templates', label: 'Forms', navKey: 'templates' },
+  { href: '/reports/inspections', label: 'Inspection reports', navKey: 'inspectionReports' },
   { href: '/import', label: 'Import', navKey: 'import' },
   { href: '/guides', label: 'Guides', navKey: 'guides' },
   { href: '/settings', label: 'Settings', navKey: 'settings' },
@@ -99,6 +100,7 @@ export default function AppLayout({ children }) {
       if (pathname.startsWith('/inspections/new')) return false
       return pathname.startsWith('/inspections/')
     }
+    if (href === '/reports/inspections') return pathname?.startsWith('/reports/inspections')
     return pathname?.startsWith(href)
   }
 
