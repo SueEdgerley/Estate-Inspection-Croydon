@@ -20,6 +20,7 @@ import {
   formatDateGb,
 } from '@/lib/issue-job-card-upload'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
+import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 import {
   getAppRoleContextForClerkUser,
   roleMayCreateAdHocInspection,
@@ -206,7 +207,7 @@ export async function GET(request) {
       LIMIT $${limitPlaceholder}`,
       [...whereParams, limit]
     )
-    return NextResponse.json(result.rows)
+    return NextResponse.json((result.rows || []).map((r) => withInspectionPdfDefaults(r)))
   } catch (error) {
     console.error('Error listing inspections:', error)
     return NextResponse.json(

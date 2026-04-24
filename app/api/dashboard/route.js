@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/l
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
+import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 
 // Dashboard access: app roles that may load dashboard stats (not unassigned `user`).
 const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin', 'caretaker', 'housing_officer', 'resident', 'esm']
@@ -214,7 +215,7 @@ export async function GET(request) {
     logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok')
     return NextResponse.json({
       stats,
-      inspections: inspectionsResult.rows,
+      inspections: (inspectionsResult.rows || []).map((r) => withInspectionPdfDefaults(r)),
     })
   } catch (error) {
     console.error('Error fetching dashboard data:', error)

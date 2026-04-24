@@ -9,6 +9,7 @@ import {
   logInspectionQuestionPipeline,
 } from '@/lib/estate-inspection-question-pipeline-diag'
 import { auditEstateWalkaboutSnapshot } from '@/lib/estate-walkabout-snapshot-audit'
+import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -98,7 +99,7 @@ export async function GET(request, { params }) {
       }
     }
 
-    return NextResponse.json(row)
+    return NextResponse.json(withInspectionPdfDefaults(row))
   } catch (error) {
     console.error('Error fetching inspection:', error)
     return NextResponse.json(

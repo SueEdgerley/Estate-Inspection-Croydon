@@ -34,6 +34,7 @@ import {
   formatDateGb,
 } from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
+import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
