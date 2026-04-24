@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '../../lib/photobook-theme'
+import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
@@ -113,30 +114,37 @@ export default function DashboardHome() {
       }
 
       const selectedRows = inspections.filter((i) => selectedInspectionIds.includes(i.id))
-      const rowsWithPdf = selectedRows.filter((i) => i.full_pdf_url || i.pdf_url)
 
-      if (rowsWithPdf.length === 0) {
-        alert('Selected inspections do not have a full inspection PDF available yet.')
-        return
-      }
-
-      rowsWithPdf.forEach((inspection, index) => {
-        const pdfUrl = inspection.full_pdf_url || inspection.pdf_url
+      for (let index = 0; index < selectedRows.length; index++) {
+        const inspection = selectedRows[index]
+        let pdfUrl = String(inspection.full_pdf_url || inspection.pdf_url || '').trim()
+        if (!pdfUrl) {
+          const res = await fetch(`/api/inspections/${inspection.id}/report-pdf`, {
+            method: 'POST',
+            credentials: 'include',
+          })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok) {
+            window.alert(
+              data.details || data.error || `Could not generate PDF for ${inspection.id} (${res.status})`
+            )
+            continue
+          }
+          pdfUrl = String(data.url || '').trim()
+        }
+        if (!pdfUrl) continue
         const a = document.createElement('a')
         a.href = pdfUrl
         a.target = '_blank'
         a.rel = 'noopener noreferrer'
         a.download = `inspection-${inspection.id}.pdf`
         document.body.appendChild(a)
-        setTimeout(() => {
-          a.click()
-          document.body.removeChild(a)
-        }, index * 100)
-      })
-
-      if (rowsWithPdf.length < selectedRows.length) {
-        alert('Some selected inspections have no PDF yet and were skipped.')
+        await new Promise((r) => setTimeout(r, index * 120))
+        a.click()
+        document.body.removeChild(a)
       }
+
+      await loadDashboardData()
     } catch (error) {
       console.error('Error downloading inspection PDF(s):', error)
       alert(error?.message || 'Failed to download selected inspection PDF(s)')
@@ -638,53 +646,14 @@ export default function DashboardHome() {
                     {inspection.grading || '-'}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                    {(() => {
-                      const reportUrl = inspection.full_pdf_url || inspection.pdf_url
-                      if (reportUrl) {
-                        const fileName = `inspection-${inspection.id}.pdf`
-                        return (
-                          <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
-                            <a
-                              href={reportUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="View saved full PDF"
-                              style={{
-                                color: photobook.link,
-                                textDecoration: 'none',
-                                fontSize: '1.25rem',
-                              }}
-                            >
-                              👁️
-                            </a>
-                            <a
-                              href={reportUrl}
-                              download={fileName}
-                              title="Download saved full PDF"
-                              style={{
-                                color: photobook.link,
-                                textDecoration: 'none',
-                                fontSize: '0.8125rem',
-                                fontWeight: 600,
-                              }}
-                            >
-                              ⬇
-                            </a>
-                          </span>
-                        )
-                      }
-                      if (inspection.pdf_generation_error) {
-                        return (
-                          <span
-                            title={String(inspection.pdf_generation_error)}
-                            style={{ color: '#d97706', fontSize: '1.1rem', cursor: 'help' }}
-                          >
-                            ⚠️
-                          </span>
-                        )
-                      }
-                      return <span style={{ color: '#9ca3af' }}>-</span>
-                    })()}
+                    <InspectionFullPdfControls
+                      inspectionId={inspection.id}
+                      savedPdfUrl={inspection.full_pdf_url || inspection.pdf_url}
+                      pdfGenerationError={inspection.pdf_generation_error}
+                      onAfterGenerate={loadDashboardData}
+                      variant="icons"
+                      linkStyle={{ color: photobook.link }}
+                    />
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                     <input
