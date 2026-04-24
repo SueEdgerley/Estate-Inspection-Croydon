@@ -287,16 +287,23 @@ export async function POST(request, { params }) {
               try {
                 const team = await formatAssignedTeamLabel(sql, actionRecipient)
                 const detail = [comment, description].filter(Boolean).join('\n\n').slice(0, 2500)
+                const issueTypeLabel = String(category || 'issue').replace(/_/g, ' ')
                 const pdfR = await tryGenerateAndStoreIssueJobCardPdf(sql, {
                   actionId,
                   inspectionId: id,
                   inspectionType: inspectionLive.template_name || 'Inspection',
                   blockEstate: estateBlockLine || '—',
                   location: estateBlockLine || '—',
+                  exactLocation: estateBlockLine || '—',
                   dateRaised: formatDateGb(completedAt),
+                  dateSent: formatDateGb(completedAt),
                   issueTitle: title,
+                  issueType: issueTypeLabel,
                   issueDetail: detail,
+                  priority: priorityVal ? String(priorityVal).replace(/_/g, ' ') : 'As assessed',
                   assignedTeam: team,
+                  targetCompletionDate: 'TBC',
+                  jobNumber: 'Pending assignment',
                   status: 'Open',
                   photoUrls: photoUrlsArr,
                 })
@@ -392,16 +399,23 @@ export async function POST(request, { params }) {
               try {
                 const teamG = await formatAssignedTeamLabel(sql, actionRecipient)
                 const detailG = [comment, description, `Grade: ${answerLabel}`].filter(Boolean).join('\n\n').slice(0, 2500)
+                const issueTypeGraded = String(category || 'issue').replace(/_/g, ' ')
                 const pdfG = await tryGenerateAndStoreIssueJobCardPdf(sql, {
                   actionId,
                   inspectionId: id,
                   inspectionType: inspectionLive.template_name || 'Inspection',
                   blockEstate: estateBlockLine || '—',
                   location: estateBlockLine || '—',
+                  exactLocation: estateBlockLine || '—',
                   dateRaised: formatDateGb(completedAt),
+                  dateSent: formatDateGb(completedAt),
                   issueTitle: title,
+                  issueType: `${issueTypeGraded} (grade ${answerLabel})`,
                   issueDetail: detailG,
+                  priority: priorityVal ? String(priorityVal).replace(/_/g, ' ') : `Grade ${answerLabel}`,
                   assignedTeam: teamG,
+                  targetCompletionDate: 'TBC',
+                  jobNumber: 'Pending assignment',
                   status: 'Open',
                   photoUrls: photoUrlsArr,
                 })
