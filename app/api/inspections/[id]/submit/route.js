@@ -19,17 +19,12 @@ import { findSectionCostCodeAnswer } from '@/lib/caretaker-section-cost-code'
 import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
 import { resolveIssueRoutingRecipient } from '@/lib/resolve-issue-routing'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
-import { buildInspectionReportPdf } from '../../../../../lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '../../../../../lib/blob/uploadPdf'
 import { sendEmails } from '@/lib/email-sender'
-import {
-  applyNeighbourhoodVoiceTemplatePatch,
-  isNeighbourhoodVoiceQuestionRenderable,
-} from '@/lib/neighbourhood-voice-template-patch'
+import { applyNeighbourhoodVoiceTemplatePatch } from '@/lib/neighbourhood-voice-template-patch'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
 import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-submit-actions'
-import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
@@ -462,119 +457,11 @@ export async function POST(request, { params }) {
       )
     }
 
-    const submitUrl = new URL(request.url)
-    const forceRegenerateFullPdf =
-      submitUrl.searchParams.get('regenerateFullPdf') === '1' ||
-      submitUrl.searchParams.get('forceFullPdf') === '1'
-
-    let fullPdfUrl = null
+    // Full inspection report PDF is generated on demand (Home / report-pdf API), not on submit.
+    const fullPdfUrl = String(inspectionLive.full_pdf_url ?? inspectionLive.pdf_url ?? '').trim() || null
     let posterPdfUrl = inspectionLive.poster_pdf_url || null
     let pdfError = null
     try {
-      const existingFullPdf = String(inspectionLive.full_pdf_url ?? '').trim()
-      const skipFullPdf = Boolean(existingFullPdf) && !forceRegenerateFullPdf
-
-      if (!skipFullPdf) {
-        const answerByQuestionId = {}
-        for (const row of answersResult.rows) {
-          answerByQuestionId[row.question_id] =
-            row.answer_value ||
-            row.answer_text ||
-            (row.answer_boolean != null ? (row.answer_boolean ? 'Yes' : 'No') : row.answer_number) ||
-            ''
-        }
-
-        const photosResult = await sql`
-          SELECT question_id, blob_url, filename
-          FROM inspection_photos
-          WHERE inspection_id = ${id}
-        `
-        const photosByQuestionId = {}
-        for (const p of photosResult.rows) {
-          if (!p.question_id || !p.blob_url) continue
-          if (!photosByQuestionId[p.question_id]) photosByQuestionId[p.question_id] = []
-          photosByQuestionId[p.question_id].push({
-            url: p.blob_url,
-            caption: p.filename || undefined,
-            linkedQuestionId: p.question_id,
-          })
-        }
-
-        const openActionQuestionIds = new Set(
-          allActions.map((a) => a.question_id).filter(Boolean)
-        )
-        let pdfVersion = inspectionLive.template_version || {}
-        if (typeof pdfVersion === 'string') {
-          try {
-            pdfVersion = JSON.parse(pdfVersion)
-          } catch {
-            pdfVersion = {}
-          }
-        }
-        if (pdfVersion && typeof pdfVersion === 'object') {
-          applyGroundsMaintenanceTemplateToSnapshot(pdfVersion)
-          applyNeighbourhoodVoiceTemplatePatch(pdfVersion)
-        }
-        const sections = Array.isArray(pdfVersion.sections) ? pdfVersion.sections : []
-        const pdfSections = []
-        const pdfPhotos = []
-
-        for (const section of sections) {
-          const sectionQuestions = []
-          for (const question of section.questions || []) {
-            if (question.nv_hidden) continue
-            if (!isNeighbourhoodVoiceQuestionRenderable(question)) continue
-            const qid = question.id
-            const answerVal = answerByQuestionId[qid] ?? ''
-            const answerRow = answersResult.rows.find((r) => r.question_id === qid)
-            const unpacked = unpackNvWizardNotes(answerRow?.notes)
-            const comment =
-              (unpacked.structured && typeof unpacked.structured.comment === 'string'
-                ? unpacked.structured.comment
-                : '') || unpacked.plainComment || ''
-
-            sectionQuestions.push({
-              id: qid,
-              text: question.resident_wording || question.question_text || question.label || '',
-              answer: String(answerVal),
-              comment: comment || undefined,
-              grade: question.grading_scheme_name ? String(answerVal) : undefined,
-              actionCreated: openActionQuestionIds.has(qid),
-            })
-
-            const questionPhotos = photosByQuestionId[qid] || []
-            for (const qp of questionPhotos) pdfPhotos.push(qp)
-          }
-          if (sectionQuestions.length > 0) {
-            pdfSections.push({
-              title: section.title || section.name || 'Section',
-              questions: sectionQuestions,
-            })
-          }
-        }
-
-        const fullPdfBytes = await buildInspectionReportPdf({
-          inspectionId: id,
-          templateName: inspectionLive.template_name || pdfVersion.name || 'Template',
-          blockName:
-            estateBlockLine ||
-            inspectionLive.title ||
-            inspectionLive.location_label ||
-            'Block',
-          completedAt: inspectionLive.submitted_at || new Date().toISOString(),
-          officerName: inspectionLive.inspector_name || 'Officer',
-          sections: pdfSections,
-          photos: pdfPhotos,
-        })
-        fullPdfUrl = await uploadInspectionPdfToBlob({
-          inspectionId: id,
-          pdfBytes: fullPdfBytes,
-          kind: 'report',
-        })
-      } else {
-        fullPdfUrl = existingFullPdf
-      }
-
       if (allActions.length > 0) {
         try {
           const posterPdfBytes = await generatePosterPdfBuffer(inspectionLive, allActions)
@@ -584,21 +471,21 @@ export async function POST(request, { params }) {
             kind: 'poster',
           })
         } catch (posterErr) {
-          console.error('[inspections/submit] poster PDF failed (full report still saved):', posterErr)
+          console.error('[inspections/submit] poster PDF failed:', posterErr)
+          pdfError = posterErr?.message || String(posterErr)
         }
       }
 
+      const truncatedErr = pdfError && pdfError.length > 2000 ? pdfError.slice(0, 2000) : pdfError
       await sql`
         UPDATE inspections
-        SET pdf_url = ${fullPdfUrl},
-            full_pdf_url = ${fullPdfUrl},
-            poster_pdf_url = ${posterPdfUrl},
-            pdf_generation_error = NULL
+        SET poster_pdf_url = COALESCE(${posterPdfUrl}, poster_pdf_url),
+            pdf_generation_error = ${truncatedErr}
         WHERE id = ${id}
       `
     } catch (pdfErr) {
       pdfError = pdfErr?.message || String(pdfErr)
-      console.error('[inspections/submit] PDF generation failed:', pdfError)
+      console.error('[inspections/submit] poster PDF update failed:', pdfError)
       const truncated = pdfError.length > 2000 ? pdfError.slice(0, 2000) : pdfError
       await sql`
         UPDATE inspections

@@ -5,7 +5,6 @@ import { createHash } from 'crypto'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
-import { buildInspectionReportPdf } from '@/lib/pdf/buildInspectionReportPdf'
 import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
@@ -798,77 +797,10 @@ export async function POST(request) {
       }
     }
 
-    let fullPdfUrl = null
+    const fullPdfUrl = null
     let posterPdfUrl = null
     let pdfErrorMessage = null
     try {
-      const pdfSections = []
-      const pdfPhotos = []
-
-      for (const section of template.sections || []) {
-        const sectionQuestions = []
-
-        for (const question of section.questions || []) {
-          const answer = answers[question.id]
-          if (answer === undefined || answer === null) continue
-
-          const extras = answer_extras[question.id] || {}
-          const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
-
-          const photoUrlsArr = Array.isArray(extras.photo_urls)
-            ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
-            : Array.isArray(extras.photoUrls)
-              ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
-              : []
-          const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
-          const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
-
-          allPhotoUrls.forEach((url) => {
-            pdfPhotos.push({
-              url,
-              linkedQuestionId: question.id,
-              caption: comment || undefined,
-            })
-          })
-
-          const isNo = String(answer).toLowerCase() === 'no'
-          const actionCreated = isNo && question.create_action_on_no
-
-          sectionQuestions.push({
-            id: question.id,
-            text: question.question_text || question.label || '',
-            answer: String(answer),
-            comment: comment || undefined,
-            grade: question.grading_scheme_name ? String(answer) : undefined,
-            actionCreated,
-          })
-        }
-
-        if (sectionQuestions.length > 0) {
-          pdfSections.push({
-            title: section.title || section.name || 'Section',
-            questions: sectionQuestions,
-          })
-        }
-      }
-
-      const pdfData = {
-        inspectionId,
-        templateName: template.name || 'Template',
-        blockName: (typeof title === 'string' && title.trim()) || location?.trim() || 'Block',
-        completedAt: new Date().toISOString(),
-        officerName: inspectorName || 'Officer',
-        sections: pdfSections,
-        photos: pdfPhotos,
-      }
-
-      const fullPdfBytes = await buildInspectionReportPdf(pdfData)
-      fullPdfUrl = await uploadInspectionPdfToBlob({
-        inspectionId,
-        pdfBytes: fullPdfBytes,
-        kind: 'report',
-      })
-
       const inspectionForPoster = {
         id: inspectionId,
         title: displayTitle,
@@ -876,21 +808,24 @@ export async function POST(request) {
         submitted_at: new Date(),
         inspector_name: inspectorName || '',
       }
-      const posterPdfBytes = await generatePosterPdfBuffer(inspectionForPoster, actionsForPoster)
-      posterPdfUrl = await uploadInspectionPdfToBlob({
-        inspectionId,
-        pdfBytes: posterPdfBytes,
-        kind: 'poster',
-      })
+      if (actionsForPoster.length > 0) {
+        const posterPdfBytes = await generatePosterPdfBuffer(inspectionForPoster, actionsForPoster)
+        posterPdfUrl = await uploadInspectionPdfToBlob({
+          inspectionId,
+          pdfBytes: posterPdfBytes,
+          kind: 'poster',
+        })
+      }
 
       await sql`
         UPDATE inspections 
-        SET pdf_url = ${fullPdfUrl}, full_pdf_url = ${fullPdfUrl}, poster_pdf_url = ${posterPdfUrl}
+        SET poster_pdf_url = COALESCE(${posterPdfUrl}, poster_pdf_url),
+            pdf_generation_error = ${pdfErrorMessage}
         WHERE id = ${inspectionId}
       `
     } catch (pdfErr) {
       pdfErrorMessage = pdfErr?.message || String(pdfErr)
-      console.error('[Inspections] Error generating PDFs:', pdfErr)
+      console.error('[Inspections] Error generating poster PDF:', pdfErr)
       try {
         const truncated =
           pdfErrorMessage.length > 2000 ? pdfErrorMessage.slice(0, 2000) : pdfErrorMessage
