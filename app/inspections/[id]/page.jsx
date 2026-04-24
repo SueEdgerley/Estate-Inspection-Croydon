@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { GeneratePosterButton } from '@/app/components/GeneratePosterButton'
+import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 
 export default function InspectionDetail() {
   const params = useParams()
@@ -64,6 +65,17 @@ export default function InspectionDetail() {
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  const reloadInspection = async () => {
+    if (!id) return
+    try {
+      const response = await fetch(`/api/inspections/${id}`, { credentials: 'include' })
+      const data = await response.json().catch(() => ({}))
+      if (response.ok) setInspection(data)
+    } catch (e) {
+      console.error('reloadInspection', e)
+    }
   }
 
   if (loading) {
@@ -201,48 +213,19 @@ export default function InspectionDetail() {
         </h2>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {id && <GeneratePosterButton inspectionId={id} />}
-          {(inspection.full_pdf_url || inspection.pdf_url) && (
-            <>
-              <a
-                href={inspection.full_pdf_url || inspection.pdf_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-block',
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  textDecoration: 'none',
-                  borderRadius: '0.5rem',
-                  fontWeight: '500',
-                  marginRight: 8,
-                }}
-              >
-                View full PDF
-              </a>
-              <a
-                href={inspection.full_pdf_url || inspection.pdf_url}
-                download={`inspection-${inspection.id}.pdf`}
-                style={{
-                  display: 'inline-block',
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#1d4ed8',
-                  color: 'white',
-                  textDecoration: 'none',
-                  borderRadius: '0.5rem',
-                  fontWeight: '500',
-                }}
-              >
-                Download full PDF
-              </a>
-            </>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <InspectionFullPdfControls
+              inspectionId={inspection.id}
+              savedPdfUrl={inspection.full_pdf_url || inspection.pdf_url}
+              pdfGenerationError={inspection.pdf_generation_error}
+              onAfterGenerate={reloadInspection}
+            />
+          </div>
+          {inspection.pdf_generation_error && !(inspection.full_pdf_url || inspection.pdf_url) && (
+            <p style={{ color: '#b45309', fontSize: '0.875rem', marginTop: 8 }}>
+              Last PDF error: {String(inspection.pdf_generation_error)}
+            </p>
           )}
-          {inspection.pdf_generation_error &&
-            !(inspection.full_pdf_url || inspection.pdf_url) && (
-              <p style={{ color: '#b45309', fontSize: '0.875rem', marginTop: 8 }}>
-                Full PDF could not be generated: {String(inspection.pdf_generation_error)}
-              </p>
-            )}
         </div>
       </div>
     </div>
