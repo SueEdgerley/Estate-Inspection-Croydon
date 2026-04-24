@@ -572,8 +572,7 @@ export default function SettingsPage() {
       <section id="issue-recipients" style={card}>
         <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Issue Recipients</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
-          Named mailboxes for inspection issue routing and form recipient dropdowns. Stored in Postgres{' '}
-          <code style={{ fontSize: '0.8em' }}>people</code> with <code style={{ fontSize: '0.8em' }}>category = issue_recipient</code>.
+          Named mailboxes for inspection issue routing and recipient options on forms.
         </p>
 
         <form onSubmit={addRecipient} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>

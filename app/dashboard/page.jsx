@@ -75,7 +75,10 @@ export default function DashboardHome() {
 
       if (!res.ok) {
         if (res.status === 500 && data?.code === 'DB_NOT_MIGRATED') {
-          setError(data?.message || data?.error || 'DB not migrated. Run: prisma migrate deploy')
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[dashboard] DB_NOT_MIGRATED', data?.message || data?.error)
+          }
+          setError('This service is temporarily unavailable. Please try again later or contact support.')
           setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
           setInspections([])
           setLoading(false)

@@ -407,29 +407,6 @@ export default function EstateWalkaboutNewInspectionForm({
             Structured walkabout sections. Ratings and Y/N answers do not create actions by themselves. Use{' '}
             <strong>Additional items &amp; action plan</strong> at the end to log follow-up actions when needed.
           </p>
-          <p
-            style={{
-              margin: '14px 0 0',
-              padding: '12px 14px',
-              background: '#ecfdf5',
-              border: '1px solid #a7f3d0',
-              borderRadius: 10,
-              fontSize: 14,
-              color: '#065f46',
-              lineHeight: 1.5,
-            }}
-          >
-            <strong>Testing a change?</strong> This page is the dedicated Walkabout <em>create</em> form. After you submit, you
-            land on a read-only summary — not this screen. <strong>Old drafts</strong> keep the template snapshot from when
-            they were first saved. For a <strong>fresh snapshot</strong>, start a <strong>new</strong> inspection, e.g. open{' '}
-            <Link href="/inspections/new?walkabout=1" style={{ color: EW.accent, fontWeight: 600 }}>
-              /inspections/new?walkabout=1
-            </Link>
-            <span style={{ color: EW.muted, fontSize: 13, display: 'block', marginTop: 6 }}>
-              Form bundle marker: {ESTATE_WALKABOUT_TEMPLATE_ID} (if this does not match your deploy, the browser or server
-              is still serving an old build).
-            </span>
-          </p>
         </header>
 
         <form onSubmit={handleSubmit}>
@@ -451,7 +428,7 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>Location</h2>
             <p style={{ margin: '0 0 12px', fontSize: 14, color: EW.muted }}>
-              Blocks (Admin → Blocks) are the location list for now. Estates are not used yet.
+              Optional: choose a location from the list, or leave blank and use the location note below.
             </p>
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle}>Location (optional)</label>
@@ -467,6 +444,11 @@ export default function EstateWalkaboutNewInspectionForm({
                   </option>
                 ))}
               </select>
+              {locationBlocks.length === 0 && (
+                <p style={{ marginTop: 8, fontSize: 13, color: EW.muted }}>
+                  No locations in the list yet. Contact your administrator if you expected to see blocks here.
+                </p>
+              )}
               {validationErrors.block_id && <p style={errStyle}>{validationErrors.block_id}</p>}
             </div>
             <div style={{ marginBottom: 16 }}>

@@ -49,12 +49,6 @@ export default function SectionQuestions({
     return getVisibleQuestions(questions, localAnswers)
   }, [estateInspectionForm, questions, localAnswers])
 
-  useEffect(() => {
-    if (!estateInspectionForm || !section) return
-    const title = section.name || section.title || sectionId
-    console.debug('[estate-section-render]', title, 'questions.length', questions.length, 'visible', visibleQuestions.length)
-  }, [estateInspectionForm, section, sectionId, questions, visibleQuestions.length])
-
   if (questions.length === 0) {
     return <div style={{ padding: '1rem', color: '#6b7280' }}>No questions found for this section.</div>
   }

@@ -929,7 +929,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const effectiveLockedTemplateId = walkaboutFromUrl
     ? ESTATE_WALKABOUT_TEMPLATE_ID
     : templateIdFromUrl
-  const debugTemplateVersion = searchParams?.get('debug') === '1'
+  const debugTemplateVersion =
+    process.env.NODE_ENV === 'development' && searchParams?.get('debug') === '1'
   const isTemplateLocked = !!effectiveLockedTemplateId
   const [apiPayload, setApiPayload] = useState({ templates: [] })
   const blocks = Array.isArray(initialBlocks) ? initialBlocks : []
@@ -960,6 +961,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [lastDraftPostResponse, setLastDraftPostResponse] = useState(null)
   const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
   const [peopleOptions, setPeopleOptions] = useState([])
+  const [showEstateFormGuidance, setShowEstateFormGuidance] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -1061,11 +1063,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           const body = await templatesRes.json().catch(() => ({}))
           const status = templatesRes.status
           const isAirtableAuth = status === 401 || body?.diagnostics?.airtable_status_code === 401
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[NewInspectionForm] /api/templates failed', status, body)
+          }
           if (isAirtableAuth) {
-            throw new Error('Template source is returning Airtable 401 via /api/templates. This is a server-side Airtable auth/config error (not phone credentials).')
+            throw new Error('Templates could not be loaded. Please contact support if this continues.')
           }
           throw new Error(
-            templatesRes.status === 503 ? 'Airtable not configured' : 'Failed to load templates'
+            templatesRes.status === 503
+              ? 'Templates are not available yet. Please try again later.'
+              : 'Templates could not be loaded. Please try again.'
           )
         }
 
@@ -1094,7 +1101,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           }
         }
       } catch (err) {
-        if (!cancelled) setLoadError(err.message)
+        if (!cancelled) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[NewInspectionForm] load templates', err)
+          }
+          setLoadError(err instanceof Error ? err.message : 'Templates could not be loaded.')
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -1369,7 +1381,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       if (inspectionId) {
         router.push(`/inspections/${inspectionId}`)
       } else {
-        setSubmitError('Save reported success but no inspection ID was returned. Check the inspections list.')
+        setSubmitError('Save may have succeeded. Open the inspections list to confirm, or try again.')
       }
     } catch (err) {
       setSubmitError(err.message || 'Something went wrong')
@@ -1430,7 +1442,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           New Inspection
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
-          Choose estate (required), optional block, location note, then complete the form
+          Optional location, location note if needed, then complete the questions below.
         </p>
       </div>
 
@@ -1477,8 +1489,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             Location
           </label>
           <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-            Blocks list is the current location data (Admin → Blocks). Optional — add a free-text location note
-            below if needed. Estates are not used in this form yet.
+            Optional: choose a location from the list, or leave blank and use the location note below.
           </p>
           <select
             id="postgres_block_id"
@@ -1507,7 +1518,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </select>
           {locationBlocks.length === 0 && (
             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
-              No active blocks in Postgres. Add them under Admin → Blocks.
+              No locations in the list yet. Contact your administrator if you expected to see blocks here.
             </p>
           )}
           {validationErrors.block_id && (
@@ -1634,11 +1645,30 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               Sections &amp; questions
             </h2>
             {estateInspectionForm ? (
-              <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
-                Sections and questions follow your Airtable template (numbers, titles, and order). Grading is A–D–NA.
-                Photo upload appears only when the template marks it (Include Photo checkbox or photo / “required
-                when” fields in Airtable).
-              </p>
+              <div style={{ margin: '-0.5rem 0 1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowEstateFormGuidance((v) => !v)}
+                  style={{
+                    padding: '0.25rem 0.65rem',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: '#2563eb',
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showEstateFormGuidance ? 'Hide guidance' : 'View guidance'}
+                </button>
+                {showEstateFormGuidance ? (
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
+                    Sections follow your inspection template (order and titles). Grading is A–D–NA. Photo upload appears when
+                    the template is set to require or allow a photo for that question.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             {(isNVTemplate(selectedTemplate)
               ? inspectionRenderSections.filter((s) => s.id !== 'nv-sec-remaining')

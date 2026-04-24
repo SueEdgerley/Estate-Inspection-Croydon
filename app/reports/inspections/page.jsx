@@ -45,6 +45,7 @@ export default function InspectionsReportPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
+  const [showReportHelp, setShowReportHelp] = useState(false)
 
   useEffect(() => {
     if (!isSignedIn) return
@@ -206,9 +207,11 @@ export default function InspectionsReportPage() {
   return (
     <>
       <style>{`
+        .report-print-only { display: none; }
         @media print {
           .no-print { display: none !important; }
           .print-root { padding: 0 !important; max-width: 100% !important; }
+          .report-print-only { display: block !important; margin-bottom: 1rem; }
         }
       `}</style>
 
@@ -236,6 +239,12 @@ export default function InspectionsReportPage() {
 
       <SignedIn>
         <div className="print-root" style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div className="report-print-only" style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '0.75rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700, color: '#111827' }}>Inspections report</h1>
+            <p style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+              Printed {new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+            </p>
+          </div>
           <div className="no-print" style={{ marginBottom: '1.25rem' }}>
             <Link href="/reports" style={{ color: photobook.link, fontSize: '0.875rem' }}>
               ← Reports
@@ -245,10 +254,34 @@ export default function InspectionsReportPage() {
           <h1 style={{ margin: '0 0 0.35rem 0', fontSize: '1.75rem', color: photobook.heading }}>
             Inspections reporting
           </h1>
-          <p style={{ margin: '0 0 1.25rem 0', color: photobook.primaryMuted, fontSize: '0.9375rem' }}>
-            Counts and breakdowns from Neon (submitted and draft inspections). Set{' '}
-            <strong>estates.area</strong> in admin or import to enable the Area filter.
+          <p style={{ margin: '0 0 0.5rem 0', color: photobook.primaryMuted, fontSize: '0.9375rem' }}>
+            Counts and breakdowns for submitted and draft inspections. Use <strong>Printable / Save as PDF</strong> for a copy
+            from your browser.
           </p>
+          <div className="no-print" style={{ margin: '0 0 1.25rem' }}>
+            <button
+              type="button"
+              onClick={() => setShowReportHelp((v) => !v)}
+              style={{
+                padding: '0.25rem 0.6rem',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                color: photobook.link,
+                background: 'transparent',
+                border: `1px solid ${photobook.softBorder}`,
+                borderRadius: 6,
+                cursor: 'pointer',
+              }}
+            >
+              {showReportHelp ? 'Hide help' : 'Help'}
+            </button>
+            {showReportHelp ? (
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.8125rem', color: '#6b7280', maxWidth: '40rem', lineHeight: 1.5 }}>
+                If the Area filter has no values, estate areas may need to be completed in estate settings. CSV export includes
+                more rows than the on-screen sample table.
+              </p>
+            ) : null}
+          </div>
 
           {optionsError && (
             <div

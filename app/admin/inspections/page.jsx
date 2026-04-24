@@ -24,7 +24,7 @@ export default function AdminInspectionsPage() {
 
   return (
     <div>
-      <h1>Latest inspections (Postgres)</h1>
+      <h1>Latest inspections</h1>
       <p>Use this to confirm saves. Each submit returns <strong>201</strong> with <strong>inspectionId</strong> — match the id below to trace.</p>
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '14px' }}>
         <thead>
@@ -68,7 +68,7 @@ export default function AdminInspectionsPage() {
           })}
         </tbody>
       </table>
-      {inspections.length === 0 && <p>No inspections in Postgres yet. Submit one from the app and check the response for <code>201</code> and <code>inspectionId</code>.</p>}
+      {inspections.length === 0 && <p>No inspections recorded yet. Create one from the app and refresh this page.</p>}
     </div>
   )
 }

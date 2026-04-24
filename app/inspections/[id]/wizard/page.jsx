@@ -134,7 +134,8 @@ export default function InspectionWizardPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const showTemplateDebug = searchParams.get('debug') === '1'
+  const showTemplateDebug =
+    process.env.NODE_ENV === 'development' && searchParams.get('debug') === '1'
   const { user } = useUser()
   const prefillResidentName = useMemo(() => {
     if (!user) return ''

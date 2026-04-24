@@ -149,7 +149,7 @@ export default function AdHocInspectionForm({ initialBlocks = [] }) {
               Location (optional)
             </label>
             <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-              Active blocks from Admin → Blocks. Estates are not used here yet.
+              Optional: choose a location from the list, or leave blank and describe the place in the fields below.
             </p>
             <select
               id="ad-hoc-block"
@@ -174,7 +174,7 @@ export default function AdHocInspectionForm({ initialBlocks = [] }) {
             </select>
             {locationBlocks.length === 0 && (
               <p style={{ marginTop: '0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-                No active blocks. Add them under Admin → Blocks.
+                No locations in the list yet. Contact your administrator if you expected to see blocks here.
               </p>
             )}
           </div>

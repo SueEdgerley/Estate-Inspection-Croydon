@@ -169,7 +169,9 @@ export default function QuestionRenderer({
         }
         setRecipientOptions(mapped)
       } catch (e) {
-        console.warn('[QuestionRenderer] loadPeople error:', e)
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[QuestionRenderer] loadPeople error:', e)
+        }
       }
     }
     loadPeople()
@@ -332,7 +334,7 @@ export default function QuestionRenderer({
               .split(/\r?\n|,/)
               .map((p) => p.trim())
               .filter(Boolean)
-        // Recipient selectors use GET /api/people (Neon); ignore static Airtable options.
+        // Recipient fields: options loaded from the server; ignore static template options.
         const options = isRecipientField
           ? recipientOptions
           : optionsFromQuestion.length > 0

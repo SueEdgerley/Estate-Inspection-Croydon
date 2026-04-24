@@ -40,7 +40,7 @@ export default function AnalyticsPage() {
   const [authCode, setAuthCode] = useState(null)
   const [message, setMessage] = useState(null)
   const [payload, setPayload] = useState(null)
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [showAnalyticsHelp, setShowAnalyticsHelp] = useState(false)
 
   const [preset, setPreset] = useState('quarter')
   const [quarter, setQuarter] = useState(defQy.q)
@@ -91,53 +91,6 @@ export default function AnalyticsPage() {
     gradeArea,
     gradeTemplateName,
   ])
-
-  const downloadReportPdf = async () => {
-    setPdfLoading(true)
-    try {
-      const qs = buildQuery()
-      const res = await fetch(
-        `/api/analytics/report${qs ? `?${qs}` : ''}`,
-        { credentials: 'include', cache: 'no-store' }
-      )
-      const contentType = (res.headers.get('content-type') || '').toLowerCase()
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        alert(
-          typeof j?.message === 'string' && j.message
-            ? j.message
-            : j?.details
-              ? `${j?.error || 'Error'}: ${j.details}`
-              : j?.error || 'Could not generate the PDF report.'
-        )
-        return
-      }
-      if (!contentType.includes('application/pdf')) {
-        const j = await res.json().catch(() => ({}))
-        alert(
-          typeof j?.message === 'string' && j.message
-            ? j.message
-            : j?.details
-              ? `${j?.error || 'Error'}: ${j.details}`
-              : j?.error || 'Server did not return a PDF (check you are signed in and have analytics access).'
-        )
-        return
-      }
-      const blob = await res.blob()
-      const u = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = u
-      a.download = `analytics-report-${new Date().toISOString().slice(0, 10)}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(u)
-    } catch (e) {
-      alert(e?.message || 'Download failed')
-    } finally {
-      setPdfLoading(false)
-    }
-  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -236,9 +189,11 @@ export default function AnalyticsPage() {
   return (
     <>
       <style>{`
+        .analytics-print-only { display: none; }
         @media print {
           .analytics-no-print { display: none !important; }
-          .analytics-print-root { padding: 0 !important; }
+          .analytics-print-root { padding: 0 !important; max-width: 100% !important; }
+          .analytics-print-only { display: block !important; margin-bottom: 1rem; }
         }
       `}</style>
       <SignedOut>
@@ -275,6 +230,14 @@ export default function AnalyticsPage() {
 
       <SignedIn>
         <div className="analytics-print-root" style={{ maxWidth: '56rem', margin: '0 auto', padding: '0 1rem 2.5rem' }}>
+          <div className="analytics-print-only" style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '0.75rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700, color: '#111827' }}>
+              Estate inspection analytics (manager summary)
+            </h1>
+            <p style={{ margin: '0.35rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+              Printed {new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+            </p>
+          </div>
           <header
             className="analytics-no-print"
             style={{
@@ -291,29 +254,28 @@ export default function AnalyticsPage() {
                 Analytics
               </h1>
               <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.9375rem', lineHeight: 1.5 }}>
-                Manager and HOS views: caretaker throughput, issue hotspots, C/D graded answers, and trends (Neon).
+                Manager and HOS: caretaker throughput, issue hotspots, C/D graded answers, and trends.
               </p>
             </div>
             {!loading && !authCode && overview != null && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', maxWidth: '20rem' }}>
                 <button
                   type="button"
-                  onClick={downloadReportPdf}
-                  disabled={pdfLoading}
+                  onClick={() => window.print()}
                   style={{
                     padding: '0.75rem 1.25rem',
                     minHeight: 48,
                     fontSize: '1rem',
                     fontWeight: 600,
                     color: '#fff',
-                    backgroundColor: pdfLoading ? '#9ca3af' : photobook.primary,
+                    backgroundColor: photobook.primary,
                     border: 'none',
                     borderRadius: '0.5rem',
-                    cursor: pdfLoading ? 'not-allowed' : 'pointer',
-                    boxShadow: pdfLoading ? 'none' : '0 2px 8px rgba(192, 38, 211, 0.25)',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(192, 38, 211, 0.25)',
                   }}
                 >
-                  {pdfLoading ? 'Preparing PDF…' : 'Download PDF report'}
+                  Print / save as PDF
                 </button>
                 <button
                   type="button"
@@ -332,19 +294,27 @@ export default function AnalyticsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => setShowAnalyticsHelp((v) => !v)}
                   style={{
-                    padding: '0.65rem 1rem',
+                    margin: 0,
+                    padding: '0.25rem 0.55rem',
+                    fontSize: '0.75rem',
                     fontWeight: 600,
-                    color: '#374151',
-                    backgroundColor: '#f3f4f6',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '0.5rem',
+                    color: photobook.primary,
+                    background: '#fff',
+                    border: `1px solid ${photobook.softBorder}`,
+                    borderRadius: 6,
                     cursor: 'pointer',
+                    alignSelf: 'flex-start',
                   }}
                 >
-                  Print / save as PDF
+                  {showAnalyticsHelp ? 'Hide help' : 'Help'}
                 </button>
+                {showAnalyticsHelp ? (
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#6b7280', lineHeight: 1.4 }}>
+                    Use <strong>Print / save as PDF</strong> so your browser produces the file (same as printing a web page).
+                  </p>
+                ) : null}
               </div>
             )}
           </header>

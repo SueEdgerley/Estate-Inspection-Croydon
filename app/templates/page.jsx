@@ -117,10 +117,10 @@ export default function FormsPage() {
       fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store', credentials: 'include' }).then(async (res) => {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
-          const msg = res.status === 503
-            ? 'Airtable not configured'
-            : (body.details || body.error || 'Failed to load forms')
-          throw new Error(msg)
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[Forms]', res.status, body)
+          }
+          throw new Error('Forms could not be loaded. Please try again or contact support.')
         }
         return body
       }),
@@ -142,8 +142,10 @@ export default function FormsPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          const msg = err instanceof Error ? err.message : String(err)
-          setError(msg || 'Failed to load forms')
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[Forms] load failed', err)
+          }
+          setError('Forms could not be loaded. Please try again or contact support.')
         }
       })
       .finally(() => {
@@ -191,20 +193,6 @@ export default function FormsPage() {
           marginBottom: '1rem',
         }}>
           <p style={{ margin: 0, fontWeight: 500 }}>{errText}</p>
-          {errText.toLowerCase().includes('airtable') && (
-            <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
-              In Vercel: Settings → Environment Variables. Set <strong>AIRTABLE_BASE_ID</strong> and <strong>AIRTABLE_API_TOKEN</strong> (or <strong>AIRTABLE_API_KEY</strong>) for <strong>Production</strong>, then redeploy.
-              {' '}
-              <a href="/api/airtable-status" target="_blank" rel="noopener noreferrer" style={{ color: '#dc2626', textDecoration: 'underline' }}>
-                Check what the server sees →
-              </a>
-            </p>
-          )}
-          {!errText.toLowerCase().includes('airtable not configured') && (
-            <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.875rem', color: '#991b1b' }}>
-              Check: correct base ID, token has access to the base, and the base has Airtable tables for forms (often named <strong>Templates</strong>, <strong>Template Sections</strong>, <strong>Template Questions</strong>) or set AIRTABLE_TEMPLATES_TABLE etc. in env.
-            </p>
-          )}
         </div>
       )}
 
