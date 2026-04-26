@@ -8,6 +8,7 @@ import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
 } from '@/lib/estate-walkabout-template'
+import { FORM_VISIT_ROLE_OPTIONS } from '@/lib/form-visit-roles'
 
 const EW = {
   pageBg: '#f1f5f9',
@@ -112,7 +113,6 @@ export default function EstateWalkaboutNewInspectionForm({
   const [answerExtras, setAnswerExtras] = useState({})
   const [checklist, setChecklist] = useState(() => [])
   const [peopleOptions, setPeopleOptions] = useState([])
-  const [roleOptions, setRoleOptions] = useState([])
 
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -135,20 +135,9 @@ export default function EstateWalkaboutNewInspectionForm({
           rows
             .map((p) => ({
               value: p.id != null ? String(p.id) : '',
-              label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
+              label: String(p.name || '').trim() || String(p.id ?? ''),
             }))
             .filter((x) => x.value && x.label)
-        )
-        setRoleOptions(
-          Array.from(
-            new Set(
-              rows
-                .map((p) => String(p.role || '').trim())
-                .filter(Boolean)
-            )
-          )
-            .sort((a, b) => a.localeCompare(b))
-            .map((role) => ({ value: role, label: role }))
         )
       } catch {
         /* ignore */
@@ -513,7 +502,7 @@ export default function EstateWalkaboutNewInspectionForm({
                   style={selectStyle(!!validationErrors.ew_q_role)}
                 >
                   <option value="">— Select… —</option>
-                  {roleOptions.map((role) => (
+                  {FORM_VISIT_ROLE_OPTIONS.map((role) => (
                     <option key={role.value} value={role.value}>
                       {role.label}
                     </option>

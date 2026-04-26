@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { APP_ACCESS_ROLES } from '@/lib/app-access-roles'
 
-const APP_ACCESS_ROLES = ['owner', 'admin', 'caretaker', 'housing_officer', 'resident', 'esm', 'user']
 const STAFF_ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
 
 const card = {
