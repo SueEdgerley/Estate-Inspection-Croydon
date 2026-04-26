@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
+import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -39,12 +40,25 @@ export async function POST(request) {
     const actions = actionsResult.rows
 
     const pdfBuffer = await generatePosterPdfBuffer(inspection, actions)
+    const posterPdfUrl = await uploadInspectionPdfToBlob({
+      inspectionId,
+      pdfBytes: pdfBuffer,
+      kind: 'poster',
+    })
+
+    await sql`
+      UPDATE inspections
+      SET poster_pdf_url = ${posterPdfUrl},
+          pdf_generation_error = NULL
+      WHERE id = ${inspectionId}
+    `
 
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="poster-${inspectionId}.pdf"`,
         'Cache-Control': 'no-store',
+        'X-Poster-Pdf-Url': posterPdfUrl,
       },
     })
   } catch (error) {
