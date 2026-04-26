@@ -41,19 +41,13 @@ export default function SectionQuestions({
     onAnswersChange(newAnswers)
   }
 
-  const caretakerForm =
-    caretakerSections12Structured ||
-    alwaysShowCaretakerComment ||
-    alwaysShowCaretakerCommentPhoto ||
-    alwaysShowCaretakerRecipient
-
-  // Estate and caretaker staff forms: show all Airtable rows; NV uses conditional visibility.
+  // Estate staff form shows every checklist row; other forms use their Airtable visibility rules.
   const visibleQuestions = useMemo(() => {
-    if (estateInspectionForm || caretakerForm) {
+    if (estateInspectionForm) {
       return questions.filter((q) => !q.nv_hidden)
     }
     return getVisibleQuestions(questions, localAnswers)
-  }, [estateInspectionForm, caretakerForm, questions, localAnswers])
+  }, [estateInspectionForm, questions, localAnswers])
 
   if (questions.length === 0) {
     return <div style={{ padding: '1rem', color: '#6b7280' }}>No questions found for this section.</div>

@@ -11,7 +11,6 @@ import {
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
-import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 import {
@@ -203,7 +202,6 @@ export default function InspectionWizardPage() {
           const cloneForDebug = JSON.parse(JSON.stringify(version))
           const beforeSummary = summarizeTemplateSnapshotForDebug(cloneForDebug)
           applyNeighbourhoodVoiceTemplatePatch(version)
-          applyTemplateDisplayPatches(version)
           applyEstateWalkaboutWizardTemplatePatch(version)
           const afterSummary = summarizeTemplateSnapshotForDebug(version)
           if (!cancelled) {
