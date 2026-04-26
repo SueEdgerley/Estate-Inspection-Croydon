@@ -2,8 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Keep sharp on the server filesystem for PDF image resizing.
-  serverExternalPackages: ['sharp'],
+  experimental: {
+    // Keep sharp on the server filesystem for PDF image resizing.
+    serverComponentsExternalPackages: ['sharp'],
+  },
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
   // Inline env at build time (set these in Vercel for deployments)
