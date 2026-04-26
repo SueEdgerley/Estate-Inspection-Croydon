@@ -397,7 +397,7 @@ await fetch(`/api/inspections/${id}/answers`, {
       }}>
         {section && (
           <h2 style={{ margin: '0 0 1.5rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-            {section.name}
+            {section.name || section.title || `Section ${sectionId}`}
           </h2>
         )}
         {section && estateInspectionForm && (section.what_to_look_for || section.help_text) && (

@@ -41,13 +41,19 @@ export default function SectionQuestions({
     onAnswersChange(newAnswers)
   }
 
-  // Estate staff form: show every checklist row; conditional logic is for NV / caretaker flows.
+  const caretakerForm =
+    caretakerSections12Structured ||
+    alwaysShowCaretakerComment ||
+    alwaysShowCaretakerCommentPhoto ||
+    alwaysShowCaretakerRecipient
+
+  // Estate and caretaker staff forms: show all Airtable rows; NV uses conditional visibility.
   const visibleQuestions = useMemo(() => {
-    if (estateInspectionForm) {
+    if (estateInspectionForm || caretakerForm) {
       return questions.filter((q) => !q.nv_hidden)
     }
     return getVisibleQuestions(questions, localAnswers)
-  }, [estateInspectionForm, questions, localAnswers])
+  }, [estateInspectionForm, caretakerForm, questions, localAnswers])
 
   if (questions.length === 0) {
     return <div style={{ padding: '1rem', color: '#6b7280' }}>No questions found for this section.</div>
