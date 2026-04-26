@@ -936,8 +936,9 @@ export async function POST(request) {
 
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = q.action_category || q.category || 'Follow-up'
+        const isIssue = inspectionAnswerTriggersIssue(q, section, answer)
 
-        if (inspectionAnswerTriggersIssue(q, section, answer)) {
+        if (isIssue) {
           try {
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
             await sql`
