@@ -32,6 +32,13 @@ import {
   countQuestionsInTemplate,
   logInspectionQuestionPipeline,
 } from '@/lib/estate-inspection-question-pipeline-diag'
+import {
+  normalizeGradeAnswerToken,
+  normalizeIssueTriggerToken,
+  normalizeYesNoAnswer,
+  parseTriggersIssueAnswerList,
+} from '@/lib/issue-trigger-answer'
+import { getActionTriggerOn } from '@/lib/template-rules'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -78,6 +85,19 @@ function mapSnapshotQuestion(q, qIndex) {
     depends_on_question_id: q.depends_on_question_id ?? null,
     show_when_value: q.show_when_value ?? null,
   }
+}
+
+function inspectionAnswerTriggersIssue(question, section, answer) {
+  const triggers = parseTriggersIssueAnswerList(question)
+  if (triggers && triggers.length > 0) {
+    const token = normalizeIssueTriggerToken(answer) || normalizeGradeAnswerToken(answer)
+    return token ? triggers.includes(token) : false
+  }
+
+  const norm = normalizeYesNoAnswer(answer)
+  const direction = getActionTriggerOn(question, section)
+  if (direction === 'yes') return norm === 'yes' && question.create_action_on_yes !== false
+  return norm === 'no' && question.create_action_on_no !== false
 }
 
 function buildTemplateVersionSnapshot(template) {
@@ -699,12 +719,10 @@ export async function POST(request) {
         const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
         const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
-        const isNo = String(answer).toLowerCase() === 'no'
-        const isIssue = isNo || (String(answer).toLowerCase() === 'yes' && comment)
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = q.action_category || q.category || 'Follow-up'
 
-        if (isNo && q.create_action_on_no) {
+        if (inspectionAnswerTriggersIssue(q, section, answer)) {
           try {
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
             await sql`

@@ -20,6 +20,7 @@ import {
   questionIsStandardInspectionConditionRow,
   questionIsStandardInspectionIssueRow,
   isEstateInspectionFormTemplate,
+  isEstateInspectionFormV2Template,
 } from '@/lib/standard-inspection-form'
 import {
   buildEstateInspectionChecklistQuestionIndexMap,
@@ -1107,6 +1108,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     return undefined
   }, [templates, templateId])
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
+  const estateInspectionFormV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
     if (isEstateInspectionFormTemplate(selectedTemplate)) {
@@ -1116,7 +1118,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   }, [selectedTemplate])
 
   useEffect(() => {
-    if (!estateInspectionForm) return
+    if (!estateInspectionForm || process.env.NODE_ENV !== 'development') return
     for (const section of inspectionRenderSections) {
       console.log(section.title || section.name, (section.questions || []).length)
     }
@@ -1125,12 +1127,14 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const estateChecklistIndexByQid = useMemo(
     () =>
       estateInspectionForm && selectedTemplate
-        ? buildEstateInspectionChecklistQuestionIndexMap({
-            ...selectedTemplate,
-            sections: inspectionRenderSections,
-          })
+        ? estateInspectionFormV2
+          ? new Map()
+          : buildEstateInspectionChecklistQuestionIndexMap({
+              ...selectedTemplate,
+              sections: inspectionRenderSections,
+            })
         : new Map(),
-    [estateInspectionForm, selectedTemplate, inspectionRenderSections]
+    [estateInspectionForm, estateInspectionFormV2, selectedTemplate, inspectionRenderSections]
   )
 
   const liveFormTemplateSummary = useMemo(() => {
