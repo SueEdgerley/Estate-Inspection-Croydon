@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
@@ -59,8 +59,8 @@ const ITEM_YN = [
   ['ew_it_play_areas', 'Have you inspected the play areas?'],
 ]
 
-/** Question ids for answer_extras photo_urls: Section 3 grade only. */
-const PHOTO_EXTRA_IDS = new Set(['ew_os_overall_grade'])
+/** Question ids for answer_extras photo_urls. */
+const PHOTO_EXTRA_IDS = new Set(['ew_os_overall_grade', 'ew_it_bulk_refuse_removal'])
 
 function emptyAnswers() {
   const keys = [
@@ -75,6 +75,8 @@ function emptyAnswers() {
     'ew_os_comments',
     ...ITEM_YN.map(([id]) => id),
     'ew_it_comments',
+    'ew_it_bulk_refuse_exact_location',
+    'ew_it_bulk_refuse_comments',
     'ew_sig_signature',
     'ew_sig_inspection_date',
   ]
@@ -117,6 +119,8 @@ export default function EstateWalkaboutNewInspectionForm({
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
+  const [toastMessage, setToastMessage] = useState('')
+  const toastTimerRef = useRef(null)
 
   const locationBlocks = useMemo(
     () => blocks.filter((b) => b == null || b.active !== false),
@@ -162,6 +166,36 @@ export default function EstateWalkaboutNewInspectionForm({
     setValidationErrors((prev) => {
       const next = { ...prev }
       delete next[id]
+      return next
+    })
+  }
+
+  const showToast = (message) => {
+    setToastMessage(message)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage('')
+      toastTimerRef.current = null
+    }, 4500)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    }
+  }, [])
+
+  const setYesNoNaField = (qid, value) => {
+    setField(qid, value)
+    if (qid !== 'ew_it_bulk_refuse_removal') return
+    if (value === 'Yes') {
+      showToast('An email notification will be sent to Nick Spenceley regarding bulk refuse removal.')
+      return
+    }
+    setAnswerExtras((prev) => {
+      if (!prev.ew_it_bulk_refuse_removal) return prev
+      const next = { ...prev }
+      delete next.ew_it_bulk_refuse_removal
       return next
     })
   }
@@ -320,7 +354,7 @@ export default function EstateWalkaboutNewInspectionForm({
             <button
               key={s}
               type="button"
-              onClick={() => setField(qid, s)}
+              onClick={() => setYesNoNaField(qid, s)}
               style={{
                 padding: '8px 16px',
                 borderRadius: 8,
@@ -336,6 +370,47 @@ export default function EstateWalkaboutNewInspectionForm({
         })}
       </div>
       {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
+      {qid === 'ew_it_bulk_refuse_removal' && answers.ew_it_bulk_refuse_removal === 'Yes' && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 14,
+            border: `1px solid ${EW.border}`,
+            borderRadius: EW.radius,
+            background: '#f8fafc',
+          }}
+        >
+          <p style={{ margin: '0 0 12px', fontSize: 14, color: EW.text, lineHeight: 1.45 }}>
+            Bulk refuse removal email notification will be prepared when this inspection is saved.
+          </p>
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Exact location / block area</label>
+            <input
+              value={answers.ew_it_bulk_refuse_exact_location || ''}
+              onChange={(e) => setField('ew_it_bulk_refuse_exact_location', e.target.value)}
+              style={inputStyle}
+              placeholder="e.g. Bin chamber, rear of block, car park bay"
+            />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Comments for bulk refuse removal</label>
+            <textarea
+              value={answers.ew_it_bulk_refuse_comments || ''}
+              onChange={(e) => setField('ew_it_bulk_refuse_comments', e.target.value)}
+              rows={3}
+              style={{ ...inputStyle, minHeight: 72 }}
+              placeholder="Add details for the removal team"
+            />
+          </div>
+          <PhotoUploadControl
+            id="ew-bulk-refuse-photo"
+            value={getPhotos('ew_it_bulk_refuse_removal')}
+            onChange={(urls) => setPhotos('ew_it_bulk_refuse_removal', urls)}
+            label="Add bulk refuse photo"
+            multiple={true}
+          />
+        </div>
+      )}
     </div>
   )
 
@@ -420,6 +495,28 @@ export default function EstateWalkaboutNewInspectionForm({
         </header>
 
         <form onSubmit={handleSubmit}>
+          {toastMessage && (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                position: 'fixed',
+                top: 16,
+                right: 16,
+                zIndex: 50,
+                maxWidth: 360,
+                padding: '12px 14px',
+                borderRadius: 10,
+                background: '#064e3b',
+                color: '#fff',
+                boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
+                fontSize: 14,
+                lineHeight: 1.45,
+              }}
+            >
+              {toastMessage}
+            </div>
+          )}
           {submitError && (
             <div
               style={{

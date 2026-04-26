@@ -264,7 +264,8 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
   const responsiblePerson = await getActivePersonName(sqlFn, answers?.ew_q_responsible)
   const role = String(answers?.ew_q_role || '').trim()
   const estateArea = String(answers?.ew_q_area || estateName || '').trim()
-  const comments = String(answers?.ew_it_comments || '').trim()
+  const exactLocation = String(answers?.ew_it_bulk_refuse_exact_location || locationLine || estateArea || '').trim()
+  const comments = String(answers?.ew_it_bulk_refuse_comments || answers?.ew_it_comments || '').trim()
   const photoUrls = collectBulkRefusePhotoUrls({ answerExtras, answers })
   const baseUrl = getAppBaseUrl(request)
   const inspectionUrl = `${baseUrl}/inspections/${inspectionId}`
@@ -292,7 +293,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
       <h2 style="font-size:16px">Issue raised</h2>
       <ul>
         <li>Bulk refuse removal required: Yes</li>
-        <li>Exact location: ${escapeHtml(locationLine || estateArea || '—')}</li>
+        <li>Exact location: ${escapeHtml(exactLocation || '—')}</li>
         <li>Comments entered by inspector: ${escapeHtml(comments || '—')}</li>
       </ul>
       <p><strong>Photo attached or link to photo(s):</strong></p>
@@ -323,7 +324,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
     '',
     'Issue raised:',
     '- Bulk refuse removal required: Yes',
-    `- Exact location: ${locationLine || estateArea || '—'}`,
+    `- Exact location: ${exactLocation || '—'}`,
     `- Comments entered by inspector: ${comments || '—'}`,
     `- Photo attached or link to photo(s): ${photoUrls.length ? photoUrls.join('; ') : 'No photo link was provided for this question.'}`,
     '',
