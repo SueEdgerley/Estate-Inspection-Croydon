@@ -9,6 +9,7 @@ import { patchCaretakerTemplatesList } from '@/lib/caretaker-fire-template-patch
 import { applyNeighbourhoodVoicePatchesToList } from '@/lib/neighbourhood-voice-template-patch'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { filterArchivedTemplates } from '@/lib/archived-templates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -66,7 +67,7 @@ async function loadTemplatesFromSnapshotFallback() {
     WHERE snapshot IS NOT NULL
     ORDER BY template_id, created_at DESC
   `
-  return fallbackResult.rows
+  const templates = fallbackResult.rows
     .map((row) => row.snapshot)
     .filter((snapshot) => snapshot && typeof snapshot === 'object')
     .map((snapshot) => ({
@@ -76,6 +77,7 @@ async function loadTemplatesFromSnapshotFallback() {
       sections: Array.isArray(snapshot.sections) ? snapshot.sections : [],
     }))
     .filter((template) => template.id)
+  return filterArchivedTemplates(templates)
 }
 
 export async function GET(request) {
