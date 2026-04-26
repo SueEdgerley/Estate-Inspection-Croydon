@@ -22,6 +22,7 @@ import {
   isEstateInspectionFormTemplate,
   isEstateInspectionFormV2Template,
 } from '@/lib/standard-inspection-form'
+import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   buildEstateInspectionChecklistQuestionIndexMap,
   isEstateInspectionInstructionalQuestion,
@@ -1111,7 +1112,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const estateInspectionFormV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
-    if (isEstateInspectionFormTemplate(selectedTemplate)) {
+    if (isEstateInspectionFormTemplate(selectedTemplate) && !isEsmInspectionFormTemplate(selectedTemplate)) {
       return buildEstateInspectionFormSections(selectedTemplate)
     }
     return getSectionsWithOrderedQuestions(selectedTemplate)
