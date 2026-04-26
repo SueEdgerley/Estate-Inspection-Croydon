@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 
 export default function AdminLayout({ children }) {
   const [allowed, setAllowed] = useState(null)
-  const router = useRouter()
+  const pathname = usePathname()
+  const isTemplateDiagnostics = pathname?.startsWith('/admin/template-diagnostics')
 
   useEffect(() => {
+    if (isTemplateDiagnostics) {
+      setAllowed(true)
+      return
+    }
     fetch('/api/admin/users', { credentials: 'include' })
       .then((res) => {
         if (res.status === 403 || res.status === 401) {
@@ -18,7 +23,7 @@ export default function AdminLayout({ children }) {
         setAllowed(res.ok)
       })
       .catch(() => setAllowed(false))
-  }, [])
+  }, [isTemplateDiagnostics])
 
   if (allowed === null) {
     return (
