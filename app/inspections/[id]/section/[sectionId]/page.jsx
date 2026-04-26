@@ -345,7 +345,7 @@ await fetch(`/api/inspections/${id}/answers`, {
     urlSectionNum <= 5
 
   let estateInspectionForm = false
-  if (inspection) {
+  if (inspection && !isCaretakerInspection) {
     let tv = inspection.template_version
     if (typeof tv === 'string') {
       try {
