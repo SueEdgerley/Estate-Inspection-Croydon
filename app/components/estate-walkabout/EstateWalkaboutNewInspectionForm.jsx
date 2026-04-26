@@ -60,7 +60,25 @@ const ITEM_YN = [
 ]
 
 /** Question ids for answer_extras photo_urls. */
-const PHOTO_EXTRA_IDS = new Set(['ew_os_overall_grade', 'ew_it_bulk_refuse_removal'])
+const PHOTO_EXTRA_IDS = new Set([
+  'ew_ec_paving_grade',
+  'ew_os_overall_grade',
+  'ew_it_bulk_refuse_removal',
+])
+
+const YNA_COLORS = {
+  Yes: { border: '#15803d', bg: '#dcfce7', selectedBg: '#16a34a', text: '#14532d' },
+  No: { border: '#b91c1c', bg: '#fee2e2', selectedBg: '#dc2626', text: '#7f1d1d' },
+  NA: { border: '#64748b', bg: '#f1f5f9', selectedBg: '#64748b', text: '#334155' },
+}
+
+const GRADE_COLORS = {
+  A: { border: '#15803d', bg: '#dcfce7', selectedBg: '#16a34a', text: '#14532d' },
+  B: { border: '#65a30d', bg: '#ecfccb', selectedBg: '#84cc16', text: '#365314' },
+  C: { border: '#b45309', bg: '#fef3c7', selectedBg: '#f59e0b', text: '#78350f' },
+  D: { border: '#b91c1c', bg: '#fee2e2', selectedBg: '#dc2626', text: '#7f1d1d' },
+  NA: { border: '#64748b', bg: '#f1f5f9', selectedBg: '#64748b', text: '#334155' },
+}
 
 function emptyAnswers() {
   const keys = [
@@ -350,6 +368,7 @@ export default function EstateWalkaboutNewInspectionForm({
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {['Yes', 'No', 'NA'].map((s) => {
           const sel = answers[qid] === s
+          const colors = YNA_COLORS[s]
           return (
             <button
               key={s}
@@ -358,9 +377,13 @@ export default function EstateWalkaboutNewInspectionForm({
               style={{
                 padding: '8px 16px',
                 borderRadius: 8,
-                border: sel ? `2px solid ${EW.accent}` : `1px solid ${EW.border}`,
-                background: sel ? EW.accentMuted : '#fff',
-                fontWeight: 600,
+                border: sel ? `2px solid ${colors.border}` : `1px solid ${colors.border}`,
+                background: sel ? colors.selectedBg : colors.bg,
+                color: sel ? '#fff' : colors.text,
+                fontWeight: 700,
+                boxShadow: sel ? `0 0 0 3px ${colors.bg}` : 'none',
+                minHeight: 42,
+                minWidth: 58,
                 cursor: 'pointer',
               }}
             >
@@ -426,6 +449,7 @@ export default function EstateWalkaboutNewInspectionForm({
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {['A', 'B', 'C', 'D', 'NA'].map((L) => {
             const sel = answers[qid] === L
+            const colors = GRADE_COLORS[L]
             return (
               <button
                 key={L}
@@ -436,9 +460,11 @@ export default function EstateWalkaboutNewInspectionForm({
                   minHeight: 44,
                   padding: '0 12px',
                   borderRadius: 8,
-                  border: sel ? `2px solid ${EW.accent}` : `1px solid ${EW.border}`,
-                  background: sel ? EW.accentMuted : '#fff',
+                  border: sel ? `2px solid ${colors.border}` : `1px solid ${colors.border}`,
+                  background: sel ? colors.selectedBg : colors.bg,
+                  color: sel ? '#fff' : colors.text,
                   fontWeight: 700,
+                  boxShadow: sel ? `0 0 0 3px ${colors.bg}` : 'none',
                   cursor: 'pointer',
                 }}
               >
@@ -694,7 +720,8 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>2. Estate care and communal repairs</h2>
             {gradeAbcdNa('ew_ec_paving_grade', 'What is the quality of the paving/potholes and signage?', 'Croydon NV Grading – Final', {
-              withPhoto: false,
+              withPhoto: true,
+              maxPhotos: 1,
             })}
             {commentTextOnly('ew_ec_comments', 'Comments')}
           </section>
