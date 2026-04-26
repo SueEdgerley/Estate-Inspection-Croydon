@@ -79,7 +79,9 @@ export default function InspectionQuestion({
       </div>
 
       <div>
-        <p style={{ ...inspectionFieldLabelStyle, margin: '0 0 8px' }}>Add photo</p>
+        <label htmlFor={`nv-std-photo-${q.id}`} style={{ ...inspectionFieldLabelStyle, margin: '0 0 8px' }}>
+          Add photo
+        </label>
         <PhotoUploadControl
           id={`nv-std-photo-${q.id}`}
           value={photos}

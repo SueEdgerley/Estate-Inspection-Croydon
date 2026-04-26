@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import WizardQuestionFields from '../../../components/wizard/WizardQuestionFields'
@@ -11,19 +11,33 @@ import {
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
+import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
+import {
+  applyEstateWalkaboutWizardTemplatePatch,
+  isEstateWalkaboutTemplateVersion,
+} from '@/lib/estate-walkabout-template'
+import {
+  buildInspectionFormNvTokens,
+  inspectionHelperParagraphStyle,
+  inspectionQuestionCardStyle,
+  inspectionQuestionTitleStyle,
+  inspectionSectionGuidanceBoxStyle,
+  inspectionSectionHeadingStyle,
+  inspectionGuidanceSubheadingStyle,
+} from '@/lib/inspection-form-ui'
 
-// NV design system (wizard only): calm, modern, resident-friendly
 const MAX_PHOTOS_PER_QUESTION = 3
 
 const MOBILE_BREAKPOINT = 768
+
+/** Wizard chrome + progress; colours/spacing align with main inspection form (`buildInspectionFormNvTokens`). */
 const nv = {
+  ...buildInspectionFormNvTokens(),
   font: 'var(--font-geist-sans), Inter, system-ui, sans-serif',
-  baseSize: 16,
   lineHeight: 1.5,
   sectionTitleSize: '20px',
-  questionSize: '17px',
-  helperSize: '14px',
-  helperColor: '#6B7280',
   metaSize: '13px',
   pagePadMobile: 16,
   pagePadDesktop: 24,
@@ -32,19 +46,9 @@ const nv = {
   spaceQuestionAnswers: 12,
   spaceSections: 24,
   bg: '#F9FAFB',
-  cardBg: '#FFFFFF',
-  cardRadius: 12,
-  cardShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  cardBorder: '1px solid #E5E7EB',
-  btnMinHeight: 48,
-  btnMinHeightMobile: 56,
-  btnRadius: 10,
-  btnFontWeight: 600,
-  btnPx: 16,
-  yesColor: '#16A34A',
-  noColor: '#DC2626',
-  naColor: '#6B7280',
-  btnUnselectedBorder: '1px solid #D1D5DB',
+  cardRadius: 8,
+  cardShadow: inspectionQuestionCardStyle.boxShadow,
+  btnMinHeightMobile: 48,
   transition: '150ms ease',
   progressHeight: 6,
   progressTrack: '#E5E7EB',
@@ -54,17 +58,10 @@ const nv = {
   issuePad: '12px 16px',
   issueRadius: 8,
   sectionAccent: '4px solid #1E3A8A',
-  primary: '#1E3A8A',
   stickyBarBg: '#FFFFFF',
   stickyBarBorder: '1px solid #E5E7EB',
   stickyPad: '12px 16px',
-  unansweredAmber: '#FEF3C7',
-  text: '#111827',
-  muted: '#6B7280',
   errorLight: '#FEE2E2',
-  error: '#DC2626',
-  success: '#16A34A',
-  primaryLight: '#EFF6FF',
 }
 
 function normalizeVal(v) {
@@ -89,7 +86,7 @@ function questionUsesNvPackedNotes(q) {
 }
 
 /** When NV uses synthetic sections, answers must POST under each question's original Airtable section_id. */
-function groupNvSectionSaveBatches(sec, answers, extras) {
+function groupNvSectionSaveBatches(sec, answers, extras, estateWalkabout = false) {
   /** @type {Map<string, { answers: Record<string, unknown>, extras: Record<string, unknown> }>} */
   const m = new Map()
   for (const q of sec.questions || []) {
@@ -103,8 +100,9 @@ function groupNvSectionSaveBatches(sec, answers, extras) {
     if (v !== undefined && v !== null) bucket.answers[q.id] = v
     const comment = extras[q.id]?.comment
     if (comment != null) bucket.answers[`${q.id}_comment`] = comment
-    if (questionUsesNvPackedNotes(q) && extras[q.id] && Object.keys(extras[q.id]).length > 0) {
-      bucket.extras[q.id] = extras[q.id]
+    const ex = extras[q.id]
+    if (ex && Object.keys(ex).length > 0 && (questionUsesNvPackedNotes(q) || estateWalkabout)) {
+      bucket.extras[q.id] = ex
     }
   }
   return Array.from(m.entries()).map(([section_id, payload]) => ({ section_id, ...payload }))
@@ -125,6 +123,9 @@ function getSectionIcon(title) {
 export default function InspectionWizardPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const showTemplateDebug =
+    process.env.NODE_ENV === 'development' && searchParams.get('debug') === '1'
   const { user } = useUser()
   const prefillResidentName = useMemo(() => {
     if (!user) return ''
@@ -149,6 +150,8 @@ export default function InspectionWizardPage() {
   const [reviewConfirmed, setReviewConfirmed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [questionStep, setQuestionStep] = useState(0)
+  const [snapshotDebugBeforePatches, setSnapshotDebugBeforePatches] = useState(null)
+  const [snapshotDebugAfterPatches, setSnapshotDebugAfterPatches] = useState(null)
   const commentFocusRef = useRef(null)
   const focusedNoForQuestionId = useRef(null)
 
@@ -197,7 +200,16 @@ export default function InspectionWizardPage() {
           }
         }
         if (version && typeof version === 'object') {
+          const cloneForDebug = JSON.parse(JSON.stringify(version))
+          const beforeSummary = summarizeTemplateSnapshotForDebug(cloneForDebug)
           applyNeighbourhoodVoiceTemplatePatch(version)
+          applyTemplateDisplayPatches(version)
+          applyEstateWalkaboutWizardTemplatePatch(version)
+          const afterSummary = summarizeTemplateSnapshotForDebug(version)
+          if (!cancelled) {
+            setSnapshotDebugBeforePatches(beforeSummary)
+            setSnapshotDebugAfterPatches(afterSummary)
+          }
           const secs = version.sections || []
           if (!cancelled) setTemplate(version)
           const steps = []
@@ -212,6 +224,9 @@ export default function InspectionWizardPage() {
             setSections(secs)
             setFlatSteps(steps)
           }
+        } else if (!cancelled) {
+          setSnapshotDebugBeforePatches(null)
+          setSnapshotDebugAfterPatches(null)
         }
 
         if (ansRes.ok) {
@@ -250,12 +265,16 @@ export default function InspectionWizardPage() {
       const persistSid = (q && q._nv_answer_section_id) || sectionId
       const payload = { section_id: persistSid, answers: { [questionId]: value } }
       if (comment != null) payload.answers[`${questionId}_comment`] = comment
-      if (
-        q &&
-        questionUsesNvPackedNotes(q) &&
+      const walkabout = template && isEstateWalkaboutTemplateVersion(template)
+      const hasExtras =
         extrasSnapshot &&
         typeof extrasSnapshot === 'object' &&
         Object.keys(extrasSnapshot).length > 0
+      if (
+        q &&
+        hasExtras &&
+        (questionUsesNvPackedNotes(q) || walkabout) &&
+        extrasSnapshot
       ) {
         payload.extras = { [questionId]: extrasSnapshot }
       }
@@ -271,13 +290,18 @@ export default function InspectionWizardPage() {
     } finally {
       setSaving(false)
     }
-  }, [id, sections])
+  }, [id, sections, template])
 
   const saveSection = useCallback(async (sec) => {
     if (!id || !sec?.questions?.length) return
     setSaving(true)
     try {
-      const batches = groupNvSectionSaveBatches(sec, answers, extras)
+      const batches = groupNvSectionSaveBatches(
+        sec,
+        answers,
+        extras,
+        !!(template && isEstateWalkaboutTemplateVersion(template))
+      )
       for (const batch of batches) {
         const hasAns = Object.keys(batch.answers).length > 0
         const hasEx = Object.keys(batch.extras).length > 0
@@ -299,7 +323,17 @@ export default function InspectionWizardPage() {
     } finally {
       setSaving(false)
     }
-  }, [id, answers, extras])
+  }, [id, answers, extras, template])
+
+  const templateVersionDebugPanel =
+    showTemplateDebug && inspection ? (
+      <InspectionTemplateVersionDebugPanel
+        inspection={inspection}
+        snapshotBeforePatches={snapshotDebugBeforePatches}
+        snapshotAfterPatches={snapshotDebugAfterPatches}
+        heading="Inspection template_version debug (?debug=1)"
+      />
+    ) : null
 
   const totalQuestions = flatSteps.length
   const answeredCount = flatSteps.filter((s) => {
@@ -328,8 +362,11 @@ export default function InspectionWizardPage() {
   const handleExtras = (questionId, sectionId, updates) => {
     setExtras((prev) => {
       const next = { ...prev, [questionId]: { ...(prev[questionId] || {}), ...updates } }
-      if (updates.photo_urls && Array.isArray(updates.photo_urls) && updates.photo_urls.length > MAX_PHOTOS_PER_QUESTION) {
-        next[questionId].photo_urls = updates.photo_urls.slice(0, MAX_PHOTOS_PER_QUESTION)
+      if (updates.photo_urls && Array.isArray(updates.photo_urls)) {
+        const cap = questionId === 'ew_os_overall_grade' ? 1 : MAX_PHOTOS_PER_QUESTION
+        if (updates.photo_urls.length > cap) {
+          next[questionId].photo_urls = updates.photo_urls.slice(0, cap)
+        }
       }
       const merged = next[questionId] || {}
       saveAnswer(sectionId, questionId, answers[questionId], merged.comment, merged)
@@ -358,6 +395,7 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
+          {templateVersionDebugPanel}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <span
               style={{
@@ -394,7 +432,7 @@ export default function InspectionWizardPage() {
             </p>
             <h2 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 12 }}>How we use your report</h2>
             <p style={{ margin: 0, fontSize: nv.baseSize, lineHeight: nv.lineHeight, color: nv.text }}>
-              Your answers and photos are used to create tasks for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
+              Your answers and photos are used to create issues and actions for officers and to prioritise repairs and cleaning. Your input helps us act quickly.
             </p>
           </div>
           <div style={{ position: 'sticky', bottom: 0, paddingTop: 16, display: 'flex', gap: 12, justifyContent: 'flex-end', backgroundColor: nv.bg }}>
@@ -417,6 +455,7 @@ export default function InspectionWizardPage() {
       return false
     })
     const unanswered = flatSteps.filter((s) => {
+      if (s.question?.nv_render_kind === 'nv_plain_textarea') return false
       const v = answers[s.question?.id]
       return v === undefined || v === null || String(v).trim() === ''
     })
@@ -434,6 +473,7 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '7rem', paddingLeft: nv.pagePadMobile, paddingRight: nv.pagePadMobile, fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          {templateVersionDebugPanel}
           <h1 style={{ fontSize: nv.sectionTitleSize, fontWeight: 600, color: nv.text, marginBottom: 16 }}>Review and submit</h1>
 
           {issues.length > 0 && (
@@ -502,7 +542,12 @@ export default function InspectionWizardPage() {
                 try {
                   const res = await fetch(`/api/inspections/${id}/submit`, { method: 'POST', credentials: 'include' })
                   if (res.ok) {
-                    await res.json().catch(() => ({}))
+                    const submitData = await res.json().catch(() => ({}))
+                    if (submitData.pdfError) {
+                      window.alert(
+                        `Inspection was submitted, but the full PDF could not be generated or saved:\n\n${String(submitData.pdfError).slice(0, 500)}`
+                      )
+                    }
                     router.push('/dashboard')
                   } else {
                     const data = await res.json().catch(() => ({}))
@@ -543,6 +588,7 @@ export default function InspectionWizardPage() {
     return (
       <div className="nv-wizard-page" style={{ minHeight: '100vh', backgroundColor: nv.bg, paddingBottom: '6rem', paddingLeft: padX, paddingRight: padX, fontFamily: nv.font, fontSize: nv.baseSize, lineHeight: nv.lineHeight }}>
         <div style={{ maxWidth: 560, margin: '0 auto', width: '100%', minWidth: 0 }}>
+          {templateVersionDebugPanel}
           <div style={{ marginBottom: nv.spaceSections }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, fontSize: nv.metaSize, color: nv.muted, marginBottom: 8 }}>
               <span style={{ fontWeight: 600, color: nv.text }}>
@@ -561,7 +607,7 @@ export default function InspectionWizardPage() {
           {getNvQuestionStepLabel(q) ? (
             <p
               style={{
-                fontSize: nv.baseSize,
+                fontSize: '0.8125rem',
                 fontWeight: 600,
                 color: nv.primary,
                 marginBottom: 10,
@@ -572,23 +618,53 @@ export default function InspectionWizardPage() {
             </p>
           ) : null}
 
-          <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2
+            style={{
+              ...inspectionSectionHeadingStyle,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
             <span>{getSectionIcon(sec.title)}</span>
             {sec.title}
           </h2>
 
           {(sec.help_text || sec.what_to_look_for) && (
-            <details style={{ marginBottom: 16 }}>
-              <summary style={{ fontSize: 13, color: nv.muted, cursor: 'pointer', padding: '8px 0' }}>
-                What to look for
-              </summary>
-              <p style={{ margin: 0, fontSize: 13, color: nv.muted, padding: '8px 12px', backgroundColor: nv.primaryLight, borderRadius: 8 }}>
-                {sec.what_to_look_for || sec.help_text}
-              </p>
-            </details>
+            <div style={{ ...inspectionSectionGuidanceBoxStyle, marginBottom: 16 }}>
+              {sec.what_to_look_for ? (
+                <>
+                  <p style={inspectionGuidanceSubheadingStyle}>What to look for</p>
+                  <p style={{ margin: '0 0 0.75rem', whiteSpace: 'pre-wrap' }}>{sec.what_to_look_for}</p>
+                </>
+              ) : null}
+              {sec.help_text && sec.help_text !== sec.what_to_look_for ? (
+                <>
+                  <p style={inspectionGuidanceSubheadingStyle}>
+                    {sec.what_to_look_for ? 'Additional help' : 'Help'}
+                  </p>
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{sec.help_text}</p>
+                </>
+              ) : !sec.what_to_look_for && sec.help_text ? (
+                <>
+                  <p style={inspectionGuidanceSubheadingStyle}>Help</p>
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{sec.help_text}</p>
+                </>
+              ) : null}
+            </div>
           )}
 
-          <div style={{ backgroundColor: nv.cardBg, padding: nv.cardPad, borderRadius: nv.cardRadius, border: nv.cardBorder, boxShadow: nv.cardShadow, marginBottom: nv.spaceCards, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+          <div
+            style={{
+              ...inspectionQuestionCardStyle,
+              padding: nv.cardPad,
+              borderRadius: nv.cardRadius,
+              marginBottom: nv.spaceCards,
+              width: '100%',
+              minWidth: 0,
+              boxSizing: 'border-box',
+            }}
+          >
             {(q.category || q.action_category) && (
               <span
                 style={{
@@ -605,8 +681,21 @@ export default function InspectionWizardPage() {
                 {q.category || q.action_category}
               </span>
             )}
-            <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
-            {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
+            {q.nv_render_kind !== 'nv_plain_textarea' ? (
+              <>
+                <p
+                  style={{
+                    ...inspectionQuestionTitleStyle,
+                    marginBottom: nv.spaceQuestionAnswers,
+                  }}
+                >
+                  {q.resident_wording || q.question_text}
+                </p>
+                {q.helper_text ? (
+                  <p style={{ ...inspectionHelperParagraphStyle, marginBottom: 16 }}>{q.helper_text}</p>
+                ) : null}
+              </>
+            ) : null}
 
             <WizardQuestionFields
               q={q}
@@ -616,7 +705,7 @@ export default function InspectionWizardPage() {
               extras={extras}
               handleAnswer={handleAnswer}
               handleExtras={handleExtras}
-              maxPhotos={MAX_PHOTOS_PER_QUESTION}
+              maxPhotos={q.id === 'ew_os_overall_grade' ? 1 : MAX_PHOTOS_PER_QUESTION}
               commentFocusRef={commentFocusRef}
               prefillResidentName={prefillResidentName}
             />
