@@ -25,30 +25,42 @@ const HEADER_KEYS = ['ew_q_responsible', 'ew_q_role', 'ew_q_area', 'ew_q_postcod
 const STAFF_YN = [
   ['ew_st_caretaker_present', 'Is there a caretaker present?'],
   ['ew_st_repairs_officer_present', 'Is there a repairs officer present?'],
+  ['ew_st_ward_cllr_present', 'Is there a Ward Cllr present?'],
 ]
 
 const ITEM_YN = [
   ['ew_it_roof_access', 'Is the roof access secure?'],
   ['ew_it_tank_secure', 'Is the tank room secure?'],
+  ['ew_it_electricity_intakes', 'Are the electricity intakes secure?'],
+  ['ew_it_fire_doors_exits', 'Have you inspected the fire doors/exits?'],
   ['ew_it_communal_lighting', 'Have you inspected the communal lighting?'],
   ['ew_it_glazing', 'Have you inspected the communal glazing and window frames?'],
+  ['ew_it_dry_risers', 'Have you inspected the dry risers?'],
+  ['ew_it_lightning_conductors', 'Have you inspected the lightning conductors?'],
+  ['ew_it_dust_chute_hoppers', 'Have you inspected the dust chute hoppers?'],
   ['ew_it_refuse_chutes', 'Are the refuse chutes clear?'],
+  ['ew_it_refuse_chamber', 'Have you inspected the refuse chamber area?'],
   ['ew_it_overflows', 'Are there any overflows or leaks?'],
+  ['ew_it_bulk_refuse_removal', 'Is a bulk refuse removal required?'],
+  ['ew_it_lifts_working', 'Are the lifts working?'],
   ['ew_it_drains', 'Are the drains and gulleys clear?'],
+  ['ew_it_tripping_hazards', 'Are there any tripping or slipping hazards?'],
   ['ew_it_estate_roads', 'Have you inspected the estate roads?'],
   [
     'ew_it_grounds',
     'Have you inspected the grass cutting, trees, flower beds and hedges?',
   ],
+  ['ew_it_door_entry', 'Have you inspected the communal door entry system?'],
   ['ew_it_abandoned_vehicles', 'Are there any abandoned vehicles?'],
   ['ew_it_parking', 'Have you inspected the parking/garage areas?'],
   ['ew_it_sheds', 'Have you inspected the sheds?'],
   ['ew_it_graffiti', 'Is there any graffiti?'],
   ['ew_it_signs', 'Have you inspected the estate signs?'],
+  ['ew_it_play_areas', 'Have you inspected the play areas?'],
 ]
 
-/** Question ids for answer_extras photo_urls: Section 3 grade (one photo) + item-inspection comments evidence. */
-const PHOTO_EXTRA_IDS = new Set(['ew_os_overall_grade', 'ew_it_comments'])
+/** Question ids for answer_extras photo_urls: Section 3 grade only. */
+const PHOTO_EXTRA_IDS = new Set(['ew_os_overall_grade'])
 
 function emptyAnswers() {
   const keys = [
@@ -80,6 +92,7 @@ function newChecklistItem() {
     photo_urls: [],
     action_required: false,
     action_summary: '',
+    order_raised_number: '',
   }
 }
 
@@ -99,6 +112,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const [answerExtras, setAnswerExtras] = useState({})
   const [checklist, setChecklist] = useState(() => [])
   const [peopleOptions, setPeopleOptions] = useState([])
+  const [roleOptions, setRoleOptions] = useState([])
 
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -124,6 +138,17 @@ export default function EstateWalkaboutNewInspectionForm({
               label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
             }))
             .filter((x) => x.value && x.label)
+        )
+        setRoleOptions(
+          Array.from(
+            new Set(
+              rows
+                .map((p) => String(p.role || '').trim())
+                .filter(Boolean)
+            )
+          )
+            .sort((a, b) => a.localeCompare(b))
+            .map((role) => ({ value: role, label: role }))
         )
       } catch {
         /* ignore */
@@ -242,6 +267,7 @@ export default function EstateWalkaboutNewInspectionForm({
             photo_urls: Array.isArray(it.photo_urls) ? it.photo_urls : [],
             action_required: !!it.action_required,
             action_summary: String(it.action_summary || '').trim(),
+            order_raised_number: String(it.order_raised_number || '').trim(),
           }))
         ),
       }
@@ -369,27 +395,6 @@ export default function EstateWalkaboutNewInspectionForm({
     </div>
   )
 
-  /** Single photo control for the Item inspections comment row only. */
-  const itemInspectionsComment = () => (
-    <div style={{ marginBottom: 18 }}>
-      <label style={labelStyle}>Comments</label>
-      <textarea
-        value={answers.ew_it_comments || ''}
-        onChange={(e) => setField('ew_it_comments', e.target.value)}
-        rows={3}
-        style={{ ...inputStyle, minHeight: 72 }}
-      />
-      <div style={{ marginTop: 10 }}>
-        <PhotoUploadControl
-          id="ph-ew_it_comments"
-          value={getPhotos('ew_it_comments')}
-          onChange={(urls) => setPhotos('ew_it_comments', urls)}
-          label="Add photo"
-        />
-      </div>
-    </div>
-  )
-
   return (
     <div
       data-ew-walkabout-form="canon-2026-04"
@@ -486,20 +491,34 @@ export default function EstateWalkaboutNewInspectionForm({
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <div>
                 <label style={labelStyle}>Responsible person *</label>
-                <input
+                <select
                   value={answers.ew_q_responsible}
                   onChange={(e) => setField('ew_q_responsible', e.target.value)}
-                  style={inputStyleErr(!!validationErrors.ew_q_responsible)}
-                />
+                  style={selectStyle(!!validationErrors.ew_q_responsible)}
+                >
+                  <option value="">— Select… —</option>
+                  {peopleOptions.map((person) => (
+                    <option key={person.value} value={person.value}>
+                      {person.label}
+                    </option>
+                  ))}
+                </select>
                 {validationErrors.ew_q_responsible && <p style={errStyle}>{validationErrors.ew_q_responsible}</p>}
               </div>
               <div>
                 <label style={labelStyle}>Role *</label>
-                <input
+                <select
                   value={answers.ew_q_role}
                   onChange={(e) => setField('ew_q_role', e.target.value)}
-                  style={inputStyleErr(!!validationErrors.ew_q_role)}
-                />
+                  style={selectStyle(!!validationErrors.ew_q_role)}
+                >
+                  <option value="">— Select… —</option>
+                  {roleOptions.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
                 {validationErrors.ew_q_role && <p style={errStyle}>{validationErrors.ew_q_role}</p>}
               </div>
               <div>
@@ -538,6 +557,7 @@ export default function EstateWalkaboutNewInspectionForm({
             <h2 style={h2Style}>1. Staff present</h2>
             {yna('ew_st_caretaker_present', 'Is there a caretaker present?')}
             {yna('ew_st_repairs_officer_present', 'Is there a repairs officer present?')}
+            {yna('ew_st_ward_cllr_present', 'Is there a Ward Cllr present?')}
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>What is the name of the repairs officer?</label>
               <select
@@ -593,7 +613,6 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
             {ITEM_YN.map(([id, lab]) => yna(id, lab))}
-            {itemInspectionsComment()}
           </section>
 
           {/* 5. Signature */}
@@ -703,14 +722,6 @@ export default function EstateWalkaboutNewInspectionForm({
                       ))}
                     </div>
                   </div>
-                  <div style={{ marginTop: 12 }}>
-                    <PhotoUploadControl
-                      id={`ew-add-${it.id}`}
-                      value={it.photo_urls}
-                      onChange={(urls) => updateItem(it.id, { photo_urls: urls })}
-                      label="Add photo"
-                    />
-                  </div>
                   <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
                     <input
                       type="checkbox"
@@ -735,6 +746,23 @@ export default function EstateWalkaboutNewInspectionForm({
                       {validationErrors[`checklist_${it.id}`] && (
                         <p style={errStyle}>{validationErrors[`checklist_${it.id}`]}</p>
                       )}
+                      <div style={{ marginTop: 12 }}>
+                        <PhotoUploadControl
+                          id={`ew-action-photo-${it.id}`}
+                          value={(it.photo_urls || []).slice(0, 1)}
+                          onChange={(urls) => updateItem(it.id, { photo_urls: urls.slice(0, 1) })}
+                          label="Add action photo"
+                          multiple={false}
+                        />
+                      </div>
+                      <div style={{ marginTop: 12 }}>
+                        <label style={labelStyle}>Order raised number (optional)</label>
+                        <input
+                          value={it.order_raised_number || ''}
+                          onChange={(e) => updateItem(it.id, { order_raised_number: e.target.value })}
+                          style={inputStyle}
+                        />
+                      </div>
                     </div>
                   )}
                   <button

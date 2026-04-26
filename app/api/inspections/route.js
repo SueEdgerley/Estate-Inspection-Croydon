@@ -14,7 +14,10 @@ import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   getCanonicalEstateWalkaboutTemplateForInsert,
 } from '@/lib/estate-walkabout-template'
-import { createEstateWalkaboutActionsFromPayload } from '@/lib/estate-walkabout-actions'
+import {
+  createEstateWalkaboutActionsFromPayload,
+  sendEstateWalkaboutRepairActionNotification,
+} from '@/lib/estate-walkabout-actions'
 import {
   tryGenerateAndStoreIssueJobCardPdf,
   formatDateGb,
@@ -657,6 +660,10 @@ export async function POST(request) {
       console.warn('[Inspections] Could not store photos for PDF pipeline:', photoErr.message)
     }
 
+    const actionsForPoster = []
+    const walkaboutEmailResults = { sent: 0, failed: [] }
+    let walkaboutEstateName = ''
+
     // Estate Walkabout: photos embedded in checklist JSON (per item)
     if (isEstateWalkaboutTemplate(template)) {
       try {
@@ -685,7 +692,8 @@ export async function POST(request) {
       try {
         const estNameRes = await sql`SELECT name FROM estates WHERE id = ${estateId} LIMIT 1`
         const estateName = estNameRes.rows[0]?.name || ''
-        await createEstateWalkaboutActionsFromPayload(sql, {
+        walkaboutEstateName = estateName
+        const walkaboutActionsResult = await createEstateWalkaboutActionsFromPayload(sql, {
           inspectionId,
           estateName,
           template,
@@ -697,12 +705,20 @@ export async function POST(request) {
           submittedAt: new Date().toISOString(),
           inspectionTypeLabel: template.name || '',
         })
+        if (Array.isArray(walkaboutActionsResult?.actions)) {
+          actionsForPoster.push(...walkaboutActionsResult.actions)
+        }
+        if (walkaboutActionsResult?.emailResults) {
+          walkaboutEmailResults.sent += walkaboutActionsResult.emailResults.sent || 0
+          if (Array.isArray(walkaboutActionsResult.emailResults.failed)) {
+            walkaboutEmailResults.failed.push(...walkaboutActionsResult.emailResults.failed)
+          }
+        }
       } catch (ewActErr) {
         console.warn('[Inspections] Estate walkabout actions:', ewActErr.message)
       }
     }
 
-    const actionsForPoster = []
     let emailGroupsByTeam = null
 
     for (const section of template.sections || []) {
@@ -737,7 +753,7 @@ export async function POST(request) {
                 ${comment || null}, true, ${JSON.stringify(allPhotoUrls)}
               )
             `
-            actionsForPoster.push({
+            const actionForPoster = {
               id: actionId,
               category,
               title: residentMessage,
@@ -745,7 +761,8 @@ export async function POST(request) {
               comment: comment || null,
               photo_urls: allPhotoUrls,
               created_at: new Date(),
-            })
+            }
+            actionsForPoster.push(actionForPoster)
             try {
               const locLine = displayTitle || String(location || '').trim() || '—'
               const pdfR = await tryGenerateAndStoreIssueJobCardPdf(sql, {
@@ -767,8 +784,38 @@ export async function POST(request) {
                 status: 'Open',
                 photoUrls: allPhotoUrls,
               })
+              if (pdfR?.url) {
+                actionForPoster.issue_pdf_url = pdfR.url
+              }
               if (!pdfR?.ok) {
                 console.warn('[Inspections] Issue job card PDF:', actionId, pdfR?.error)
+              }
+              if (isEstateWalkaboutTemplate(template)) {
+                try {
+                  const notify = await sendEstateWalkaboutRepairActionNotification(sql, {
+                    inspectionId,
+                    questionId: q.id,
+                    actionTitle: residentMessage,
+                    actionPlanPdfUrl: pdfR?.url || null,
+                    estateName: walkaboutEstateName || displayTitle || '',
+                    locationLine: locLine,
+                    submittedAt: new Date().toISOString(),
+                    inspectorName,
+                    description: [q.question_text || q.label, comment].filter(Boolean).join('\n\n'),
+                    actionSummary: residentMessage,
+                    photoUrls: allPhotoUrls,
+                  })
+                  walkaboutEmailResults.sent += notify.sent || 0
+                  if (Array.isArray(notify.failed)) {
+                    walkaboutEmailResults.failed.push(...notify.failed)
+                  }
+                } catch (notifyErr) {
+                  console.warn('[Inspections] Estate walkabout repair email failed:', notifyErr?.message || notifyErr)
+                  walkaboutEmailResults.failed.push({
+                    actionId,
+                    error: notifyErr?.message || String(notifyErr),
+                  })
+                }
               }
             } catch (issuePdfErr) {
               console.warn('[Inspections] Issue job card PDF failed:', issuePdfErr?.message || issuePdfErr)
@@ -887,6 +934,8 @@ export async function POST(request) {
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,
+      emails_sent: walkaboutEmailResults.sent || undefined,
+      email_failures: walkaboutEmailResults.failed.length ? walkaboutEmailResults.failed : undefined,
       ...(pdfErrorMessage ? { pdfError: pdfErrorMessage } : {}),
     }, { status: 201 })
   } catch (error) {
