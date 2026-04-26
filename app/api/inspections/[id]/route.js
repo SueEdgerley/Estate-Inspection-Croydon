@@ -3,6 +3,10 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import {
+  applyNeighbourhoodVoiceTemplatePatch,
+  isNeighbourhoodVoiceQuestionRenderable,
+} from '@/lib/neighbourhood-voice-template-patch'
 import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
 import {
   countQuestionsInTemplate,
@@ -10,9 +14,59 @@ import {
 } from '@/lib/estate-inspection-question-pipeline-diag'
 import { auditEstateWalkaboutSnapshot } from '@/lib/estate-walkabout-snapshot-audit'
 import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+function cloneJson(value) {
+  if (!value || typeof value !== 'object') return value
+  return JSON.parse(JSON.stringify(value))
+}
+
+function countNvRenderableSteps(template) {
+  let count = 0
+  const samples = []
+  for (const sec of template?.sections || []) {
+    for (const q of sec.questions || []) {
+      if (q?.nv_hidden) continue
+      if (!isNeighbourhoodVoiceQuestionRenderable(q)) continue
+      count += 1
+      if (samples.length < 12) {
+        samples.push({
+          section: sec.title || sec.name || sec.id || '',
+          question_id: q.id,
+          render_kind: q.nv_render_kind || q.question_type || null,
+          text: String(q.resident_wording || q.question_text || q.label || '').slice(0, 120),
+        })
+      }
+    }
+  }
+  return { count, samples }
+}
+
+function buildNeighbourhoodVoiceSnapshotDebug(row, rawTemplateVersion) {
+  const source = cloneJson(rawTemplateVersion)
+  const patched = cloneJson(rawTemplateVersion)
+  if (patched && typeof patched === 'object') {
+    applyNeighbourhoodVoiceTemplatePatch(patched)
+    applyTemplateDisplayPatches(patched)
+  }
+  const renderable = patched && typeof patched === 'object'
+    ? countNvRenderableSteps(patched)
+    : { count: 0, samples: [] }
+  return {
+    inspection_id: row.id,
+    template_id: row.template_id ?? null,
+    template_name: row.template_name ?? null,
+    template_version_id: row.template_version_id ?? null,
+    source: 'inspections.template_version before NV patch',
+    source_summary: summarizeTemplateSnapshotForDebug(source),
+    after_patch_summary: summarizeTemplateSnapshotForDebug(patched),
+    final_rendered_step_count: renderable.count,
+    final_rendered_step_samples: renderable.samples,
+  }
+}
 
 export async function GET(request, { params }) {
   const includeQuestionPipelineInBody = request.nextUrl?.searchParams?.get('debug') === '1'
@@ -66,6 +120,10 @@ export async function GET(request, { params }) {
       row.walkaboutSnapshotAudit = auditEstateWalkaboutSnapshot(JSON.parse(JSON.stringify(tv)), {
         template_version_id: row.template_version_id ?? null,
       })
+    }
+    if (includeQuestionPipelineInBody) {
+      row.neighbourhoodVoiceSnapshotDebug = buildNeighbourhoodVoiceSnapshotDebug(row, tv)
+      console.log('[NV snapshot debug]', row.neighbourhoodVoiceSnapshotDebug)
     }
     if (tv && typeof tv === 'object') {
       const patched = applyGroundsMaintenanceTemplateToSnapshot(tv)
