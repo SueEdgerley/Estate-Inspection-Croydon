@@ -8,7 +8,6 @@ import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
 } from '@/lib/estate-walkabout-template'
-import { FORM_VISIT_ROLE_OPTIONS } from '@/lib/form-visit-roles'
 
 const EW = {
   pageBg: '#f1f5f9',
@@ -113,6 +112,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const [answerExtras, setAnswerExtras] = useState({})
   const [checklist, setChecklist] = useState(() => [])
   const [peopleOptions, setPeopleOptions] = useState([])
+  const [jobTitleOptions, setJobTitleOptions] = useState([])
 
   const [submitError, setSubmitError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -136,8 +136,16 @@ export default function EstateWalkaboutNewInspectionForm({
             .map((p) => ({
               value: p.id != null ? String(p.id) : '',
               label: String(p.name || '').trim() || String(p.id ?? ''),
+              jobTitle: String(p.job_title || '').trim(),
             }))
             .filter((x) => x.value && x.label)
+        )
+        setJobTitleOptions(
+          Array.from(
+            new Set(rows.map((p) => String(p.job_title || '').trim()).filter(Boolean))
+          )
+            .sort((a, b) => a.localeCompare(b))
+            .map((jobTitle) => ({ value: jobTitle, label: jobTitle }))
         )
       } catch {
         /* ignore */
@@ -156,6 +164,14 @@ export default function EstateWalkaboutNewInspectionForm({
       delete next[id]
       return next
     })
+  }
+
+  const setResponsiblePerson = (personId) => {
+    setField('ew_q_responsible', personId)
+    const selected = peopleOptions.find((person) => person.value === personId)
+    if (selected?.jobTitle) {
+      setField('ew_q_role', selected.jobTitle)
+    }
   }
 
   const setPhotos = (id, urls) => {
@@ -482,7 +498,7 @@ export default function EstateWalkaboutNewInspectionForm({
                 <label style={labelStyle}>Responsible person *</label>
                 <select
                   value={answers.ew_q_responsible}
-                  onChange={(e) => setField('ew_q_responsible', e.target.value)}
+                  onChange={(e) => setResponsiblePerson(e.target.value)}
                   style={selectStyle(!!validationErrors.ew_q_responsible)}
                 >
                   <option value="">— Select… —</option>
@@ -502,7 +518,7 @@ export default function EstateWalkaboutNewInspectionForm({
                   style={selectStyle(!!validationErrors.ew_q_role)}
                 >
                   <option value="">— Select… —</option>
-                  {FORM_VISIT_ROLE_OPTIONS.map((role) => (
+                  {jobTitleOptions.map((role) => (
                     <option key={role.value} value={role.value}>
                       {role.label}
                     </option>

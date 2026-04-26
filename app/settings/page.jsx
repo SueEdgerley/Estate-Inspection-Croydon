@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { APP_ACCESS_ROLES } from '@/lib/app-access-roles'
 
-const STAFF_ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
+const STAFF_JOB_TITLES = [
+  'Estate Services Manager',
+  'Housing Officer',
+  'Caretaker',
+  'Resident Representative',
+  'Ward Councillor',
+  'Repairs Officer',
+  'Concierge',
+  'Other',
+]
 
 const card = {
   backgroundColor: '#fff',
@@ -57,7 +66,7 @@ export default function SettingsPage() {
   const [staffDirectory, setStaffDirectory] = useState([])
   const [recipients, setRecipients] = useState([])
 
-  const [staffForm, setStaffForm] = useState({ name: '', email: '', role: '' })
+  const [staffForm, setStaffForm] = useState({ name: '', email: '', job_title: '' })
   const [recipientForm, setRecipientForm] = useState({ name: '', email: '' })
   const [editingUserId, setEditingUserId] = useState(null)
   const [editUser, setEditUser] = useState({ email: '', role: '' })
@@ -150,12 +159,12 @@ export default function SettingsPage() {
         body: JSON.stringify({
           name: staffForm.name.trim(),
           email: staffForm.email.trim(),
-          role: staffForm.role || undefined,
+          job_title: staffForm.job_title || undefined,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
-      setStaffForm({ name: '', email: '', role: '' })
+      setStaffForm({ name: '', email: '', job_title: '' })
       await refreshStaffDirectory()
     } catch (err) {
       setLoadError(err.message)
@@ -488,7 +497,7 @@ export default function SettingsPage() {
       <section id="staff-directory" style={card}>
         <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Staff directory (assignments)</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
-          Staff roles for estate/block assignments: {STAFF_ROLES.join(', ')}. Rows live in <code style={{ fontSize: '0.85em' }}>people</code> only — not the same as app roles above.
+          Staff job titles for estate/block assignments: {STAFF_JOB_TITLES.join(', ')}. Rows live in <code style={{ fontSize: '0.85em' }}>people.job_title</code> — not app access roles.
           When someone later signs in with Clerk using the same email, the app may link their account to this row (see provisioning in code).
         </p>
 
@@ -511,14 +520,14 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: 4 }}>Role</label>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: '#6b7280', marginBottom: 4 }}>Job title</label>
             <select
-              value={staffForm.role}
-              onChange={(e) => setStaffForm((f) => ({ ...f, role: e.target.value }))}
+              value={staffForm.job_title}
+              onChange={(e) => setStaffForm((f) => ({ ...f, job_title: e.target.value }))}
               style={{ padding: '0.5rem 0.65rem', borderRadius: 6, border: '1px solid #d1d5db' }}
             >
               <option value="">—</option>
-              {STAFF_ROLES.map((r) => (
+              {STAFF_JOB_TITLES.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
@@ -548,7 +557,7 @@ export default function SettingsPage() {
               <tr>
                 <th style={th}>Name</th>
                 <th style={th}>Email</th>
-                <th style={th}>Role</th>
+                <th style={th}>Job title</th>
                 <th style={th}>Active</th>
               </tr>
             </thead>
@@ -557,7 +566,7 @@ export default function SettingsPage() {
                 <tr key={s.id}>
                   <td style={td}>{s.name || '—'}</td>
                   <td style={td}>{s.email || '—'}</td>
-                  <td style={td}>{s.role || '—'}</td>
+                  <td style={td}>{s.job_title || '—'}</td>
                   <td style={td}>{s.active === false ? 'No' : 'Yes'}</td>
                 </tr>
               ))}

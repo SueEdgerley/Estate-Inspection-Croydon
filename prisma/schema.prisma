@@ -194,6 +194,7 @@ model Person {
   name       String   @db.VarChar(255)
   email      String   @unique @db.VarChar(255)
   role       String?  @db.VarChar(100)
+  jobTitle   String?  @map("job_title") @db.VarChar(255)
   category   String?  @db.VarChar(50)
   active     Boolean? @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz

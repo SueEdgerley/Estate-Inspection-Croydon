@@ -2,8 +2,8 @@
 /**
  * Import people.csv into public.people (Neon Postgres via DATABASE_URL from .env or env).
  *
- * - CSV columns: name, email, role, category, active
- * - Inserts: id, name, email, role, category, active; airtable_id is always NULL
+ * - CSV columns: name, email, role, job_title, category, active
+ * - Inserts: id, name, email, role, job_title, category, active; airtable_id is always NULL
  * - IDs: ppl_000001 … (6 digits). Next id = 1 + max existing ppl_NNNNNN
  * - Skips blank names. Dedupes CSV: by trimmed lower email when present, else name + category
  * - Skips DB rows that already match on email (any) or, when CSV had no email, name + category
@@ -131,6 +131,7 @@ function pickColumns(row) {
     name: map.name != null ? String(map.name) : '',
     email: map.email != null ? String(map.email) : '',
     role: map.role != null ? String(map.role) : '',
+    job_title: map.job_title != null ? String(map.job_title) : '',
     category: map.category != null ? String(map.category) : '',
     active: map.active,
   }
@@ -155,6 +156,7 @@ async function readAllRows(filePath) {
       name: name.length > NAME_MAX ? name.slice(0, NAME_MAX) : name,
       email: raw.email,
       role: raw.role,
+      job_title: raw.job_title,
       category: raw.category,
       active: raw.active,
     })
@@ -181,6 +183,7 @@ function uniqueInCsv(records) {
         email,
         hadRealEmail,
         role: trimRole(r.role),
+        job_title: trimRole(r.job_title),
         category: cat,
         active: parseActive(r.active),
       })
@@ -293,7 +296,7 @@ async function main() {
     console.log('\nDRY-RUN (no database writes). Run with --apply to import.\n')
     unique.slice(0, 5).forEach((r) => {
       const em = r.hadRealEmail ? r.email : `${r.email} (synthetic)`
-      console.log(' ', r.name, '|', em, '|', r.role || '—', '|', r.category || '—', '| active:', r.active)
+      console.log(' ', r.name, '|', em, '|', r.role || '—', '|', r.job_title || '—', '|', r.category || '—', '| active:', r.active)
     })
     process.exit(0)
   }
@@ -301,7 +304,7 @@ async function main() {
   const pool = new Pool({ connectionString: cs, max: 3 })
   const client = await pool.connect()
   const insertSql =
-    'INSERT INTO people (id, name, email, role, category, active, airtable_id) VALUES ($1, $2, $3, $4, $5, $6, NULL)'
+    'INSERT INTO people (id, name, email, role, job_title, category, active, airtable_id) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)'
 
   try {
     await client.query('BEGIN')
@@ -325,7 +328,7 @@ async function main() {
     for (const r of toInsert) {
       const id = formatPplId(nextSeq)
       nextSeq += 1
-      await client.query(insertSql, [id, r.name, r.email, r.role, r.category, r.active])
+      await client.query(insertSql, [id, r.name, r.email, r.role, r.job_title, r.category, r.active])
       imported += 1
     }
 

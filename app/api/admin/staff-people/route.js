@@ -6,7 +6,22 @@ import { getAppAdminAccess } from '@/lib/app-admin-access'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STAFF_ROLES = ['caretaker', 'esm', 'housing officer', 'admin']
+const STAFF_JOB_TITLES = [
+  'Estate Services Manager',
+  'Housing Officer',
+  'Caretaker',
+  'Resident Representative',
+  'Ward Councillor',
+  'Repairs Officer',
+  'Concierge',
+  'Other',
+]
+
+function normalizeStaffJobTitle(raw) {
+  const value = raw != null ? String(raw).trim() : ''
+  if (!value) return null
+  return STAFF_JOB_TITLES.find((title) => title.toLowerCase() === value.toLowerCase()) || null
+}
 
 async function requireAdmin() {
   const access = await getAppAdminAccess()
@@ -26,7 +41,7 @@ export async function GET() {
   try {
     await ensureDatabase()
     const result = await sql`
-      SELECT id, name, email, role, COALESCE(active, true) AS active
+      SELECT id, name, email, role, job_title, COALESCE(active, true) AS active
       FROM people
       WHERE category IS DISTINCT FROM 'issue_recipient'
       ORDER BY LOWER(name), LOWER(email)
@@ -51,8 +66,13 @@ export async function POST(request) {
     const name = body.name && String(body.name).trim()
     const email = body.email && String(body.email).trim().toLowerCase()
     if (!name || !email) return NextResponse.json({ error: 'name and email are required' }, { status: 400 })
-    const roleRaw = body.role != null && String(body.role).trim() ? String(body.role).toLowerCase().trim() : null
-    const role = roleRaw && STAFF_ROLES.includes(roleRaw) ? roleRaw : null
+    const jobTitleRaw =
+      body.job_title != null && String(body.job_title).trim()
+        ? String(body.job_title).trim()
+        : body.role != null && String(body.role).trim()
+          ? String(body.role).trim()
+          : null
+    const jobTitle = normalizeStaffJobTitle(jobTitleRaw)
 
     const existing = await sql`
       SELECT id, category FROM people WHERE lower(trim(email)) = ${email} LIMIT 1
@@ -70,7 +90,7 @@ export async function POST(request) {
         UPDATE people
         SET
           name = ${name},
-          role = ${role},
+          job_title = ${jobTitle},
           category = CASE WHEN category = 'issue_recipient' THEN category ELSE 'staff' END,
           active = true,
           updated_at = CURRENT_TIMESTAMP
@@ -78,7 +98,7 @@ export async function POST(request) {
       `
       const updated = (
         await sql`
-          SELECT id, name, email, role, COALESCE(active, true) AS active
+          SELECT id, name, email, role, job_title, COALESCE(active, true) AS active
           FROM people WHERE id = ${row.id} LIMIT 1
         `
       ).rows[0]
@@ -87,12 +107,12 @@ export async function POST(request) {
 
     const id = `person_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
     await sql`
-      INSERT INTO people (id, name, email, role, category, active)
-      VALUES (${id}, ${name}, ${email}, ${role}, 'staff', true)
+      INSERT INTO people (id, name, email, job_title, category, active)
+      VALUES (${id}, ${name}, ${email}, ${jobTitle}, 'staff', true)
     `
     const created = (
       await sql`
-        SELECT id, name, email, role, COALESCE(active, true) AS active
+        SELECT id, name, email, role, job_title, COALESCE(active, true) AS active
         FROM people WHERE id = ${id} LIMIT 1
       `
     ).rows[0]

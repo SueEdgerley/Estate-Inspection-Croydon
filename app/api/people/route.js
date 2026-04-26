@@ -24,7 +24,7 @@ export async function GET() {
     }
 
     const result = await sql`
-      SELECT id, name, email, category, role
+      SELECT id, name, email, category, role, job_title
       FROM people
       WHERE COALESCE(active, true) = true
       ORDER BY
