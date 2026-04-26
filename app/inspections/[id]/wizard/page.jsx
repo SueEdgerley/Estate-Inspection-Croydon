@@ -417,7 +417,6 @@ export default function InspectionWizardPage() {
       return false
     })
     const unanswered = flatSteps.filter((s) => {
-      if (s.question?.nv_render_kind === 'nv_plain_textarea') return false
       const v = answers[s.question?.id]
       return v === undefined || v === null || String(v).trim() === ''
     })
@@ -606,14 +605,8 @@ export default function InspectionWizardPage() {
                 {q.category || q.action_category}
               </span>
             )}
-            {q.nv_render_kind !== 'nv_plain_textarea' ? (
-              <>
-                <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>
-                  {q.resident_wording || q.question_text}
-                </p>
-                {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
-              </>
-            ) : null}
+            <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
+            {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
 
             <WizardQuestionFields
               q={q}
