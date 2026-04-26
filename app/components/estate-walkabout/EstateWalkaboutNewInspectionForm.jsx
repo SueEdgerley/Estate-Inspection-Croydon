@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
+import BestPracticeGuideButton from '@/app/components/BestPracticeGuideButton'
 import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
@@ -933,6 +934,7 @@ export default function EstateWalkaboutNewInspectionForm({
             {isSubmitting ? 'Saving…' : 'Save inspection'}
           </button>
         </form>
+        <BestPracticeGuideButton title="Estate Walkabout Best Practice Guide" />
       </div>
     </div>
   )

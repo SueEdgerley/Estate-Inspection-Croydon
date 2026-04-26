@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
+import BestPracticeGuideButton from '@/app/components/BestPracticeGuideButton'
 import {
   NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
@@ -23,6 +24,7 @@ import {
   isEstateInspectionFormV2Template,
 } from '@/lib/standard-inspection-form'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
+import { isGroundsMaintenanceTemplate } from '@/lib/grounds-maintenance-template'
 import {
   buildEstateInspectionChecklistQuestionIndexMap,
   isEstateInspectionInstructionalQuestion,
@@ -1145,6 +1147,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       sections: inspectionRenderSections,
     })
   }, [selectedTemplate, inspectionRenderSections])
+  const showBestPracticeGuide =
+    !!selectedTemplate &&
+    !isCaretakerTemplate(selectedTemplate) &&
+    (isNVTemplate(selectedTemplate) ||
+      isEsmInspectionFormTemplate(selectedTemplate) ||
+      isGroundsMaintenanceTemplate(selectedTemplate))
 
   const debugPseudoInspection = useMemo(
     () =>
@@ -1852,6 +1860,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </button>
         </div>
       </form>
+      {showBestPracticeGuide && (
+        <BestPracticeGuideButton
+          title={`${selectedTemplate?.name || 'Inspection'} Best Practice Guide`}
+        />
+      )}
     </div>
   )
 }
