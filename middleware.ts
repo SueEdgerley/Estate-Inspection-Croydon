@@ -13,6 +13,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/register(.*)",
+  "/admin/template-diagnostics(.*)",
 ]);
 
 const hasClerkKeys =
