@@ -75,7 +75,9 @@ export default function WizardQuestionFields({
   useEffect(() => {
     if (kind !== 'nv_q25' || !prefillResidentName?.trim()) return
     const cur = extras[q.id]?.resident_display_name
-    if (cur !== undefined && cur !== null) return
+    const method = extras[q.id]?.completion_method
+    if (method !== undefined && method !== null) return
+    if (cur !== undefined && cur !== null && String(cur).trim()) return
     handleExtras(q.id, persistSecId, { resident_display_name: prefillResidentName.trim() })
   }, [kind, q.id, persistSecId, prefillResidentName, extras, handleExtras])
 

@@ -38,7 +38,7 @@ async function getViewerContext() {
 }
 
 function applyTemplateVisibility(templates, viewer) {
-  if (!viewer.userId) return templates
+  if (!viewer.userId) return []
   return filterTemplatesForViewer(templates, viewer)
 }
 
@@ -102,6 +102,8 @@ export async function GET() {
               id: s.id,
               template_key: s.template_key ?? '',
               name: s.name ?? s.template_name ?? 'Template',
+              template_type: s.template_type ?? s.type ?? 'standard',
+              type: s.type ?? s.template_type ?? 'standard',
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)

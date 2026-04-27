@@ -85,6 +85,24 @@ function questionUsesNvPackedNotes(q) {
   return q && ['nv_standard', 'nv_estate_feedback', 'nv_issues_report', 'nv_q25'].includes(q.nv_render_kind)
 }
 
+function getNvSignoffMissingReason(q, extras) {
+  if (q?.nv_render_kind !== 'nv_q25') return ''
+  const ex = extras?.[q.id] || {}
+  const paperPhotos = Array.isArray(ex.paper_form_photo_urls)
+    ? ex.paper_form_photo_urls.filter((u) => typeof u === 'string' && u)
+    : Array.isArray(ex.photo_urls)
+      ? ex.photo_urls.filter((u) => typeof u === 'string' && u)
+      : []
+  if (!String(ex.completion_method || '').trim()) return 'choose how the inspection was completed'
+  if (ex.completion_method === 'Using a paper form' && paperPhotos.length === 0) {
+    return 'upload a photo of the completed paper form'
+  }
+  if (!String(ex.visit_date || '').trim()) return 'add the inspection completion date'
+  if (!String(ex.resident_display_name || '').trim()) return 'enter the resident name'
+  if (!ex.nv_signoff_confirmed) return 'confirm the declaration'
+  return ''
+}
+
 /** When NV uses synthetic sections, answers must POST under each question's original Airtable section_id. */
 function groupNvSectionSaveBatches(sec, answers, extras, estateWalkabout = false) {
   /** @type {Map<string, { answers: Record<string, unknown>, extras: Record<string, unknown> }>} */
@@ -456,6 +474,7 @@ export default function InspectionWizardPage() {
     })
     const unanswered = flatSteps.filter((s) => {
       if (s.question?.nv_render_kind === 'nv_plain_textarea') return false
+      if (getNvSignoffMissingReason(s.question, extras)) return true
       const v = answers[s.question?.id]
       return v === undefined || v === null || String(v).trim() === ''
     })
@@ -538,6 +557,12 @@ export default function InspectionWizardPage() {
               disabled={saving || !reviewConfirmed}
               onClick={async () => {
                 if (!reviewConfirmed) return
+                const signoffMissing = flatSteps.find((s) => getNvSignoffMissingReason(s.question, extras))
+                if (signoffMissing) {
+                  setError(`Please complete Sign Off: ${getNvSignoffMissingReason(signoffMissing.question, extras)}.`)
+                  setQuestionStep(Math.max(1, flatSteps.findIndex((s) => s.question?.id === signoffMissing.question?.id) + 1))
+                  return
+                }
                 setSaving(true)
                 try {
                   const res = await fetch(`/api/inspections/${id}/submit`, { method: 'POST', credentials: 'include' })

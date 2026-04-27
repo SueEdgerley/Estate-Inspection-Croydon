@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getSectionQuestions, normalizeQuestion } from '@/lib/airtable-client'
+import { auth, currentUser } from '@clerk/nextjs/server'
+import { getSectionQuestions, getTemplatesNested, normalizeQuestion } from '@/lib/airtable-client'
+import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,6 +10,23 @@ export const dynamic = 'force-dynamic'
 export async function GET(request, { params }) {
   try {
     const { sectionId } = await params
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const templates = await getTemplatesNested()
+    const template = templates.find((t) =>
+      (t.sections || []).some((section) => section.id === sectionId)
+    )
+    if (!template) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 404 })
+    }
+    const cu = await currentUser()
+    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
+      return NextResponse.json({ error: 'Forbidden: your role cannot access this form template' }, { status: 403 })
+    }
     
     const questions = await getSectionQuestions(sectionId)
     const normalized = questions.map(normalizeQuestion)

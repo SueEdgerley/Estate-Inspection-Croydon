@@ -12,7 +12,7 @@ import {
   getNvQuestionStepLabel,
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
-import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import { isCaretakerTemplate } from '@/lib/caretaker-template'
 import { caretakerRowDisplayLabel, indexToCaretakerRowLetter } from '@/lib/caretaker-yesno-display'
@@ -43,6 +43,7 @@ import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@
 import CaretakerRoutingBundle from '@/app/components/questions/CaretakerRoutingBundle'
 import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion'
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
+import SignOffSection from '@/app/components/wizard/SignOffSection'
 import { buildInspectionFormNvTokens } from '@/lib/inspection-form-ui'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
@@ -332,6 +333,7 @@ function InspectionQuestion({
   const yesNoNaValue = normalizeYesNoNaValue(value)
   const isNo = yesNoNaValue === 'No'
   const isYes = yesNoNaValue === 'Yes'
+  const extras = answerExtras || { comment: '', photo_urls: [] }
   const commentWhen = question.comment_required_when
   const photoWhen = question.photo_required_when
   const typeIncludesPhoto = !!question.type_includes_photo
@@ -342,6 +344,11 @@ function InspectionQuestion({
   const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const showCommentPhotoBlock = (showComment || showActionBlock) || isExpanded
+  const showPhotoInYesNoFollowUp =
+    !isNvTemplate ||
+    photoRequired ||
+    (question.caretaker_recipient_on_yes && isYes) ||
+    !!extras.raise_issue
   const expandedSectionRef = useRef(null)
   const didScrollRef = useRef(false)
 
@@ -356,7 +363,6 @@ function InspectionQuestion({
     }
   }, [isNvTemplate, showCommentPhotoBlock])
 
-  const extras = answerExtras || { comment: '', photo_urls: [] }
   const stdInspection = standardInspectionForm && !isNvTemplate
   const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(eq)
   const isStdIssueRow = stdInspection && questionIsStandardInspectionIssueRow(question)
@@ -517,7 +523,7 @@ function InspectionQuestion({
                 Action category: {question.action_category}
               </p>
             )}
-            {isNvTemplate || (question.caretaker_recipient_on_yes && isYes) ? photoBlock : null}
+            {showPhotoInYesNoFollowUp ? photoBlock : null}
           </div>
         )}
         {!isNvTemplate &&
@@ -635,7 +641,7 @@ function InspectionQuestion({
             </option>
           ))}
         </select>
-        {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
+        {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -671,7 +677,7 @@ function InspectionQuestion({
             </button>
           ))}
         </div>
-        {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
+        {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -702,7 +708,7 @@ function InspectionQuestion({
             minHeight: 100,
           }}
         />
-        {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
+        {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -824,53 +830,21 @@ function InspectionQuestion({
     return (
       <div style={{ marginBottom: '1rem' }}>
         {nvHeading}
-        <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#374151' }}>Sign-off</p>
-        <label htmlFor={`nv25-date-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-          Date of this visit
-        </label>
-        <input
-          id={`nv25-date-${question.id}`}
-          type="date"
-          value={extras.visit_date || ''}
-          onChange={(e) => setExtras({ visit_date: e.target.value })}
-          style={{
-            ...NV_TEXT_INPUT_SURFACE,
-            width: '100%',
-            maxWidth: 280,
-            padding: '0.75rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
-            marginBottom: '0.75rem',
+        <SignOffSection
+          q={question}
+          nv={NV_INLINE}
+          ext={extras}
+          sec={{ id: question._nv_answer_section_id || question.section_id || 'nv-sec-signoff' }}
+          btnMinH={NV_INLINE.btnMinHeight}
+          prefillResidentName=""
+          handleExtras={(questionId, sectionId, updates) => {
+            void sectionId
+            onAnswerExtras(questionId, { ...(answerExtras || {}), ...updates })
           }}
+          handleAnswer={(questionId, answerValue) => onChange(questionId, answerValue)}
         />
-        <label htmlFor={`nv25-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-          Name as it should appear on the report
-        </label>
-        <input
-          id={`nv25-name-${question.id}`}
-          type="text"
-          value={extras.resident_display_name != null ? extras.resident_display_name : ''}
-          onChange={(e) => setExtras({ resident_display_name: e.target.value })}
-          style={{
-            ...NV_TEXT_INPUT_SURFACE,
-            width: '100%',
-            padding: '0.75rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            fontSize: '1rem',
-            marginBottom: '0.75rem',
-          }}
-        />
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.875rem', color: '#374151', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={!!extras.nv_signoff_confirmed}
-            onChange={(e) => setExtras({ nv_signoff_confirmed: e.target.checked })}
-            style={{ marginTop: 3 }}
-          />
-          <span>I confirm this feedback is accurate to the best of my knowledge.</span>
-        </label>
+        {error && <p style={{ marginTop: 8, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+        {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
       </div>
     )
   }
@@ -897,7 +871,7 @@ function InspectionQuestion({
           fontSize: '1rem',
         }}
       />
-      {(!estateInspectionForm || estatePhotoAllowed) && photoBlock}
+      {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
       {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
     </div>
   )
@@ -1309,8 +1283,21 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         if (qType === 'nv_q25') {
           const ex = answerExtras[q.id] || {}
           if (q.is_required) {
-            if (!(ex.visit_date || '').trim() || !(ex.resident_display_name || '').trim()) {
-              errs[q.id] = 'Please add the visit date and your display name'
+            const paperPhotos = Array.isArray(ex.paper_form_photo_urls)
+              ? ex.paper_form_photo_urls.filter((u) => typeof u === 'string' && u)
+              : Array.isArray(ex.photo_urls)
+                ? ex.photo_urls.filter((u) => typeof u === 'string' && u)
+                : []
+            if (!(ex.completion_method || '').trim()) {
+              errs[q.id] = 'Please choose how the inspection was completed'
+            } else if (ex.completion_method === 'Using a paper form' && paperPhotos.length === 0) {
+              errs[`${q.id}_photos`] = 'Please upload a photo of the completed paper form'
+            } else if (!(ex.visit_date || '').trim()) {
+              errs[q.id] = 'Please add the date inspection was completed'
+            } else if (!(ex.resident_display_name || '').trim()) {
+              errs[q.id] = 'Please enter the resident name'
+            } else if (!ex.nv_signoff_confirmed) {
+              errs[q.id] = 'Please confirm the declaration'
             }
           }
           return
