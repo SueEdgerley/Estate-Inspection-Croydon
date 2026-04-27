@@ -190,6 +190,7 @@ export default function WizardQuestionFields({
       ['A', 'B', 'C', 'D', 'NA']
     const selected = rawVal != null && rawVal !== '' ? String(rawVal) : ''
     const needPhoto = !!q.nv_graded_require_comment_photo
+    const showSinglePhoto = !!q.nv_allow_single_photo && !needPhoto
     const needCommentOnly = !!q.nv_graded_require_comment_only
     const showGradedFollowUp = (needPhoto || needCommentOnly) && selected
     const showPhoto = needPhoto && selected
@@ -254,6 +255,20 @@ export default function WizardQuestionFields({
                 />
               </>
             )}
+          </div>
+        )}
+        {showSinglePhoto && (
+          <div style={{ marginTop: 4 }}>
+            <p style={{ ...inspectionFieldLabelStyle, marginBottom: 4 }}>
+              Photo (optional, 1 maximum)
+            </p>
+            <PhotoUploadControl
+              id={`nv-single-photo-${q.id}`}
+              value={(ext.photo_urls || []).slice(0, 1)}
+              onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, 1) })}
+              label="Add photo"
+              multiple={false}
+            />
           </div>
         )}
       </div>

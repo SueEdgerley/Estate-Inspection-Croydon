@@ -69,6 +69,24 @@ function normalizeYesNoNaValue(val) {
   return ''
 }
 
+function parsePhotoAnswer(raw) {
+  if (raw == null || raw === '') return []
+  if (Array.isArray(raw)) return raw.filter((u) => typeof u === 'string' && u)
+  const s = String(raw).trim()
+  try {
+    const parsed = JSON.parse(s)
+    if (Array.isArray(parsed)) return parsed.filter((u) => typeof u === 'string' && u)
+  } catch {
+    // fall through
+  }
+  return s ? s.split(',').map((x) => x.trim()).filter(Boolean) : []
+}
+
+function stringifyPhotos(urls) {
+  const arr = Array.isArray(urls) ? urls.filter((u) => typeof u === 'string' && u) : []
+  return arr.length ? JSON.stringify(arr) : ''
+}
+
 // Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo", "yesno", "Yes/No")
 function normalizeQuestionType(v) {
   if (v == null || v === '') return 'text'
@@ -538,6 +556,7 @@ function InspectionQuestion({
   if (qType === 'graded') {
     const gradingOpts = eq.grading_options?.length ? eq.grading_options : ['A', 'B', 'C', 'D', 'NA']
     const needPhoto = !!eq.nv_graded_require_comment_photo
+    const showSingleNvPhoto = isNvTemplate && !!eq.nv_allow_single_photo && !needPhoto
     const needComment = needPhoto || !!eq.nv_graded_require_comment_only
     const hasGrade = value != null && String(value).trim() !== ''
     const showGradedExtras =
@@ -594,6 +613,21 @@ function InspectionQuestion({
                 error={errorPhotos}
               />
             )}
+          </div>
+        )}
+        {showSingleNvPhoto && (
+          <div style={{ marginTop: '0.75rem' }}>
+            <label htmlFor={`nv-single-photo-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Photo (optional, 1 maximum)
+            </label>
+            <PhotoUploadControl
+              id={`nv-single-photo-${question.id}`}
+              value={(extras.photo_urls || []).slice(0, 1)}
+              onChange={(urls) => setExtras({ photo_urls: urls.slice(0, 1) })}
+              label="Add photo"
+              multiple={false}
+              error={errorPhotos}
+            />
           </div>
         )}
         {!isNvTemplate &&
@@ -678,6 +712,29 @@ function InspectionQuestion({
           ))}
         </div>
         {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
+        {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
+      </div>
+    )
+  }
+
+  if (qType === 'photo') {
+    const urls = parsePhotoAnswer(value).slice(0, 1)
+    return (
+      <div style={{ marginBottom: '1rem' }}>
+        {nvHeading}
+        <label htmlFor={`photo-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
+          {displayPrimaryLabel}
+          {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
+        </label>
+        <PhotoUploadControl
+          id={`photo-${question.id}`}
+          value={urls}
+          onChange={(next) => handleChange(stringifyPhotos(next.slice(0, 1)))}
+          label="Add photo"
+          multiple={false}
+          required={isRequired}
+          error={errorPhotos || error}
+        />
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
