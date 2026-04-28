@@ -31,7 +31,11 @@ async function getViewerContext() {
       await ensureDatabase()
       const r = await sql`
         SELECT
-          COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          COALESCE(u.system_role, CASE
+            WHEN lower(trim(COALESCE(u.role, ''))) = 'owner' THEN 'owner'
+            WHEN lower(trim(COALESCE(u.role, ''))) = 'admin' THEN 'admin'
+            ELSE 'user'
+          END) AS system_role,
           p.job_title
         FROM users u
         LEFT JOIN people p ON p.id = u.people_id OR lower(trim(p.email)) = lower(trim(COALESCE(u.email, '')))

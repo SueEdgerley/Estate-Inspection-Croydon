@@ -44,7 +44,11 @@ async function resolveAuth() {
     SELECT
       id,
       email,
-      COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role
+      COALESCE(system_role, CASE
+        WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+        WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+        ELSE 'user'
+      END) AS system_role
     FROM users
     WHERE clerk_user_id = ${userId}
     LIMIT 1
@@ -59,9 +63,10 @@ async function resolveAuth() {
     }
   }
   const admin =
+    roleCtx.systemRole === 'owner' ||
     roleCtx.systemRole === 'admin' ||
     clerkIsAdmin ||
-    (internalUser.system_role || '').toLowerCase() === 'admin'
+    ['owner', 'admin'].includes((internalUser.system_role || '').toLowerCase())
   return { userId, internalUser, admin, roleCtx }
 }
 

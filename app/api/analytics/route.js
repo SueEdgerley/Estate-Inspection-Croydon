@@ -72,7 +72,11 @@ export async function GET(request) {
     try {
       userResult = await sql`
         SELECT id, clerk_user_id, email,
-          COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          COALESCE(system_role, CASE
+            WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+            WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+            ELSE 'user'
+          END) AS system_role,
           COALESCE(is_active, true) AS is_active
         FROM users
         WHERE clerk_user_id = ${clerkUserId}

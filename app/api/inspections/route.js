@@ -385,7 +385,11 @@ export async function GET(request) {
     let postgresListAll = false
     try {
       const roleRow = await sql`
-        SELECT lower(trim(COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END))) AS r
+        SELECT lower(trim(COALESCE(system_role, CASE
+          WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+          WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+          ELSE 'user'
+        END))) AS r
         FROM users
         WHERE clerk_user_id = ${userId}
         LIMIT 1

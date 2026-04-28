@@ -28,8 +28,16 @@ export async function GET(request, { params }) {
     const u = (
       await sql`
         SELECT id, clerk_user_id, email,
-          COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
-          COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS role,
+          COALESCE(system_role, CASE
+            WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+            WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+            ELSE 'user'
+          END) AS system_role,
+          COALESCE(system_role, CASE
+            WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+            WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+            ELSE 'user'
+          END) AS role,
           COALESCE(is_active, true) AS is_active
         FROM users WHERE id = ${id} LIMIT 1
       `
@@ -60,11 +68,11 @@ export async function GET(request, { params }) {
     const ownerCount = (
       await sql`
         SELECT COUNT(*)::int AS c FROM users
-        WHERE lower(trim(COALESCE(system_role, role))) = 'admin' AND COALESCE(is_active, true) = true
+        WHERE lower(trim(COALESCE(system_role, role))) = 'owner' AND COALESCE(is_active, true) = true
       `
     ).rows[0]?.c ?? 0
 
-    const isOwner = String(u.role || '').toLowerCase().trim() === 'owner' && u.is_active !== false
+    const isOwner = String(u.system_role || u.role || '').toLowerCase().trim() === 'owner' && u.is_active !== false
     const lastOwner = isOwner && ownerCount <= 1
 
     const blockers = []

@@ -6,7 +6,7 @@ import { getAppAdminAccess } from '@/lib/app-admin-access'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const APP_ROLES = new Set(['admin', 'user'])
+const APP_ROLES = new Set(['owner', 'admin', 'user'])
 
 export async function PATCH(request, { params }) {
   const access = await getAppAdminAccess()
@@ -28,7 +28,11 @@ export async function PATCH(request, { params }) {
     const cur = await sql`
       SELECT
         id,
-        COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+        COALESCE(system_role, CASE
+          WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+          WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+          ELSE 'user'
+        END) AS system_role,
         COALESCE(is_active, true) AS is_active
       FROM users
       WHERE id = ${id}
@@ -43,7 +47,7 @@ export async function PATCH(request, { params }) {
     if (body.role !== undefined || body.system_role !== undefined) {
       const r = String(body.system_role ?? body.role).toLowerCase().trim()
       if (!APP_ROLES.has(r)) {
-        return NextResponse.json({ error: 'system role must be admin or user' }, { status: 400 })
+        return NextResponse.json({ error: 'system role must be owner, admin, or user' }, { status: 400 })
       }
       role = r
     }

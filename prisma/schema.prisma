@@ -79,7 +79,7 @@ model User {
   id           String   @id @default(cuid()) @db.VarChar(255)
   clerkUserId  String   @unique @map("clerk_user_id") @db.VarChar(255) // required, unique
   email        String?  @db.VarChar(255)
-  systemRole   String   @default("user") @map("system_role") @db.VarChar(50) // permissions: admin | user
+  systemRole   String   @default("user") @map("system_role") @db.VarChar(50) // permissions: owner | admin | user
   role         String   @default("user") @db.VarChar(50) // legacy mirror; use systemRole for permissions
   peopleId     String?  @unique @map("people_id") @db.VarChar(255) // optional link to Person (people.id)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz

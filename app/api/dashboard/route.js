@@ -8,7 +8,7 @@ import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-fil
 import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 
 // Permissions come from users.system_role; operational grouping comes from people.job_title.
-const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'resident', 'esm']
+const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'esm']
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
@@ -96,7 +96,11 @@ export async function GET(request) {
           u.id,
           u.clerk_user_id,
           u.email,
-          COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          COALESCE(u.system_role, CASE
+            WHEN lower(trim(COALESCE(u.role, ''))) = 'owner' THEN 'owner'
+            WHEN lower(trim(COALESCE(u.role, ''))) = 'admin' THEN 'admin'
+            ELSE 'user'
+          END) AS system_role,
           p.job_title,
           COALESCE(u.is_active, true) AS is_active
         FROM users u
@@ -165,7 +169,7 @@ export async function GET(request) {
 
     console.log('[Dashboard] debug:', { systemRole, jobTitle, is_active: internalUser.is_active, assignedEstateCount })
 
-    const admin = systemRole === 'admin' || clerkAdminUser
+    const admin = systemRole === 'owner' || systemRole === 'admin' || clerkAdminUser
 
     // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
     // Temporarily: do not early-return here so we can confirm access works without estate scoping

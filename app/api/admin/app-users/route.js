@@ -19,8 +19,16 @@ export async function GET() {
         id,
         clerk_user_id,
         COALESCE(NULLIF(TRIM(email), ''), '') AS email,
-        COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
-        COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS role,
+        COALESCE(system_role, CASE
+          WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+          WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+          ELSE 'user'
+        END) AS system_role,
+        COALESCE(system_role, CASE
+          WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+          WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+          ELSE 'user'
+        END) AS role,
         COALESCE(is_active, true) AS is_active,
         created_at,
         updated_at
