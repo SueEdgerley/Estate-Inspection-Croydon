@@ -185,7 +185,7 @@ export default function DashboardHome() {
       const escapeCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`
       const rows = selectedRows.map((i) => [
         i.id || '',
-        i.type || '',
+        i.work_type || i.type || '',
         i.location_label || '',
         i.inspector_name || '',
         i.template_name || '',
@@ -711,7 +711,7 @@ export default function DashboardHome() {
                   onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
-                    {inspection.type || '-'}
+                    {inspection.work_type || inspection.type || '-'}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
                     {inspection.location_label || '-'}
