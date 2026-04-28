@@ -6,7 +6,7 @@ import { getAppAdminAccess } from '@/lib/app-admin-access'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const APP_ROLES = new Set(['owner', 'admin', 'user'])
+const APP_ROLES = new Set(['admin', 'user'])
 
 export async function PATCH(request, { params }) {
   const access = await getAppAdminAccess()
@@ -18,26 +18,32 @@ export async function PATCH(request, { params }) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   const body = await request.json().catch(() => ({}))
-  const touched = body.role !== undefined || typeof body.is_active === 'boolean'
+  const touched = body.role !== undefined || body.system_role !== undefined || typeof body.is_active === 'boolean'
   if (!touched) {
-    return NextResponse.json({ error: 'Provide role and/or is_active' }, { status: 400 })
+    return NextResponse.json({ error: 'Provide system role and/or is_active' }, { status: 400 })
   }
 
   try {
     await ensureDatabase()
     const cur = await sql`
-      SELECT id, role, COALESCE(is_active, true) AS is_active FROM users WHERE id = ${id} LIMIT 1
+      SELECT
+        id,
+        COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+        COALESCE(is_active, true) AS is_active
+      FROM users
+      WHERE id = ${id}
+      LIMIT 1
     `
     const row0 = cur.rows[0]
     if (!row0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    let role = row0.role
+    let role = row0.system_role
     let isActive = row0.is_active
 
-    if (body.role !== undefined) {
-      const r = String(body.role).toLowerCase().trim()
+    if (body.role !== undefined || body.system_role !== undefined) {
+      const r = String(body.system_role ?? body.role).toLowerCase().trim()
       if (!APP_ROLES.has(r)) {
-        return NextResponse.json({ error: 'role must be owner, admin, or user' }, { status: 400 })
+        return NextResponse.json({ error: 'system role must be admin or user' }, { status: 400 })
       }
       role = r
     }
@@ -47,13 +53,13 @@ export async function PATCH(request, { params }) {
 
     await sql`
       UPDATE users
-      SET role = ${role}, is_active = ${isActive}, updated_at = CURRENT_TIMESTAMP
+      SET system_role = ${role}, role = ${role}, is_active = ${isActive}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
     `
 
     const row = (
       await sql`
-        SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active,
+        SELECT id, clerk_user_id, email, system_role, system_role AS role, COALESCE(is_active, true) AS is_active,
           created_at, updated_at, people_id
         FROM users WHERE id = ${id}
       `

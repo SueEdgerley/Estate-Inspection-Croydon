@@ -7,8 +7,8 @@ import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 
-// Dashboard access: app roles that may load dashboard stats (not unassigned `user`).
-const ALLOWED_DASHBOARD_ROLES = ['owner', 'admin', 'caretaker', 'housing_officer', 'resident', 'esm']
+// Permissions come from users.system_role; operational grouping comes from people.job_title.
+const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'resident', 'esm']
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
@@ -91,7 +91,20 @@ export async function GET(request) {
     // Match on users.clerk_user_id === Clerk user.id (exact string match, not email or internal UUID)
     let userResult
     try {
-      userResult = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
+      userResult = await sql`
+        SELECT
+          u.id,
+          u.clerk_user_id,
+          u.email,
+          COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          p.job_title,
+          COALESCE(u.is_active, true) AS is_active
+        FROM users u
+        LEFT JOIN people p ON p.id = u.people_id OR lower(trim(p.email)) = lower(trim(COALESCE(u.email, '')))
+        WHERE u.clerk_user_id = ${clerkUserId}
+        ORDER BY CASE WHEN p.id = u.people_id THEN 0 ELSE 1 END
+        LIMIT 1
+      `
     } catch (e) {
       console.error('[Dashboard] users table lookup failed:', e.message)
       if (isUsersTableMissing(e)) {
@@ -121,22 +134,23 @@ export async function GET(request) {
 
     // Only 403 if is_active explicitly false (legacy column) or role explicitly disallowed
     if (internalUser.is_active === false) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'USER_INACTIVE')
+      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.system_role, null, 403, 'USER_INACTIVE')
       return NextResponse.json(
         { error: 'User inactive', code: 'USER_INACTIVE', reason: 'Account is inactive' },
         { status: 403 }
       )
     }
 
-    const role = (internalUser.role || '').toLowerCase().trim()
+    const systemRole = (internalUser.system_role || 'user').toLowerCase().trim()
+    const jobTitle = String(internalUser.job_title || '').toLowerCase().trim().replace(/[\s-]+/g, '_')
     const clerkAdminUser = await isAdmin()
-    if (!ALLOWED_DASHBOARD_ROLES.includes(role) && !clerkAdminUser) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, null, 403, 'ROLE_NOT_PERMITTED')
+    if (systemRole !== 'admin' && !ALLOWED_DASHBOARD_JOB_TITLES.includes(jobTitle) && !clerkAdminUser) {
+      logDashboardAuth(clerkUserId, userEmail, internalUser, systemRole, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
         {
           error: 'Access denied',
           code: 'ROLE_NOT_PERMITTED',
-          reason: role ? 'Your role does not have dashboard access.' : 'No role assigned. Ask an admin to assign your role.',
+          reason: jobTitle ? 'Your job title does not have dashboard access.' : 'No job title assigned. Ask an admin to assign your staff job title.',
         },
         { status: 403 }
       )
@@ -149,15 +163,15 @@ export async function GET(request) {
       assignedEstateCount = countResult.rows[0]?.c ?? 0
     }
 
-    console.log('[Dashboard] debug:', { role, is_active: internalUser.is_active, assignedEstateCount })
+    console.log('[Dashboard] debug:', { systemRole, jobTitle, is_active: internalUser.is_active, assignedEstateCount })
 
-    const admin = role === 'admin' || role === 'owner' || role === 'esm' || clerkAdminUser
+    const admin = systemRole === 'admin' || clerkAdminUser
 
     // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
     // Temporarily: do not early-return here so we can confirm access works without estate scoping
     const hasEstates = assignedEstateCount > 0
     if (!admin && !hasEstates) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok_no_estates')
+      logDashboardAuth(clerkUserId, userEmail, internalUser, systemRole, assignedEstateCount, 200, 'ok_no_estates')
       return NextResponse.json({
         stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
         inspections: [],
@@ -173,6 +187,10 @@ export async function GET(request) {
       dateTo: searchParams.get('dateTo') || '',
       type: searchParams.get('type') || 'all',
       template: searchParams.get('template') || 'all',
+      workType: searchParams.get('workType') || 'all',
+      role: searchParams.get('role') || 'all',
+      estateId: searchParams.get('estateId') || '',
+      blockId: searchParams.get('blockId') || '',
       inspector: searchParams.get('inspector') || 'all',
       scheduled: searchParams.get('scheduled') || 'all',
       grading: searchParams.get('grading') || 'all',
@@ -182,12 +200,17 @@ export async function GET(request) {
     const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const run = getNeonQuery()
 
-    // Stats query
+    // Keep default management reporting focused on scheduled caretaker work, while
+    // surfacing ESM and Housing Officer activity as separate operating lines.
     const statsResult = await run(
       `SELECT
-        COUNT(*) FILTER (WHERE status = 'submitted') AS total_completed,
-        COUNT(*) FILTER (WHERE status = 'submitted' AND is_scheduled = true) AS scheduled_completed,
-        COUNT(*) FILTER (WHERE status = 'submitted' AND (is_scheduled = false OR is_scheduled IS NULL)) AS ad_hoc_completed
+        COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled') AS caretaker_scheduled,
+        COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled' AND status = 'submitted') AS caretaker_completed,
+        COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled' AND status IS DISTINCT FROM 'submitted') AS caretaker_missed,
+        COUNT(*) FILTER (WHERE work_type = 'esm_adhoc' AND status = 'submitted') AS esm_adhoc_completed,
+        COUNT(DISTINCT estate_id) FILTER (WHERE work_type = 'esm_adhoc' AND status = 'submitted' AND estate_id IS NOT NULL) AS esm_estates_checked,
+        COUNT(*) FILTER (WHERE work_type = 'housing_walkabout' AND status = 'submitted') AS housing_walkabouts_completed,
+        COUNT(*) FILTER (WHERE status = 'submitted') AS total_completed
       FROM inspections
       WHERE ${whereText}`,
       whereParams
@@ -205,7 +228,7 @@ export async function GET(request) {
       dashboardPdfFragments,
       (pdfCols) =>
         `SELECT
-        id, type, location_label, inspector_name, inspector_id,
+        id, type, work_type, location_label, inspector_name, inspector_id,
         template_id, template_name, due_date, submitted_at, grading,
         ${pdfCols}
       FROM inspections
@@ -217,11 +240,21 @@ export async function GET(request) {
 
     const stats = {
       totalCompleted: parseInt(statsResult.rows[0]?.total_completed || 0),
-      scheduledCompleted: parseInt(statsResult.rows[0]?.scheduled_completed || 0),
-      adHocCompleted: parseInt(statsResult.rows[0]?.ad_hoc_completed || 0),
+      scheduledCompleted: parseInt(statsResult.rows[0]?.caretaker_completed || 0),
+      adHocCompleted: parseInt(statsResult.rows[0]?.esm_adhoc_completed || 0),
+      caretakerScheduled: parseInt(statsResult.rows[0]?.caretaker_scheduled || 0),
+      caretakerCompleted: parseInt(statsResult.rows[0]?.caretaker_completed || 0),
+      caretakerMissed: parseInt(statsResult.rows[0]?.caretaker_missed || 0),
+      caretakerCompletionRate:
+        parseInt(statsResult.rows[0]?.caretaker_scheduled || 0) > 0
+          ? Math.round((parseInt(statsResult.rows[0]?.caretaker_completed || 0) * 100) / parseInt(statsResult.rows[0]?.caretaker_scheduled || 0))
+          : null,
+      esmAdhocCompleted: parseInt(statsResult.rows[0]?.esm_adhoc_completed || 0),
+      esmEstatesChecked: parseInt(statsResult.rows[0]?.esm_estates_checked || 0),
+      housingWalkaboutsCompleted: parseInt(statsResult.rows[0]?.housing_walkabouts_completed || 0),
     }
 
-    logDashboardAuth(clerkUserId, userEmail, internalUser, internalUser.role, assignedEstateCount, 200, 'ok')
+    logDashboardAuth(clerkUserId, userEmail, internalUser, systemRole, assignedEstateCount, 200, 'ok')
     return NextResponse.json({
       stats,
       inspections: inspectionsRows,

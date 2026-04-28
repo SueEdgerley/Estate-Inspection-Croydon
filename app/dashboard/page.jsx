@@ -13,7 +13,14 @@ export default function DashboardHome() {
   const [stats, setStats] = useState({
     totalCompleted: 0,
     scheduledCompleted: 0,
-    adHocCompleted: 0
+    adHocCompleted: 0,
+    caretakerScheduled: 0,
+    caretakerCompleted: 0,
+    caretakerMissed: 0,
+    caretakerCompletionRate: null,
+    esmAdhocCompleted: 0,
+    esmEstatesChecked: 0,
+    housingWalkaboutsCompleted: 0,
   })
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,6 +33,8 @@ export default function DashboardHome() {
     dateTo: '',
     type: 'all',
     template: 'all',
+    workType: 'all',
+    role: 'all',
     inspector: 'all',
     scheduled: 'all',
     grading: 'all'
@@ -48,6 +57,8 @@ export default function DashboardHome() {
       if (filters.dateTo) params.set('dateTo', filters.dateTo)
       if (filters.type && filters.type !== 'all') params.set('type', filters.type)
       if (filters.template && filters.template !== 'all') params.set('template', filters.template)
+      if (filters.workType && filters.workType !== 'all') params.set('workType', filters.workType)
+      if (filters.role && filters.role !== 'all') params.set('role', filters.role)
       if (filters.inspector && filters.inspector !== 'all') params.set('inspector', filters.inspector)
       if (filters.scheduled && filters.scheduled !== 'all') params.set('scheduled', filters.scheduled)
       if (filters.grading && filters.grading !== 'all') params.set('grading', filters.grading)
@@ -61,14 +72,14 @@ export default function DashboardHome() {
 
       if (res.status === 401) {
         setAuthCode('UNAUTHORIZED')
-        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
         setInspections([])
         return
       }
 
       if (res.status === 403 && data?.code) {
         setAuthCode(data.code)
-        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
         setInspections([])
         return
       }
@@ -79,7 +90,7 @@ export default function DashboardHome() {
             console.warn('[dashboard] DB_NOT_MIGRATED', data?.message || data?.error)
           }
           setError('This service is temporarily unavailable. Please try again later or contact support.')
-          setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+          setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
           setInspections([])
           setLoading(false)
           return
@@ -94,7 +105,14 @@ export default function DashboardHome() {
       setStats({
         totalCompleted: data?.stats?.totalCompleted ?? 0,
         scheduledCompleted: data?.stats?.scheduledCompleted ?? 0,
-        adHocCompleted: data?.stats?.adHocCompleted ?? 0
+        adHocCompleted: data?.stats?.adHocCompleted ?? 0,
+        caretakerScheduled: data?.stats?.caretakerScheduled ?? 0,
+        caretakerCompleted: data?.stats?.caretakerCompleted ?? 0,
+        caretakerMissed: data?.stats?.caretakerMissed ?? 0,
+        caretakerCompletionRate: data?.stats?.caretakerCompletionRate ?? null,
+        esmAdhocCompleted: data?.stats?.esmAdhocCompleted ?? 0,
+        esmEstatesChecked: data?.stats?.esmEstatesChecked ?? 0,
+        housingWalkaboutsCompleted: data?.stats?.housingWalkaboutsCompleted ?? 0,
       })
 
       const nextInspections = Array.isArray(data?.inspections) ? data.inspections : []
@@ -103,7 +121,7 @@ export default function DashboardHome() {
       setSelectedInspectionIds((prev) => prev.filter((id) => nextIds.has(id)))
     } catch (e) {
       setError(e?.message || 'Failed to load dashboard data')
-      setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 })
+      setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
       setInspections([])
     } finally {
       setLoading(false)
@@ -347,7 +365,7 @@ export default function DashboardHome() {
       <>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '1.5rem',
         marginBottom: '2rem'
       }}>
@@ -360,10 +378,13 @@ export default function DashboardHome() {
           borderTop: `3px solid ${photobook.primary}`,
         }}>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            Total Inspections Completed
+            Caretaker Scheduled Work
           </div>
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.totalCompleted}
+            {loading ? '...' : stats.caretakerScheduled}
+          </div>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted }}>
+            Completed {stats.caretakerCompleted} / missed {stats.caretakerMissed}
           </div>
         </div>
 
@@ -376,10 +397,10 @@ export default function DashboardHome() {
           borderTop: `3px solid ${photobook.primary}`,
         }}>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            Scheduled Inspections Completed
+            Caretaker Completion Rate
           </div>
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.scheduledCompleted}
+            {loading ? '...' : stats.caretakerCompletionRate == null ? '-' : `${stats.caretakerCompletionRate}%`}
           </div>
         </div>
 
@@ -392,10 +413,29 @@ export default function DashboardHome() {
           borderTop: `3px solid ${photobook.primary}`,
         }}>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            Ad Hoc Inspections Completed
+            ESM Ad-Hoc Checks
           </div>
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.adHocCompleted}
+            {loading ? '...' : stats.esmAdhocCompleted}
+          </div>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted }}>
+            Estates checked {stats.esmEstatesChecked}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
+          border: `1px solid ${photobook.softBorder}`,
+          borderTop: `3px solid ${photobook.primary}`,
+        }}>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
+            Housing Walkabouts
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
+            {loading ? '...' : stats.housingWalkaboutsCompleted}
           </div>
         </div>
       </div>
@@ -505,6 +545,46 @@ export default function DashboardHome() {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+                Work Type
+              </label>
+              <select
+                value={filters.workType}
+                onChange={(e) => setFilters({ ...filters, workType: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem'
+                }}
+              >
+                <option value="all">All work types</option>
+                <option value="caretaker_scheduled">Caretaker scheduled</option>
+                <option value="esm_adhoc">ESM ad-hoc</option>
+                <option value="housing_walkabout">Housing walkabout</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+                Role
+              </label>
+              <select
+                value={filters.role}
+                onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem'
+                }}
+              >
+                <option value="all">All roles</option>
+                <option value="caretaker">Caretaker</option>
+                <option value="esm">ESM</option>
+                <option value="housing_officer">Housing Officer</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
                 Type
               </label>
               <select
@@ -552,6 +632,8 @@ export default function DashboardHome() {
                 dateTo: '',
                 type: 'all',
                 template: 'all',
+                workType: 'all',
+                role: 'all',
                 inspector: 'all',
                 scheduled: 'all',
                 grading: 'all'

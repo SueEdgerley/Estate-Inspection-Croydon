@@ -11,13 +11,14 @@ import { filterArchivedTemplates } from '@/lib/archived-templates'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
 
-/** Role + Clerk admin for template list filtering (no Airtable changes). */
+/** System role + job title for template list filtering (no Airtable changes). */
 async function getViewerContext() {
   const { userId } = await auth()
   if (!userId) {
-    return { userId: null, appRole: null, clerkIsAdmin: false }
+    return { userId: null, systemRole: null, jobTitle: null, clerkIsAdmin: false }
   }
-  let appRole = null
+  let systemRole = null
+  let jobTitle = null
   let clerkIsAdmin = false
   try {
     const cu = await currentUser()
@@ -28,13 +29,23 @@ async function getViewerContext() {
   try {
     if (getPgUrl()) {
       await ensureDatabase()
-      const r = await sql`SELECT role FROM users WHERE clerk_user_id = ${userId} LIMIT 1`
-      appRole = r.rows[0]?.role ?? null
+      const r = await sql`
+        SELECT
+          COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          p.job_title
+        FROM users u
+        LEFT JOIN people p ON p.id = u.people_id OR lower(trim(p.email)) = lower(trim(COALESCE(u.email, '')))
+        WHERE u.clerk_user_id = ${userId}
+        ORDER BY CASE WHEN p.id = u.people_id THEN 0 ELSE 1 END
+        LIMIT 1
+      `
+      systemRole = r.rows[0]?.system_role ?? null
+      jobTitle = r.rows[0]?.job_title ?? null
     }
   } catch (e) {
     console.warn('[api/templates] role lookup failed:', e?.message)
   }
-  return { userId, appRole, clerkIsAdmin }
+  return { userId, systemRole, jobTitle, clerkIsAdmin }
 }
 
 function applyTemplateVisibility(templates, viewer) {

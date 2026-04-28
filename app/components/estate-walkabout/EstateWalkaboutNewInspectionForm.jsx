@@ -934,7 +934,12 @@ export default function EstateWalkaboutNewInspectionForm({
             {isSubmitting ? 'Saving…' : 'Save inspection'}
           </button>
         </form>
-        <BestPracticeGuideButton title="Estate Walkabout Best Practice Guide" />
+        <BestPracticeGuideButton
+          title="Estate Walkabout Best Practice Guide"
+          templateId={ESTATE_WALKABOUT_TEMPLATE_ID}
+          templateKey="estate_walkabout"
+          templateName="Estate Walkabout"
+        />
       </div>
     </div>
   )

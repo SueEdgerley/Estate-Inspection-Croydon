@@ -17,7 +17,7 @@ async function requireAdmin() {
 /**
  * Phase 1: one row per app account (`users` only). No join to `people`.
  * - `id` = users.id (for PATCH)
- * - `display_name` = email (there is no separate name column on users)
+ * - `role` / `system_role` = permission role only (admin/user)
  */
 export async function GET() {
   const err = await requireAdmin()
@@ -29,7 +29,8 @@ export async function GET() {
         id,
         clerk_user_id,
         COALESCE(NULLIF(TRIM(email), ''), '') AS email,
-        COALESCE(role, 'user') AS role,
+        COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS role,
+        COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
         COALESCE(is_active, true) AS account_active,
         created_at
       FROM users

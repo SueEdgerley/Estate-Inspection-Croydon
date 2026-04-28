@@ -27,6 +27,7 @@ model Inspection {
   templateVersionId   String?   @map("template_version_id") @db.VarChar(255)
   dueDate             DateTime? @map("due_date") @db.Timestamptz
   submittedAt         DateTime? @map("submitted_at") @db.Timestamptz
+  workType            String?   @map("work_type") @db.VarChar(50)
   grading             String?   @db.VarChar(50)
   pdfUrl              String?   @map("pdf_url") @db.Text
   /// Set when poster PDF/blob step fails; submission still completes (status=submitted).
@@ -78,13 +79,15 @@ model User {
   id           String   @id @default(cuid()) @db.VarChar(255)
   clerkUserId  String   @unique @map("clerk_user_id") @db.VarChar(255) // required, unique
   email        String?  @db.VarChar(255)
-  role         String   @default("user") @db.VarChar(50) // access control: owner | admin | user
+  systemRole   String   @default("user") @map("system_role") @db.VarChar(50) // permissions: admin | user
+  role         String   @default("user") @db.VarChar(50) // legacy mirror; use systemRole for permissions
   peopleId     String?  @unique @map("people_id") @db.VarChar(255) // optional link to Person (people.id)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   person           Person?                  @relation(fields: [peopleId], references: [id], onDelete: SetNull)
   estateAssignments AppUserEstateAssignment[]
+  caretakerSchedules CaretakerSchedule[]
 
   @@map("users")
 }
@@ -115,6 +118,7 @@ model Estate {
   inspections Inspection[]
   userAssignments UserAssignment[]
   appUserEstateAssignments AppUserEstateAssignment[]
+  caretakerSchedules CaretakerSchedule[]
 
   @@map("estates")
 }
@@ -134,6 +138,7 @@ model Block {
   actions     Action[]
   userAssignments UserAssignment[]
   appUserEstateAssignments AppUserEstateAssignment[]
+  caretakerSchedules CaretakerSchedule[]
 
   @@map("blocks")
 }
@@ -204,8 +209,48 @@ model Person {
   actionsReceived       Action[] @relation("RecipientActions")
   inspectionRecipients   InspectionRecipient[]
   userAssignments       UserAssignment[]
+  caretakerSchedules    CaretakerSchedule[]
 
   @@map("people")
+}
+
+model CaretakerSchedule {
+  id                 String   @id @db.VarChar(255)
+  caretakerUserId    String?  @map("caretaker_user_id") @db.VarChar(255)
+  caretakerPersonId  String?  @map("caretaker_person_id") @db.VarChar(255)
+  estateId           String?  @map("estate_id") @db.VarChar(255)
+  blockId            String?  @map("block_id") @db.VarChar(255)
+  templateId         String?  @map("template_id") @db.VarChar(255)
+  templateName       String?  @map("template_name") @db.VarChar(255)
+  dayOfWeek          Int      @map("day_of_week")
+  frequency          String   @default("weekly") @db.VarChar(50)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  caretakerUser   User?   @relation(fields: [caretakerUserId], references: [id], onDelete: SetNull)
+  caretakerPerson Person? @relation(fields: [caretakerPersonId], references: [id], onDelete: SetNull)
+  estate          Estate? @relation(fields: [estateId], references: [id], onDelete: SetNull)
+  block           Block?  @relation(fields: [blockId], references: [id], onDelete: SetNull)
+
+  @@map("caretaker_schedules")
+}
+
+model BestPracticeGuide {
+  id           String   @id @db.VarChar(255)
+  templateId   String?  @map("template_id") @db.VarChar(255)
+  templateKey  String?  @map("template_key") @db.VarChar(255)
+  templateName String?  @map("template_name") @db.VarChar(255)
+  title        String   @db.VarChar(255)
+  fileUrl      String   @map("file_url") @db.Text
+  fileKey      String?  @map("file_key") @db.VarChar(500)
+  contentType  String   @default("application/pdf") @map("content_type") @db.VarChar(100)
+  active       Boolean  @default(true)
+  createdBy    String?  @map("created_by") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("best_practice_guides")
 }
 
 /// Routes NV (and other) issue categories to people.role or a specific person.

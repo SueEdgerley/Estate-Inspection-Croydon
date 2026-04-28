@@ -186,8 +186,8 @@ export async function POST(req) {
         await client.query(
           `INSERT INTO inspections (
             id, legacy_inspection_id, type, location_label, inspector_name, inspector_id,
-            template_name, due_date, submitted_at, status, is_scheduled, created_at, updated_at
-          ) VALUES ($1, $2, 'estate_walkabout', $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($8, NOW()), COALESCE($8, NOW()))
+            template_name, due_date, submitted_at, status, is_scheduled, work_type, created_at, updated_at
+          ) VALUES ($1, $2, 'estate_walkabout', $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($8, NOW()), COALESCE($8, NOW()))
           ON CONFLICT (id) DO UPDATE SET
             legacy_inspection_id = EXCLUDED.legacy_inspection_id,
             location_label = EXCLUDED.location_label,
@@ -198,8 +198,21 @@ export async function POST(req) {
             submitted_at = EXCLUDED.submitted_at,
             status = EXCLUDED.status,
             is_scheduled = EXCLUDED.is_scheduled,
+            work_type = EXCLUDED.work_type,
             updated_at = EXCLUDED.updated_at`,
-          [inspectionId, id, location, inspectorName, inspectorEmail, templateName, dueDate, submittedAt, status, isScheduled]
+          [
+            inspectionId,
+            id,
+            location,
+            inspectorName,
+            inspectorEmail,
+            templateName,
+            dueDate,
+            submittedAt,
+            status,
+            isScheduled,
+            isScheduled ? 'caretaker_scheduled' : 'housing_walkabout',
+          ]
         )
         syncedToInspections++
       }

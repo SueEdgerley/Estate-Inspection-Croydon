@@ -23,7 +23,8 @@ async function selectUserRow(userId) {
       id,
       clerk_user_id,
       COALESCE(NULLIF(TRIM(email), ''), '') AS email,
-      COALESCE(role, 'user') AS role,
+      COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS role,
+      COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
       COALESCE(is_active, true) AS account_active,
       created_at
     FROM users
@@ -54,7 +55,7 @@ export async function PATCH(request, { params }) {
 
     if (nextAccountActive === null && !emailTouched && !roleTouched) {
       return NextResponse.json(
-        { error: 'Provide account_active (or active), and/or email, role' },
+        { error: 'Provide account_active (or active), and/or email, system role' },
         { status: 400 }
       )
     }
@@ -83,6 +84,7 @@ export async function PATCH(request, { params }) {
       UPDATE users
       SET
         email = ${email},
+        system_role = ${role},
         role = ${role},
         is_active = ${isActive},
         updated_at = CURRENT_TIMESTAMP
@@ -128,23 +130,23 @@ export async function DELETE(_request, { params }) {
 
     const u = (
       await sql`
-        SELECT id, role, COALESCE(is_active, true) AS is_active
+        SELECT id, COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role, COALESCE(is_active, true) AS is_active
         FROM users WHERE id = ${id} LIMIT 1
       `
     ).rows[0]
     if (!u) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const isOwner = String(u.role || '').toLowerCase().trim() === 'owner' && u.is_active !== false
+    const isOwner = String(u.system_role || '').toLowerCase().trim() === 'admin' && u.is_active !== false
     if (isOwner) {
       const ownerCount = (
         await sql`
           SELECT COUNT(*)::int AS c FROM users
-          WHERE lower(trim(role)) = 'owner' AND COALESCE(is_active, true) = true
+          WHERE lower(trim(COALESCE(system_role, role))) = 'admin' AND COALESCE(is_active, true) = true
         `
       ).rows[0]?.c ?? 0
       if (ownerCount <= 1) {
         return NextResponse.json(
-          { error: 'Cannot delete the only active owner. Promote another owner first.' },
+          { error: 'Cannot delete the only active admin. Promote another admin first.' },
           { status: 400 }
         )
       }

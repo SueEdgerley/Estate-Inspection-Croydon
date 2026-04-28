@@ -32,7 +32,7 @@ async function resolveAuth() {
     console.warn('[reports/inspections] provision:', e?.message)
   }
   const roleCtx = await getAppRoleContextForClerkUser(userId, clerkIsAdmin)
-  if (!mayViewInspectionReports(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+  if (!mayViewInspectionReports(roleCtx.systemRole, roleCtx.clerkIsAdmin)) {
     return {
       error: NextResponse.json(
         { error: 'Forbidden', code: 'REPORTS_NOT_PERMITTED' },
@@ -41,7 +41,13 @@ async function resolveAuth() {
     }
   }
   const userRow = await sql`
-    SELECT id, email, role FROM users WHERE clerk_user_id = ${userId} LIMIT 1
+    SELECT
+      id,
+      email,
+      COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role
+    FROM users
+    WHERE clerk_user_id = ${userId}
+    LIMIT 1
   `
   const internalUser = userRow.rows[0] || null
   if (!internalUser) {
@@ -53,10 +59,9 @@ async function resolveAuth() {
     }
   }
   const admin =
-    roleCtx.normalized === 'admin' ||
-    roleCtx.normalized === 'esm' ||
+    roleCtx.systemRole === 'admin' ||
     clerkIsAdmin ||
-    (internalUser.role || '').toLowerCase() === 'owner'
+    (internalUser.system_role || '').toLowerCase() === 'admin'
   return { userId, internalUser, admin, roleCtx }
 }
 
@@ -108,7 +113,7 @@ export async function GET(request) {
   if (optionsOnly) {
     try {
       const run = getNeonQuery()
-      const [areasR, estatesR, blocksR, typesR, templatesR] = await Promise.all([
+      const [areasR, estatesR, blocksR, typesR, workTypesR, templatesR] = await Promise.all([
         run(
           `SELECT DISTINCT NULLIF(TRIM(area), '') AS area
            FROM estates
@@ -133,6 +138,9 @@ export async function GET(request) {
           `SELECT DISTINCT type FROM inspections WHERE NULLIF(TRIM(type), '') IS NOT NULL ORDER BY 1`
         ),
         run(
+          `SELECT DISTINCT work_type FROM inspections WHERE NULLIF(TRIM(work_type), '') IS NOT NULL ORDER BY 1`
+        ),
+        run(
           `SELECT DISTINCT TRIM(template_name) AS template_name
            FROM inspections
            WHERE NULLIF(TRIM(template_name), '') IS NOT NULL
@@ -145,6 +153,7 @@ export async function GET(request) {
         estates: estatesR.rows || [],
         blocks: blocksR.rows || [],
         types: (typesR.rows || []).map((r) => r.type).filter(Boolean),
+        workTypes: (workTypesR.rows || []).map((r) => r.work_type).filter(Boolean),
         templateNames: (templatesR.rows || []).map((r) => r.template_name).filter(Boolean),
       })
     } catch (e) {
@@ -172,6 +181,8 @@ export async function GET(request) {
   const blockId = (searchParams.get('blockId') || '').trim()
   const type = searchParams.get('type') || 'all'
   const templateName = searchParams.get('templateName') || ''
+  const workType = searchParams.get('workType') || 'all'
+  const role = searchParams.get('role') || 'all'
   const inspectionStatus = searchParams.get('status') || 'submitted'
   const locationSearch = searchParams.get('locationSearch') || ''
 
@@ -183,6 +194,10 @@ export async function GET(request) {
     type,
     templateName: templateName && templateName !== 'all' ? templateName : '',
     template: 'all',
+    workType,
+    role,
+    estateId,
+    blockId,
     locationSearch,
     admin: authRes.admin,
     fallbackInspectorId:
@@ -262,6 +277,7 @@ export async function GET(request) {
          i.id,
          i.status,
          i.type,
+         i.work_type,
          i.template_name,
          NULLIF(TRIM(COALESCE(e.area, '')), '') AS area,
          e.name AS estate_name,
@@ -294,6 +310,8 @@ export async function GET(request) {
         estateId: estateId || null,
         blockId: blockId || null,
         type: type !== 'all' ? type : null,
+        workType: workType !== 'all' ? workType : null,
+        role: role !== 'all' ? role : null,
         templateName: templateName && templateName !== 'all' ? templateName : null,
         inspectionStatus,
         locationSearch: locationSearch || null,

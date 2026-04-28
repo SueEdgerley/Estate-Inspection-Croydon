@@ -1907,6 +1907,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       {showBestPracticeGuide && (
         <BestPracticeGuideButton
           title={`${selectedTemplate?.name || 'Inspection'} Best Practice Guide`}
+          templateId={selectedTemplate?.id || ''}
+          templateKey={selectedTemplate?.template_key || ''}
+          templateName={selectedTemplate?.name || selectedTemplate?.template_name || ''}
         />
       )}
     </div>

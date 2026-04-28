@@ -24,7 +24,8 @@ export async function GET() {
     })
   }
 
-  let role = null
+  let systemRole = null
+  let jobTitle = null
   try {
     if (getPgUrl()) {
       await ensureDatabase()
@@ -39,19 +40,29 @@ export async function GET() {
         console.warn('[auth/me] user provision failed:', provErr?.message)
       }
       const result = await sql`
-        SELECT role FROM users WHERE clerk_user_id = ${userId} LIMIT 1
+        SELECT
+          COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          p.job_title
+        FROM users u
+        LEFT JOIN people p ON p.id = u.people_id OR lower(trim(p.email)) = lower(trim(COALESCE(u.email, '')))
+        WHERE u.clerk_user_id = ${userId}
+        ORDER BY CASE WHEN p.id = u.people_id THEN 0 ELSE 1 END
+        LIMIT 1
       `
-      role = result.rows[0]?.role ?? null
+      systemRole = result.rows[0]?.system_role ?? null
+      jobTitle = result.rows[0]?.job_title ?? null
     }
   } catch (e) {
     console.warn('[auth/me] role lookup failed:', e?.message)
   }
 
-  const roleUi = getRoleUiFlags(role, clerkIsAdmin)
+  const roleUi = getRoleUiFlags(systemRole, clerkIsAdmin, jobTitle)
 
   return Response.json({
     userId,
-    role,
+    role: systemRole,
+    systemRole,
+    jobTitle,
     clerkIsAdmin,
     roleUi,
   })

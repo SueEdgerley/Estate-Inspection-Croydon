@@ -140,6 +140,13 @@ export async function POST(request, { params }) {
       SET status = 'submitted',
           submitted_at = CURRENT_TIMESTAMP,
           pdf_generation_error = NULL,
+          work_type = COALESCE(work_type, CASE
+            WHEN COALESCE(is_scheduled, false) = true THEN 'caretaker_scheduled'
+            WHEN lower(COALESCE(type, '')) = 'estate_walkabout' OR lower(COALESCE(template_name, '')) LIKE '%walkabout%' THEN 'housing_walkabout'
+            WHEN lower(COALESCE(template_name, '')) LIKE '%caretaker%' THEN 'caretaker_scheduled'
+            WHEN lower(COALESCE(template_name, '')) LIKE '%esm%' THEN 'esm_adhoc'
+            ELSE 'esm_adhoc'
+          END),
           grading = COALESCE(${gradingValue}, grading),
           inspector_id = COALESCE(NULLIF(TRIM(inspector_id), ''), ${inspectorEmail}),
           inspector_name = COALESCE(NULLIF(TRIM(inspector_name), ''), ${inspectorName})

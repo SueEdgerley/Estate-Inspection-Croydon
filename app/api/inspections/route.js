@@ -44,6 +44,7 @@ import {
 import { getActionTriggerOn } from '@/lib/template-rules'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
+import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -384,7 +385,10 @@ export async function GET(request) {
     let postgresListAll = false
     try {
       const roleRow = await sql`
-        SELECT lower(trim(role)) AS r FROM users WHERE clerk_user_id = ${userId} LIMIT 1
+        SELECT lower(trim(COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END))) AS r
+        FROM users
+        WHERE clerk_user_id = ${userId}
+        LIMIT 1
       `
       const r = roleRow.rows[0]?.r || ''
       postgresListAll = r === 'owner' || r === 'admin' || r === 'esm'
@@ -405,6 +409,10 @@ export async function GET(request) {
       dateTo: searchParams.get('dateTo') || '',
       type: searchParams.get('type') || 'all',
       template: searchParams.get('template') || 'all',
+      workType: searchParams.get('workType') || 'all',
+      role: searchParams.get('role') || 'all',
+      estateId: searchParams.get('estateId') || '',
+      blockId: searchParams.get('blockId') || '',
       inspector: searchParams.get('inspector') || 'all',
       scheduled: searchParams.get('scheduled') || 'all',
       grading: searchParams.get('grading') || 'all',
@@ -425,7 +433,7 @@ export async function GET(request) {
       getNeonQuery(),
       listPdfFragments,
       (pdfCols) =>
-        `SELECT i.id, i.type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
+        `SELECT i.id, i.type, i.work_type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
              i.due_date, i.submitted_at, i.grading, ${pdfCols},
              i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
              e.name AS estate_name, b.name AS block_name,
@@ -542,11 +550,18 @@ export async function POST(request) {
       }
       const adHocVersion = await getOrCreateTemplateVersion('ad_hoc', 'Ad Hoc Inspection', adHocSnapshot)
 
+      const workType = deriveInspectionWorkType({
+        role: roleCtx.jobTitle,
+        source: adHocSource,
+        explicit: body?.work_type,
+        isScheduled: false,
+      })
+
       await sql`
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
           template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
-          inspector_id, inspector_name, estate_id, block_id, source
+          inspector_id, inspector_name, estate_id, block_id, source, work_type
         )
         VALUES (
           ${inspectionId},
@@ -568,7 +583,8 @@ export async function POST(request) {
           ${inspectorName || null},
           ${estateId},
           ${blockId},
-          ${adHocSource}
+          ${adHocSource},
+          ${workType}
         )
       `
       return NextResponse.json({ inspectionId, id: inspectionId }, { status: 201 })
@@ -663,6 +679,13 @@ export async function POST(request) {
       })
     }
     const inspectionRowType = isEstateWalkaboutTemplate(template) ? 'estate_walkabout' : 'inspection'
+    const workType = deriveInspectionWorkType({
+      template,
+      role: roleCtx.jobTitle,
+      source: sourceValue,
+      explicit: body?.work_type,
+      isScheduled: false,
+    })
 
     // Draft-only: create inspection with status 'draft' for wizard flow (e.g. Neighbourhood Voice)
     if (createDraft === true) {
@@ -673,7 +696,7 @@ export async function POST(request) {
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
           template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
-          inspector_id, inspector_name, estate_id, block_id, source
+          inspector_id, inspector_name, estate_id, block_id, source, work_type
         )
         VALUES (
           ${inspectionId},
@@ -695,7 +718,8 @@ export async function POST(request) {
           ${inspectorName || null},
           ${estateId},
           ${blockId},
-          ${sourceValue}
+          ${sourceValue},
+          ${workType}
         )
       `
       return NextResponse.json(
@@ -730,7 +754,7 @@ export async function POST(request) {
       INSERT INTO inspections (
         id, legacy_inspection_id, type, title, description, location_label, due_date,
         template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
-        inspector_id, inspector_name, estate_id, block_id, source, grading
+        inspector_id, inspector_name, estate_id, block_id, source, work_type, grading
       )
       VALUES (
         ${inspectionId},
@@ -753,6 +777,7 @@ export async function POST(request) {
         ${estateId},
         ${blockId},
         ${sourceValue},
+        ${workType},
         ${gradingValue}
       )
       ON CONFLICT (id) DO UPDATE SET
@@ -771,6 +796,7 @@ export async function POST(request) {
         estate_id = COALESCE(EXCLUDED.estate_id, inspections.estate_id),
         block_id = COALESCE(EXCLUDED.block_id, inspections.block_id),
         source = COALESCE(EXCLUDED.source, inspections.source),
+        work_type = COALESCE(EXCLUDED.work_type, inspections.work_type),
         grading = COALESCE(EXCLUDED.grading, inspections.grading),
         updated_at = ${new Date()}
     `

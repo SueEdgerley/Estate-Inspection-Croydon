@@ -36,7 +36,10 @@ export async function POST(request, { params }) {
     })
 
     const out = await sql`
-      SELECT u.id, u.clerk_user_id, u.email, u.role, COALESCE(u.is_active, true) AS is_active,
+      SELECT u.id, u.clerk_user_id, u.email,
+        COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+        COALESCE(u.system_role, CASE WHEN lower(trim(COALESCE(u.role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS role,
+        COALESCE(u.is_active, true) AS is_active,
         u.people_id, pe.name AS staff_directory_name
       FROM users u
       LEFT JOIN people pe ON pe.id = u.people_id

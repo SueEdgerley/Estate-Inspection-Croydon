@@ -41,7 +41,7 @@ export async function GET(request) {
       clerkUserId,
       cu?.publicMetadata?.isAdmin === true
     )
-    if (!mayViewManagerAnalytics(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+    if (!mayViewManagerAnalytics(roleCtx.systemRole, roleCtx.clerkIsAdmin)) {
       return NextResponse.json({ error: 'Access denied', code: 'ROLE_NOT_PERMITTED' }, { status: 403 })
     }
 
@@ -70,7 +70,14 @@ export async function GET(request) {
 
     let userResult
     try {
-      userResult = await sql`SELECT id, clerk_user_id, email, role, COALESCE(is_active, true) AS is_active FROM users WHERE clerk_user_id = ${clerkUserId} LIMIT 1`
+      userResult = await sql`
+        SELECT id, clerk_user_id, email,
+          COALESCE(system_role, CASE WHEN lower(trim(COALESCE(role, ''))) IN ('owner', 'admin') THEN 'admin' ELSE 'user' END) AS system_role,
+          COALESCE(is_active, true) AS is_active
+        FROM users
+        WHERE clerk_user_id = ${clerkUserId}
+        LIMIT 1
+      `
     } catch (e) {
       if (isUsersTableMissing(e)) {
         return NextResponse.json(
@@ -91,9 +98,7 @@ export async function GET(request) {
 
     /** Broaden inspection/inspector filters for ESM and HOS; caretakers stay scoped when estate scoping is on. */
     const adminForFilters =
-      isPrivilegedAdmin(roleCtx.normalized, roleCtx.clerkIsAdmin) ||
-      roleCtx.normalized === 'esm' ||
-      roleCtx.normalized === 'housing_officer'
+      isPrivilegedAdmin(roleCtx.systemRole, roleCtx.clerkIsAdmin)
 
     const { searchParams } = new URL(request.url)
     const { body } = await loadAnalyticsPayload({

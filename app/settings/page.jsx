@@ -375,7 +375,7 @@ export default function SettingsPage() {
             <thead>
               <tr>
                 <th style={th}>Email</th>
-                <th style={th}>Role</th>
+                <th style={th}>System role</th>
                 <th style={th}>Active</th>
                 <th style={th}>Actions</th>
               </tr>
@@ -395,7 +395,7 @@ export default function SettingsPage() {
                       </td>
                       <td style={td}>
                         <select
-                          value={(editUser.role || 'user').toLowerCase()}
+                          value={(editUser.system_role || editUser.role || 'user').toLowerCase()}
                           onChange={(e) => setEditUser((s) => ({ ...s, role: e.target.value }))}
                           style={{ padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
                         >
@@ -437,7 +437,7 @@ export default function SettingsPage() {
                   ) : (
                     <>
                       <td style={td}>{displayUserLabel(u)}</td>
-                      <td style={td}>{(u.role || 'user').toLowerCase()}</td>
+                      <td style={td}>{(u.system_role || u.role || 'user').toLowerCase()}</td>
                       <td style={td}>{u.account_active === false ? 'No' : 'Yes'}</td>
                       <td style={{ ...td, whiteSpace: 'normal' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
@@ -447,7 +447,7 @@ export default function SettingsPage() {
                               setEditingUserId(u.id)
                               setEditUser({
                                 email: u.email || '',
-                                role: (u.role || 'user').toLowerCase(),
+                                role: (u.system_role || u.role || 'user').toLowerCase(),
                               })
                             }}
                             style={{

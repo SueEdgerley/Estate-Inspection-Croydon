@@ -16,7 +16,8 @@ export async function GET() {
     const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
     const allowed = filterTemplatesForAppRole(normalized, {
       userId,
-      appRole: roleCtx.raw,
+      systemRole: roleCtx.systemRole,
+      jobTitle: roleCtx.jobTitle,
       clerkIsAdmin: roleCtx.clerkIsAdmin,
     })
     
