@@ -148,7 +148,7 @@ export async function GET(request) {
     const systemRole = (internalUser.system_role || 'user').toLowerCase().trim()
     const jobTitle = String(internalUser.job_title || '').toLowerCase().trim().replace(/[\s-]+/g, '_')
     const clerkAdminUser = await isAdmin()
-    if (systemRole !== 'admin' && !ALLOWED_DASHBOARD_JOB_TITLES.includes(jobTitle) && !clerkAdminUser) {
+    if (systemRole !== 'owner' && systemRole !== 'admin' && !ALLOWED_DASHBOARD_JOB_TITLES.includes(jobTitle) && !clerkAdminUser) {
       logDashboardAuth(clerkUserId, userEmail, internalUser, systemRole, null, 403, 'ROLE_NOT_PERMITTED')
       return NextResponse.json(
         {
