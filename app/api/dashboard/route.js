@@ -96,11 +96,11 @@ export async function GET(request) {
           u.id,
           u.clerk_user_id,
           u.email,
-          COALESCE(u.system_role, CASE
+          CASE
             WHEN lower(trim(COALESCE(u.role, ''))) = 'owner' THEN 'owner'
-            WHEN lower(trim(COALESCE(u.role, ''))) = 'admin' THEN 'admin'
+            WHEN lower(trim(COALESCE(u.system_role, u.role, ''))) = 'admin' THEN 'admin'
             ELSE 'user'
-          END) AS system_role,
+          END AS system_role,
           p.job_title,
           COALESCE(u.is_active, true) AS is_active
         FROM users u
