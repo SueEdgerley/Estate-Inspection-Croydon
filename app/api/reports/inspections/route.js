@@ -44,11 +44,11 @@ async function resolveAuth() {
     SELECT
       id,
       email,
-      COALESCE(system_role, CASE
+      CASE
         WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
-        WHEN lower(trim(COALESCE(role, ''))) = 'admin' THEN 'admin'
+        WHEN lower(trim(COALESCE(system_role, role, ''))) = 'admin' THEN 'admin'
         ELSE 'user'
-      END) AS system_role
+      END AS system_role
     FROM users
     WHERE clerk_user_id = ${userId}
     LIMIT 1
