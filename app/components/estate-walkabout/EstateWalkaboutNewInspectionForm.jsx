@@ -65,6 +65,7 @@ const ITEM_YN_PHOTO_ON_YES = new Set([
   'ew_it_tripping_hazards',
   'ew_it_abandoned_vehicles',
   'ew_it_overflows',
+  'ew_it_graffiti',
 ])
 
 /** Question ids that show comment/photo conditionally when No is selected (all others except bulk_refuse and photo_on_yes). */
@@ -806,7 +807,7 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>
-              Select Yes/No/NA for each item. Comments and photos are collected when issues are marked (Yes for tripping hazards, abandoned vehicles, and overflows; No for other items). Use <strong>Additional items &amp; action plan</strong> below to log follow-up actions.
+              Select Yes/No/NA for each item. Comments and photos are collected when issues are marked (Yes for tripping hazards, abandoned vehicles, overflows, and graffiti; No for other items). Use <strong>Additional items &amp; action plan</strong> below to log follow-up actions.
             </p>
             {itemInspectionsQuestion()}
           </section>

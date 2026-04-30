@@ -103,9 +103,13 @@ export async function GET(request) {
     const result = await query
     return NextResponse.json(result.rows)
   } catch (error) {
-    console.error('Error fetching actions:', error)
+    console.error('Error fetching actions:', {
+      inspectionId: searchParams?.get('inspection_id'),
+      url: request.url,
+      error,
+    })
     return NextResponse.json(
-      { error: 'Failed to fetch actions', details: error.message },
+      { error: 'Failed to fetch actions', details: error?.message || String(error) },
       { status: 500 }
     )
   }
