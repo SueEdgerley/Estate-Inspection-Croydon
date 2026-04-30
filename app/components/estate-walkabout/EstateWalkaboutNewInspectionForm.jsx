@@ -65,6 +65,7 @@ const PHOTO_EXTRA_IDS = new Set([
   'ew_ec_paving_grade',
   'ew_os_overall_grade',
   'ew_it_bulk_refuse_removal',
+  'ew_it_comments_photo',
 ])
 
 const YNA_COLORS = {
@@ -743,6 +744,25 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
             {ITEM_YN.map(([id, lab]) => yna(id, lab))}
+            <div style={{ marginTop: 18 }}>
+              <label style={labelStyle}>Comments</label>
+              <textarea
+                value={answers.ew_it_comments || ''}
+                onChange={(e) => setField('ew_it_comments', e.target.value)}
+                rows={3}
+                style={{ ...inputStyle, minHeight: 72 }}
+                placeholder="Add any additional item inspection comments"
+              />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <PhotoUploadControl
+                id="ew-it-comments-photo"
+                value={getPhotos('ew_it_comments_photo')}
+                onChange={(urls) => setPhotos('ew_it_comments_photo', urls)}
+                label="Add photo"
+                multiple={true}
+              />
+            </div>
           </section>
 
           {/* 5. Signature */}
