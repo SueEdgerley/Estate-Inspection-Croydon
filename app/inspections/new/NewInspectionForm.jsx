@@ -955,13 +955,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   /** Active blocks = live location list (estates not used in UI yet). */
   const locationBlocks = useMemo(
-    () => blocks.filter((b) => b == null || b.active !== false),
+    () => blocks.filter((b) => b != null && b.active !== false),
     [blocks]
   )
 
   useEffect(() => {
     if (!postgresBlockId) return
-    const stillValid = locationBlocks.some((b) => b.id === postgresBlockId)
+    const stillValid = locationBlocks.some((b) => b?.id === postgresBlockId)
     if (!stillValid) setPostgresBlockId('')
   }, [postgresBlockId, locationBlocks])
   const [location, setLocation] = useState('')

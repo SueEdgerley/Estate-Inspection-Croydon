@@ -143,7 +143,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const toastTimerRef = useRef(null)
 
   const locationBlocks = useMemo(
-    () => blocks.filter((b) => b == null || b.active !== false),
+    () => blocks.filter((b) => b != null && b.active !== false),
     [blocks]
   )
 
@@ -436,6 +436,41 @@ export default function EstateWalkaboutNewInspectionForm({
           />
         </div>
       )}
+    </div>
+  )
+
+  const itemInspectionsQuestion = () => (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'grid', gap: 18 }}>
+        {ITEM_YN.map(([id, lab]) => yna(id, lab))}
+      </div>
+      <div
+        style={{
+          marginTop: 12,
+          padding: 14,
+          border: `1px solid ${EW.border}`,
+          borderRadius: EW.radius,
+          background: '#f8fafc',
+        }}
+      >
+        <label style={labelStyle}>Comments</label>
+        <textarea
+          value={answers.ew_it_comments || ''}
+          onChange={(e) => setField('ew_it_comments', e.target.value)}
+          rows={3}
+          style={{ ...inputStyle, minHeight: 72 }}
+          placeholder="Add any additional item inspection comments"
+        />
+        <div style={{ marginTop: 12 }}>
+          <PhotoUploadControl
+            id="ew-it-comments-photo"
+            value={getPhotos('ew_it_comments_photo')}
+            onChange={(urls) => setPhotos('ew_it_comments_photo', urls)}
+            label="Add photo"
+            multiple={true}
+          />
+        </div>
+      </div>
     </div>
   )
 
