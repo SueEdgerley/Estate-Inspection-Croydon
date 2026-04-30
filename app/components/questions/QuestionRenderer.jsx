@@ -5,6 +5,7 @@ import { QUESTION_TYPES } from '@/lib/airtable'
 import { getEffectiveQuestionKind } from '../../../lib/question-types'
 import { isEstateInspectionInstructionalQuestion } from '@/lib/estate-standard-inspection-template-patch'
 import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib/template-rules'
+import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import {
   indexToCaretakerRowLetter,
@@ -487,6 +488,7 @@ export default function QuestionRenderer({
             onChange={(e) => handleChange(e.target.value)}
             rows={8}
             style={{
+              ...NV_TEXTAREA_SURFACE,
               width: '100%',
               padding: '0.75rem',
               border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -507,6 +509,7 @@ export default function QuestionRenderer({
             rows={4}
             placeholder="Additional comments (optional)"
             style={{
+              ...NV_TEXTAREA_SURFACE,
               width: '100%',
               padding: '0.75rem',
               border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -525,6 +528,7 @@ export default function QuestionRenderer({
             rows={2}
             placeholder="Sign-off (date and name if editing outside the wizard)"
             style={{
+              ...NV_TEXTAREA_SURFACE,
               width: '100%',
               padding: '0.75rem',
               border: errors[question.id] ? '1px solid #ef4444' : '1px solid #d1d5db',
