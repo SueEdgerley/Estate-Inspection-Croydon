@@ -67,12 +67,20 @@ const ITEM_YN_PHOTO_ON_YES = new Set([
   'ew_it_overflows',
 ])
 
+/** Question ids that show comment/photo conditionally when No is selected (all others except bulk_refuse and photo_on_yes). */
+const ITEM_YN_PHOTO_ON_NO = new Set(
+  ITEM_YN.map(([id]) => id).filter(
+    (id) => !ITEM_YN_PHOTO_ON_YES.has(id) && id !== 'ew_it_bulk_refuse_removal'
+  )
+)
+
 /** Question ids for answer_extras photo_urls. */
 const PHOTO_EXTRA_IDS = new Set([
   'ew_ec_paving_grade',
   'ew_os_overall_grade',
   'ew_it_bulk_refuse_removal',
   ...ITEM_YN_PHOTO_ON_YES,
+  ...ITEM_YN_PHOTO_ON_NO,
 ])
 
 const YNA_COLORS = {
@@ -372,8 +380,14 @@ export default function EstateWalkaboutNewInspectionForm({
   }
 
   const yna = (qid, label) => {
-    const showCommentPhotoOnYes = ITEM_YN_PHOTO_ON_YES.has(qid)
-    const showCommentPhoto = showCommentPhotoOnYes && answers[qid] === 'Yes'
+    const showPhotoOnYes = ITEM_YN_PHOTO_ON_YES.has(qid)
+    const showPhotoOnNo = ITEM_YN_PHOTO_ON_NO.has(qid)
+    const isBulkRefuse = qid === 'ew_it_bulk_refuse_removal'
+    
+    let showCommentPhoto = false
+    if (showPhotoOnYes) showCommentPhoto = answers[qid] === 'Yes'
+    else if (showPhotoOnNo) showCommentPhoto = answers[qid] === 'No'
+    
     return (
       <div style={{ marginBottom: 18 }}>
         <span style={{ fontWeight: 600, display: 'block', marginBottom: 8, color: EW.text }}>{label}</span>
@@ -405,7 +419,7 @@ export default function EstateWalkaboutNewInspectionForm({
           })}
         </div>
         {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
-        {showCommentPhoto && (
+        {showCommentPhoto && !isBulkRefuse && (
           <div
             style={{
               marginTop: 12,
@@ -792,7 +806,7 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>
-              Select Yes/No/NA for each item. Comments and photos are collected for tripping/slipping hazards, abandoned vehicles, and overflows/leaks when marked Yes. Use <strong>Additional items &amp; action plan</strong> below to log any follow-up actions.
+              Select Yes/No/NA for each item. Comments and photos are collected when issues are marked (Yes for tripping hazards, abandoned vehicles, and overflows; No for other items). Use <strong>Additional items &amp; action plan</strong> below to log follow-up actions.
             </p>
             {itemInspectionsQuestion()}
           </section>
