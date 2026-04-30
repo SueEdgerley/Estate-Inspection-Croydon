@@ -15,6 +15,9 @@ export default function InspectionDetail() {
   const [inspection, setInspection] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [actions, setActions] = useState([])
+  const [actionsLoading, setActionsLoading] = useState(true)
+  const [actionsError, setActionsError] = useState(null)
 
   useEffect(() => {
     if (!id) {
@@ -51,6 +54,48 @@ export default function InspectionDetail() {
     }
 
     loadInspection()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (!id) {
+      setActions([])
+      setActionsLoading(false)
+      setActionsError(null)
+      return
+    }
+
+    let cancelled = false
+    const loadActions = async () => {
+      setActionsLoading(true)
+      setActionsError(null)
+      try {
+        const response = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}`, {
+          credentials: 'include',
+        })
+        const data = await response.json().catch(() => ({}))
+        if (cancelled) return
+        if (response.ok) {
+          setActions(Array.isArray(data) ? data : [])
+          setActionsError(null)
+        } else {
+          setActions([])
+          setActionsError(data?.error || `Could not load actions (${response.status})`)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error loading actions:', error)
+          setActions([])
+          setActionsError(error?.message || 'Failed to load actions')
+        }
+      } finally {
+        if (!cancelled) setActionsLoading(false)
+      }
+    }
+
+    loadActions()
     return () => {
       cancelled = true
     }
@@ -200,6 +245,46 @@ export default function InspectionDetail() {
         <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
           Actions logged during this inspection will appear here.
         </p>
+        {actionsLoading ? (
+          <p style={{ color: '#6b7280' }}>Loading actions...</p>
+        ) : actionsError ? (
+          <p style={{ color: '#b45309' }}>{actionsError}</p>
+        ) : actions.length === 0 ? (
+          <p style={{ color: '#6b7280' }}>No actions were logged for this inspection.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {actions.map((action) => (
+              <div
+                key={action.id}
+                style={{
+                  padding: '1rem',
+                  borderRadius: '0.5rem',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#111827' }}>{action.title || 'Action'}</div>
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{action.status || 'open'}</div>
+                </div>
+                {action.category ? (
+                  <div style={{ marginTop: '0.25rem', color: '#475569' }}>{action.category}</div>
+                ) : null}
+                {action.comment ? (
+                  <p style={{ margin: '0.75rem 0 0 0', color: '#334155' }}>{action.comment}</p>
+                ) : null}
+                {action.description && action.description !== action.comment ? (
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#334155' }}>{action.description}</p>
+                ) : null}
+                {action.location ? (
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                    Location: {action.location}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{
