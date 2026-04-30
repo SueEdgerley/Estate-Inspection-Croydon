@@ -60,14 +60,19 @@ const ITEM_YN = [
   ['ew_it_play_areas', 'Have you inspected the play areas?'],
 ]
 
-const ITEM_YN_IDS = new Set(ITEM_YN.map(([id]) => id))
+/** Question ids that show comment/photo conditionally when Yes is selected. */
+const ITEM_YN_PHOTO_ON_YES = new Set([
+  'ew_it_tripping_hazards',
+  'ew_it_abandoned_vehicles',
+  'ew_it_overflows',
+])
 
 /** Question ids for answer_extras photo_urls. */
 const PHOTO_EXTRA_IDS = new Set([
   'ew_ec_paving_grade',
   'ew_os_overall_grade',
   'ew_it_bulk_refuse_removal',
-  ...ITEM_YN_IDS,
+  ...ITEM_YN_PHOTO_ON_YES,
 ])
 
 const YNA_COLORS = {
@@ -367,7 +372,8 @@ export default function EstateWalkaboutNewInspectionForm({
   }
 
   const yna = (qid, label) => {
-    const showItemCommentPhoto = ITEM_YN_IDS.has(qid) && qid !== 'ew_it_bulk_refuse_removal'
+    const showCommentPhotoOnYes = ITEM_YN_PHOTO_ON_YES.has(qid)
+    const showCommentPhoto = showCommentPhotoOnYes && answers[qid] === 'Yes'
     return (
       <div style={{ marginBottom: 18 }}>
         <span style={{ fontWeight: 600, display: 'block', marginBottom: 8, color: EW.text }}>{label}</span>
@@ -399,7 +405,7 @@ export default function EstateWalkaboutNewInspectionForm({
           })}
         </div>
         {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
-        {showItemCommentPhoto && (
+        {showCommentPhoto && (
           <div
             style={{
               marginTop: 12,
@@ -416,7 +422,7 @@ export default function EstateWalkaboutNewInspectionForm({
                 onChange={(e) => setField(`${qid}_comment`, e.target.value)}
                 rows={3}
                 style={{ ...inputStyle, minHeight: 72 }}
-                placeholder="Add comments for this item"
+                placeholder="Add comments"
               />
             </div>
             <PhotoUploadControl
@@ -785,6 +791,9 @@ export default function EstateWalkaboutNewInspectionForm({
           {/* 4. Item inspections */}
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>
+              Select Yes/No/NA for each item. Comments and photos are collected for tripping/slipping hazards, abandoned vehicles, and overflows/leaks when marked Yes. Use <strong>Additional items &amp; action plan</strong> below to log any follow-up actions.
+            </p>
             {itemInspectionsQuestion()}
           </section>
 
