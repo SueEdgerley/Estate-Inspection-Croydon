@@ -743,26 +743,7 @@ export default function EstateWalkaboutNewInspectionForm({
           {/* 4. Item inspections */}
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
-            {ITEM_YN.map(([id, lab]) => yna(id, lab))}
-            <div style={{ marginTop: 18 }}>
-              <label style={labelStyle}>Comments</label>
-              <textarea
-                value={answers.ew_it_comments || ''}
-                onChange={(e) => setField('ew_it_comments', e.target.value)}
-                rows={3}
-                style={{ ...inputStyle, minHeight: 72 }}
-                placeholder="Add any additional item inspection comments"
-              />
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <PhotoUploadControl
-                id="ew-it-comments-photo"
-                value={getPhotos('ew_it_comments_photo')}
-                onChange={(urls) => setPhotos('ew_it_comments_photo', urls)}
-                label="Add photo"
-                multiple={true}
-              />
-            </div>
+            {itemInspectionsQuestion()}
           </section>
 
           {/* 5. Signature */}
