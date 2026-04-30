@@ -579,8 +579,8 @@ export default function EstateWalkaboutNewInspectionForm({
             Estate Walkabout
           </h1>
           <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 16, maxWidth: 720 }}>
-            Structured walkabout sections. Ratings and Y/N answers do not create actions by themselves. Use{' '}
-            <strong>Additional items &amp; action plan</strong> at the end to log follow-up actions when needed.
+            Structured walkabout sections. Some questions will automatically create actions when issues are identified and supported by comments or photos. Use{' '}
+            <strong>Additional items &amp; action plan</strong> to log any further follow-up actions not already captured.
           </p>
         </header>
 
@@ -625,10 +625,10 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>Location</h2>
             <p style={{ margin: '0 0 12px', fontSize: 14, color: EW.muted }}>
-              Optional: choose a location from the list, or leave blank and use the location note below.
+              Choose a location from the list or use the location note below.
             </p>
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Location (optional)</label>
+              <label style={labelStyle}>Location</label>
               <select
                 value={postgresBlockId}
                 onChange={(e) => setPostgresBlockId(e.target.value)}
