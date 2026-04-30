@@ -401,10 +401,6 @@ export async function GET(request) {
     }
     const canListAll = clerkAdmin || postgresListAll
     const { searchParams } = new URL(request.url)
-    const fallbackInspectorId =
-      !canListAll && typeof userEmail === 'string' && userEmail.trim()
-        ? userEmail.trim()
-        : null
 
     const whereConditions = buildInspectionWhereConditions({
       completionScope: searchParams.get('completionScope') || 'active',
@@ -422,7 +418,6 @@ export async function GET(request) {
       grading: searchParams.get('grading') || 'all',
       locationSearch: searchParams.get('search') || '',
       admin: canListAll,
-      fallbackInspectorId,
     })
     const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const limit = canListAll ? 200 : 100
