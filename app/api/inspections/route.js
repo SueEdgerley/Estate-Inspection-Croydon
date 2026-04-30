@@ -129,6 +129,10 @@ function mapSnapshotQuestion(q, qIndex) {
     create_action_on_no: q.create_action_on_no ?? true,
     require_comment_on_no: q.require_comment_on_no ?? true,
     require_photo_on_no: q.require_photo_on_no ?? true,
+    triggers_issue_answer:
+      q.triggers_issue_answer ?? q.triggers_issue_answers ?? q.issue_trigger_answers ?? null,
+    action_trigger_on: q.action_trigger_on ?? q.issue_triggers_on ?? null,
+    issue_triggers_on: q.issue_triggers_on ?? null,
     triggers_task: q.triggers_task ?? false,
     triggers_email: q.triggers_email ?? false,
     email_routing: q.email_routing ?? null,
@@ -950,7 +954,9 @@ export async function POST(request) {
         const answer = answers[q.id]
         if (answer === undefined || answer === null) continue
         const extras = answer_extras[q.id] || {}
-        const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+        const answerCommentKey = `${q.id}_comment`
+        const answerComment = typeof answers[answerCommentKey] === 'string' ? answers[answerCommentKey].trim() : ''
+        const comment = answerComment || (typeof extras.comment === 'string' ? extras.comment.trim() : '')
         const photoUrlsArr = Array.isArray(extras.photo_urls)
           ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
           : Array.isArray(extras.photoUrls)
@@ -961,7 +967,18 @@ export async function POST(request) {
 
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = q.action_category || q.category || 'Follow-up'
-        const isIssue = inspectionAnswerTriggersIssue(q, section, answer)
+        let isIssue = inspectionAnswerTriggersIssue(q, section, answer)
+        if (
+          isIssue &&
+          isEstateWalkaboutTemplate(template) &&
+          q.question_type === 'yes_no' &&
+          String(q.id || '').startsWith('ew_it_')
+        ) {
+          const hasCommentOrPhoto = Boolean(comment || allPhotoUrls.length)
+          if (!hasCommentOrPhoto) {
+            isIssue = false
+          }
+        }
 
         if (isIssue) {
           try {
