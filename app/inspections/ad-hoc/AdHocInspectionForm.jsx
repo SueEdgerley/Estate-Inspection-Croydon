@@ -16,13 +16,13 @@ export default function AdHocInspectionForm({ initialBlocks = [] }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const locationBlocks = useMemo(
-    () => blocks.filter((b) => b != null && b.active !== false),
+    () => blocks.filter((b) => b == null || b.active !== false),
     [blocks]
   )
 
   useEffect(() => {
     if (!postgresBlockId) return
-    const stillValid = locationBlocks.some((b) => b?.id === postgresBlockId)
+    const stillValid = locationBlocks.some((b) => b.id === postgresBlockId)
     if (!stillValid) setPostgresBlockId('')
   }, [postgresBlockId, locationBlocks])
 

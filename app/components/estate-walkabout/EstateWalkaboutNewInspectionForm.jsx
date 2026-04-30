@@ -60,12 +60,14 @@ const ITEM_YN = [
   ['ew_it_play_areas', 'Have you inspected the play areas?'],
 ]
 
+const ITEM_YN_IDS = new Set(ITEM_YN.map(([id]) => id))
+
 /** Question ids for answer_extras photo_urls. */
 const PHOTO_EXTRA_IDS = new Set([
   'ew_ec_paving_grade',
   'ew_os_overall_grade',
   'ew_it_bulk_refuse_removal',
-  'ew_it_comments_photo',
+  ...ITEM_YN_IDS,
 ])
 
 const YNA_COLORS = {
@@ -364,112 +366,117 @@ export default function EstateWalkaboutNewInspectionForm({
     }
   }
 
-  const yna = (qid, label) => (
-    <div style={{ marginBottom: 18 }}>
-      <span style={{ fontWeight: 600, display: 'block', marginBottom: 8, color: EW.text }}>{label}</span>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {['Yes', 'No', 'NA'].map((s) => {
-          const sel = answers[qid] === s
-          const colors = YNA_COLORS[s]
-          return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setYesNoNaField(qid, s)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: sel ? `2px solid ${colors.border}` : `1px solid ${colors.border}`,
-                background: sel ? colors.selectedBg : colors.bg,
-                color: sel ? '#fff' : colors.text,
-                fontWeight: 700,
-                boxShadow: sel ? `0 0 0 3px ${colors.bg}` : 'none',
-                minHeight: 42,
-                minWidth: 58,
-                cursor: 'pointer',
-              }}
-            >
-              {s}
-            </button>
-          )
-        })}
-      </div>
-      {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
-      {qid === 'ew_it_bulk_refuse_removal' && answers.ew_it_bulk_refuse_removal === 'Yes' && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: 14,
-            border: `1px solid ${EW.border}`,
-            borderRadius: EW.radius,
-            background: '#f8fafc',
-          }}
-        >
-          <p style={{ margin: '0 0 12px', fontSize: 14, color: EW.text, lineHeight: 1.45 }}>
-            Bulk refuse removal email notification will be prepared when this inspection is saved.
-          </p>
-          <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Exact location / block area</label>
-            <input
-              value={answers.ew_it_bulk_refuse_exact_location || ''}
-              onChange={(e) => setField('ew_it_bulk_refuse_exact_location', e.target.value)}
-              style={inputStyle}
-              placeholder="e.g. Bin chamber, rear of block, car park bay"
-            />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Comments for bulk refuse removal</label>
-            <textarea
-              value={answers.ew_it_bulk_refuse_comments || ''}
-              onChange={(e) => setField('ew_it_bulk_refuse_comments', e.target.value)}
-              rows={3}
-              style={{ ...inputStyle, minHeight: 72 }}
-              placeholder="Add details for the removal team"
-            />
-          </div>
-          <PhotoUploadControl
-            id="ew-bulk-refuse-photo"
-            value={getPhotos('ew_it_bulk_refuse_removal')}
-            onChange={(urls) => setPhotos('ew_it_bulk_refuse_removal', urls)}
-            label="Add bulk refuse photo"
-            multiple={true}
-          />
+  const yna = (qid, label) => {
+    const showItemCommentPhoto = ITEM_YN_IDS.has(qid) && qid !== 'ew_it_bulk_refuse_removal'
+    return (
+      <div style={{ marginBottom: 18 }}>
+        <span style={{ fontWeight: 600, display: 'block', marginBottom: 8, color: EW.text }}>{label}</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {['Yes', 'No', 'NA'].map((s) => {
+            const sel = answers[qid] === s
+            const colors = YNA_COLORS[s]
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setYesNoNaField(qid, s)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: sel ? `2px solid ${colors.border}` : `1px solid ${colors.border}`,
+                  background: sel ? colors.selectedBg : colors.bg,
+                  color: sel ? '#fff' : colors.text,
+                  fontWeight: 700,
+                  boxShadow: sel ? `0 0 0 3px ${colors.bg}` : 'none',
+                  minHeight: 42,
+                  minWidth: 58,
+                  cursor: 'pointer',
+                }}
+              >
+                {s}
+              </button>
+            )
+          })}
         </div>
-      )}
-    </div>
-  )
+        {validationErrors[qid] && <p style={errStyle}>{validationErrors[qid]}</p>}
+        {showItemCommentPhoto && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              border: `1px solid ${EW.border}`,
+              borderRadius: EW.radius,
+              background: '#f8fafc',
+            }}
+          >
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Comments</label>
+              <textarea
+                value={answers[`${qid}_comment`] || ''}
+                onChange={(e) => setField(`${qid}_comment`, e.target.value)}
+                rows={3}
+                style={{ ...inputStyle, minHeight: 72 }}
+                placeholder="Add comments for this item"
+              />
+            </div>
+            <PhotoUploadControl
+              id={`ew-${qid}-photo`}
+              value={getPhotos(qid)}
+              onChange={(urls) => setPhotos(qid, urls)}
+              label="Add photo"
+              multiple={true}
+            />
+          </div>
+        )}
+        {qid === 'ew_it_bulk_refuse_removal' && answers.ew_it_bulk_refuse_removal === 'Yes' && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              border: `1px solid ${EW.border}`,
+              borderRadius: EW.radius,
+              background: '#f8fafc',
+            }}
+          >
+            <p style={{ margin: '0 0 12px', fontSize: 14, color: EW.text, lineHeight: 1.45 }}>
+              Bulk refuse removal email notification will be prepared when this inspection is saved.
+            </p>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Exact location / block area</label>
+              <input
+                value={answers.ew_it_bulk_refuse_exact_location || ''}
+                onChange={(e) => setField('ew_it_bulk_refuse_exact_location', e.target.value)}
+                style={inputStyle}
+                placeholder="e.g. Bin chamber, rear of block, car park bay"
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Comments for bulk refuse removal</label>
+              <textarea
+                value={answers.ew_it_bulk_refuse_comments || ''}
+                onChange={(e) => setField('ew_it_bulk_refuse_comments', e.target.value)}
+                rows={3}
+                style={{ ...inputStyle, minHeight: 72 }}
+                placeholder="Add details for the removal team"
+              />
+            </div>
+            <PhotoUploadControl
+              id="ew-bulk-refuse-photo"
+              value={getPhotos('ew_it_bulk_refuse_removal')}
+              onChange={(urls) => setPhotos('ew_it_bulk_refuse_removal', urls)}
+              label="Add bulk refuse photo"
+              multiple={true}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const itemInspectionsQuestion = () => (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'grid', gap: 18 }}>
         {ITEM_YN.map(([id, lab]) => yna(id, lab))}
-      </div>
-      <div
-        style={{
-          marginTop: 12,
-          padding: 14,
-          border: `1px solid ${EW.border}`,
-          borderRadius: EW.radius,
-          background: '#f8fafc',
-        }}
-      >
-        <label style={labelStyle}>Comments</label>
-        <textarea
-          value={answers.ew_it_comments || ''}
-          onChange={(e) => setField('ew_it_comments', e.target.value)}
-          rows={3}
-          style={{ ...inputStyle, minHeight: 72 }}
-          placeholder="Add any additional item inspection comments"
-        />
-        <div style={{ marginTop: 12 }}>
-          <PhotoUploadControl
-            id="ew-it-comments-photo"
-            value={getPhotos('ew_it_comments_photo')}
-            onChange={(urls) => setPhotos('ew_it_comments_photo', urls)}
-            label="Add photo"
-            multiple={true}
-          />
-        </div>
       </div>
     </div>
   )
