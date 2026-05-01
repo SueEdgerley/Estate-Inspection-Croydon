@@ -136,6 +136,7 @@ function mapSnapshotQuestion(q, qIndex) {
     require_photo_on_yes: q.require_photo_on_yes ?? false,
     require_photo_on_no: q.require_photo_on_no ?? true,
     caretaker_recipient_on_yes: q.caretaker_recipient_on_yes ?? false,
+    caretaker_recipient_options: q.caretaker_recipient_options ?? null,
     triggers_issue_answer:
       q.triggers_issue_answer ?? q.triggers_issue_answers ?? q.issue_trigger_answers ?? null,
     action_trigger_on: q.action_trigger_on ?? q.issue_triggers_on ?? null,

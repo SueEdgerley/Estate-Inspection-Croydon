@@ -411,6 +411,12 @@ function InspectionQuestion({
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
   const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
+  const caretakerRecipientOptions = Array.isArray(question.caretaker_recipient_options)
+    ? question.caretaker_recipient_options
+        .map((name) => String(name || '').trim())
+        .filter(Boolean)
+        .map((name) => ({ value: name, label: name }))
+    : peopleOptions
   const showActionBlock =
     qType === 'yes_no' &&
     !esmQ4AbandonedVehicle &&
@@ -654,10 +660,10 @@ function InspectionQuestion({
                   }}
                 />
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
-                {question.caretaker_recipient_on_yes && isYes && Array.isArray(peopleOptions) && (
+                {question.caretaker_recipient_on_yes && isYes && Array.isArray(caretakerRecipientOptions) && (
                   <>
                     <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                      Who does this need to be sent to <span style={{ color: '#ef4444' }}>*</span>
+                      Who does this need to go to <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <select
                       id={`recipient-${question.id}`}
@@ -674,7 +680,7 @@ function InspectionQuestion({
                       }}
                     >
                       <option value="">Select recipient…</option>
-                      {peopleOptions.map((opt) => (
+                      {caretakerRecipientOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
