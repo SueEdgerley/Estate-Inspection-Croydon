@@ -49,6 +49,7 @@ export async function GET(request) {
             a.category, a.priority, a.title, a.description,
             a.location,
             a.status, a.comment, a.recipient_person_id, a.auto_created,
+            a.photo_urls,
             a.block_id, a.cost_code, a.issue_pdf_url,
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
@@ -66,6 +67,7 @@ export async function GET(request) {
             a.category, a.priority, a.title, a.description,
             a.location,
             a.status, a.comment, a.recipient_person_id, a.auto_created,
+            a.photo_urls,
             a.block_id, a.cost_code, a.issue_pdf_url,
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
@@ -83,6 +85,7 @@ export async function GET(request) {
             a.category, a.priority, a.title, a.description,
             a.location,
             a.status, a.comment, a.recipient_person_id, a.auto_created,
+            a.photo_urls,
             a.block_id, a.cost_code, a.issue_pdf_url,
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
@@ -101,7 +104,84 @@ export async function GET(request) {
       }
     } catch (dbError) {
       console.error('[Actions API] Query failed for inspection_id:', inspectionId, 'error:', dbError?.message || dbError)
-      result = { rows: [] }
+      try {
+        let fallbackQuery
+        if (inspectionId && questionId) {
+          fallbackQuery = sql`
+            SELECT
+              a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+              a.category, a.priority, a.title, a.description, a.location,
+              a.status, a.comment, a.recipient_person_id, a.auto_created,
+              a.photo_urls,
+              NULL::varchar AS block_id,
+              NULL::varchar AS cost_code,
+              NULL::text AS issue_pdf_url,
+              a.job_number, a.expected_completion_date,
+              NULL::text AS repair_notes,
+              NULL::text AS repair_photo_url,
+              NULL::timestamptz AS repair_updated_at,
+              a.created_at, a.updated_at,
+              'Inspector' AS created_by,
+              'Assigned' AS assigned_to
+            FROM actions a
+            WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
+            ORDER BY a.created_at DESC
+          `
+        } else if (inspectionId) {
+          fallbackQuery = sql`
+            SELECT
+              a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+              a.category, a.priority, a.title, a.description, a.location,
+              a.status, a.comment, a.recipient_person_id, a.auto_created,
+              a.photo_urls,
+              NULL::varchar AS block_id,
+              NULL::varchar AS cost_code,
+              NULL::text AS issue_pdf_url,
+              a.job_number, a.expected_completion_date,
+              NULL::text AS repair_notes,
+              NULL::text AS repair_photo_url,
+              NULL::timestamptz AS repair_updated_at,
+              a.created_at, a.updated_at,
+              'Inspector' AS created_by,
+              'Assigned' AS assigned_to
+            FROM actions a
+            WHERE a.inspection_id = ${inspectionId}
+            ORDER BY a.created_at DESC
+          `
+        } else {
+          fallbackQuery = sql`
+            SELECT
+              a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+              a.category, a.priority, a.title, a.description, a.location,
+              a.status, a.comment, a.recipient_person_id, a.auto_created,
+              a.photo_urls,
+              NULL::varchar AS block_id,
+              NULL::varchar AS cost_code,
+              NULL::text AS issue_pdf_url,
+              a.job_number, a.expected_completion_date,
+              NULL::text AS repair_notes,
+              NULL::text AS repair_photo_url,
+              NULL::timestamptz AS repair_updated_at,
+              a.created_at, a.updated_at,
+              'Inspector' AS created_by,
+              'Assigned' AS assigned_to
+            FROM actions a
+            ORDER BY a.created_at DESC
+            LIMIT 1000
+          `
+        }
+        result = await fallbackQuery
+        console.warn(
+          '[Actions API] Used core actions fallback for inspection_id:',
+          inspectionId || '(global)',
+          '- found',
+          result.rows.length,
+          'actions'
+        )
+      } catch (fallbackError) {
+        console.error('[Actions API] Fallback query failed for inspection_id:', inspectionId, 'error:', fallbackError?.message || fallbackError)
+        result = { rows: [] }
+      }
     }
 
     return NextResponse.json(Array.isArray(result.rows) ? result.rows : result.rows || [])
