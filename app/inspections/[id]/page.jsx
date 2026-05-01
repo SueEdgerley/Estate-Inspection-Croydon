@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { GeneratePosterButton } from '@/app/components/GeneratePosterButton'
+import GenerateRepairsUpdatePdfButton from '@/app/components/GenerateRepairsUpdatePdfButton'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
@@ -313,10 +314,11 @@ export default function InspectionDetail() {
         border: '1px solid #e5e7eb'
       }}>
         <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-          Poster
+          PDFs
         </h2>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {id && <GeneratePosterButton inspectionId={id} />}
+          {id && <GenerateRepairsUpdatePdfButton inspectionId={id} />}
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <InspectionFullPdfControls
               inspectionId={inspection.id}
