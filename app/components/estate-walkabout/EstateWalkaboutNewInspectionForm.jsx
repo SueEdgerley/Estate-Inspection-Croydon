@@ -126,7 +126,6 @@ function newChecklistItem() {
         ? crypto.randomUUID()
         : `item_${Date.now()}_${Math.random()}`,
     description: '',
-    status: 'NA',
     photo_urls: [],
     action_required: false,
     action_summary: '',
@@ -338,7 +337,6 @@ export default function EstateWalkaboutNewInspectionForm({
           checklist.map((it) => ({
             id: it.id,
             description: (it.description || '').trim(),
-            status: it.status,
             photo_urls: Array.isArray(it.photo_urls) ? it.photo_urls : [],
             action_required: !!it.action_required,
             action_summary: String(it.action_summary || '').trim(),
@@ -897,28 +895,6 @@ export default function EstateWalkaboutNewInspectionForm({
                   {validationErrors[`checklist_desc_${it.id}`] && (
                     <p style={errStyle}>{validationErrors[`checklist_desc_${it.id}`]}</p>
                   )}
-                  <div style={{ marginTop: 12 }}>
-                    <span style={{ ...labelStyle, display: 'block', marginBottom: 8 }}>Status</span>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {['Yes', 'No', 'NA'].map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => updateItem(it.id, { status: s })}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 8,
-                            border: it.status === s ? `2px solid ${EW.accent}` : `1px solid ${EW.border}`,
-                            background: it.status === s ? EW.accentMuted : '#fff',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                   <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
                     <input
                       type="checkbox"
