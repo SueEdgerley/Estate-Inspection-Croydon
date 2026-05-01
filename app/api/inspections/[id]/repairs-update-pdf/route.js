@@ -41,7 +41,9 @@ async function generate(request, { params }) {
         a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
         a.category, a.priority, a.title, a.description, a.location, a.status, a.comment,
         a.photo_urls, a.job_number, a.expected_completion_date,
-        a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+        NULL::text AS repair_notes,
+        NULL::text AS repair_photo_url,
+        NULL::timestamptz AS repair_updated_at,
         a.created_at, a.updated_at,
         p.name AS recipient_name,
         p.job_title AS recipient_job_title,
@@ -61,8 +63,6 @@ async function generate(request, { params }) {
           OR lower(COALESCE(p.category, '')) LIKE '%repair%'
           OR NULLIF(TRIM(COALESCE(a.job_number, '')), '') IS NOT NULL
           OR a.expected_completion_date IS NOT NULL
-          OR NULLIF(TRIM(COALESCE(a.repair_notes, '')), '') IS NOT NULL
-          OR NULLIF(TRIM(COALESCE(a.repair_photo_url, '')), '') IS NOT NULL
         )
       ORDER BY
         CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END,

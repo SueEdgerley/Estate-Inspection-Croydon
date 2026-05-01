@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureRepairActionFields } from '@/lib/repair-action-fields'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,7 @@ export async function GET(request, { params }) {
       )
     }
     const { id } = await params
+    await ensureRepairActionFields(sql)
     const result = await sql`
       SELECT 
         id, inspection_id, section_id, section_name, question_id,
@@ -58,6 +60,7 @@ export async function PUT(request, { params }) {
     }
     const { id } = await params
     const data = await request.json()
+    await ensureRepairActionFields(sql)
 
     // Build update query dynamically
     const updates = []

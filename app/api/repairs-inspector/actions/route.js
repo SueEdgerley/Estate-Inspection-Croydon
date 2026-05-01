@@ -3,6 +3,7 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getAppRoleContextForClerkUser, roleMayViewGlobalActionsList } from '@/lib/app-role-access'
+import { ensureRepairActionFields } from '@/lib/repair-action-fields'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,7 @@ export async function GET() {
 
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()
+    await ensureRepairActionFields(sql)
 
     const result = await sql`
       SELECT

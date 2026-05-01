@@ -7,6 +7,7 @@ import {
   roleMayPostManualAction,
   roleMayViewGlobalActionsList,
 } from '@/lib/app-role-access'
+import { ensureRepairActionFields } from '@/lib/repair-action-fields'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -220,6 +221,7 @@ export async function POST(request) {
       )
     }
     const data = await request.json()
+    await ensureRepairActionFields(sql)
     
     // Generate ID if not provided
     const id = data.id || `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
