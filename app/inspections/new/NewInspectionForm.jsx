@@ -197,15 +197,6 @@ const ESM_Q4_COST_CODES = [
   'C203410.641620.0000 (East)',
 ]
 
-const ESM_Q4_RECIPIENTS = [
-  'Adam Curtis',
-  'Kingsey Eze',
-  'Stanley Enyinnaya',
-  'Mike Thomas',
-  'Angela Bradford',
-  'Karen Reid',
-]
-
 function CaretakerYesNoButtons({ id, value, onChange }) {
   const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
   return (
@@ -459,7 +450,6 @@ function InspectionQuestion({
           photo_urls: [],
           authorisation_text: '',
           cost_code: '',
-          recipient_person_id: '',
         })
       } else if (caretakerYesTriggersFollowUp && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
@@ -624,30 +614,6 @@ function InspectionQuestion({
               ))}
             </select>
             {errorCostCode && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorCostCode}</p>}
-            <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Who does this need to go to?
-            </label>
-            <select
-              id={`recipient-${question.id}`}
-              value={extras.recipient_person_id || ''}
-              onChange={(e) => setExtras({ recipient_person_id: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: errorRecipient ? '1px solid #ef4444' : '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: '1rem',
-                backgroundColor: 'white',
-              }}
-            >
-              <option value="">Select recipient…</option>
-              {ESM_Q4_RECIPIENTS.map((recipient) => (
-                <option key={recipient} value={recipient}>
-                  {recipient}
-                </option>
-              ))}
-            </select>
-            {errorRecipient && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorRecipient}</p>}
           </div>
         )}
         {showCommentPhotoBlock && (
@@ -1468,9 +1434,6 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             }
             if (!(extras.cost_code || '').trim()) {
               errs[`${q.id}_cost_code`] = 'Please select a cost code'
-            }
-            if (!(extras.recipient_person_id || '').trim()) {
-              errs[`${q.id}_recipient`] = 'Please select a recipient'
             }
           }
           if (q.caretaker_recipient_on_yes && isYes && !(extras.recipient_person_id || '').trim()) {
