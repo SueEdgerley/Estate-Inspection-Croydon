@@ -1004,6 +1004,9 @@ export async function POST(request) {
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
             const isCaretakerAction = isCaretakerTemplate(template)
             const isEsmQ4Action = q.esm_q4_abandoned_vehicle === true
+            const isGroundsAction =
+              isGroundsMaintenanceTemplate(template) &&
+              (q.action_category === 'grounds' || q.category === 'grounds')
             const qText = q.question_text || q.label || q.id
             const actionRecipient =
               (isCaretakerAction || isEsmQ4Action || q.action_recipient_required_when) &&
@@ -1015,7 +1018,7 @@ export async function POST(request) {
               ? `${section.title || section.name || 'Section'} - ${qText}`
               : isEsmQ4Action
                 ? `${section.title || section.name || 'Section'} - ${qText}`
-                : q.action_recipient_required_when
+                : isGroundsAction
                   ? `${section.title || section.name || 'Section'} - ${qText}`
                   : residentMessage
             const esmQ4Description = isEsmQ4Action
@@ -1032,14 +1035,14 @@ export async function POST(request) {
               ? [qText, comment].filter(Boolean).join('\n\n')
               : isEsmQ4Action
                 ? esmQ4Description
-                : q.action_recipient_required_when
-                  ? [qText, comment, actionRecipient ? `Selected dropdown: ${actionRecipient}` : null].filter(Boolean).join('\n\n')
+                : isGroundsAction
+                  ? [qText, `Answer: ${String(answer ?? '')}`, comment].filter(Boolean).join('\n\n')
                   : residentMessage
             const actionCostCode =
               isEsmQ4Action && extras.cost_code && String(extras.cost_code).trim()
                 ? String(extras.cost_code).trim()
                 : null
-            const actionLocation = q.action_recipient_required_when
+            const actionLocation = isGroundsAction
               ? (String(location || '').trim() || displayTitle || null)
               : null
             await sql`
