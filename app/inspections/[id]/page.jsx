@@ -73,21 +73,24 @@ export default function InspectionDetail() {
       setActionsError(null)
       try {
         const response = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}`, {
+          cache: 'no-store',
           credentials: 'include',
         })
-        const text = await response.text()
-        let data = {}
-        try {
-          data = text ? JSON.parse(text) : {}
-        } catch (jsonError) {
-          data = { error: text }
-          console.error('Invalid JSON response from /api/actions:', text, jsonError)
-        }
+        const data = await response.json().catch((jsonError) => {
+          console.error('Invalid JSON response from /api/actions:', jsonError)
+          return null
+        })
 
         if (cancelled) return
         if (response.ok) {
-          if (Array.isArray(data)) {
-            setActions(data)
+          const actionsData = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.rows)
+            ? data.rows
+            : null
+
+          if (actionsData) {
+            setActions(actionsData)
             setActionsError(null)
           } else {
             console.warn('Unexpected /api/actions payload for inspection', id, data)

@@ -97,7 +97,8 @@ export async function GET(request) {
       console.error('[Actions API] Query failed for inspection_id:', inspectionId, 'error:', dbError?.message || dbError)
       result = { rows: [] }
     }
-    return NextResponse.json(result.rows)
+
+    return NextResponse.json(Array.isArray(result.rows) ? result.rows : result.rows || [])
   } catch (error) {
     console.error('Error fetching actions:', {
       inspectionId: searchParams?.get?.('inspection_id'),
