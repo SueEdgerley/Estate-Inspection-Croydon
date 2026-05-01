@@ -21,7 +21,9 @@ const EW = {
   radius: 12,
 }
 
-const HEADER_KEYS = ['ew_q_responsible', 'ew_q_role', 'ew_q_area', 'ew_q_postcode', 'ew_q_planned_date']
+const HEADER_KEYS = ['ew_q_responsible', 'ew_q_role', 'ew_q_area', 'ew_q_planned_date']
+
+const ESTATE_AREA_OPTIONS = ['West', 'South', 'Central', 'North']
 
 const STAFF_YN = [
   ['ew_st_caretaker_present', 'Is there a caretaker present?'],
@@ -269,6 +271,9 @@ export default function EstateWalkaboutNewInspectionForm({
 
     for (const k of HEADER_KEYS) {
       if (!String(answers[k] || '').trim()) errs[k] = 'Required'
+    }
+    if (!ESTATE_AREA_OPTIONS.includes(String(answers.ew_q_area || '').trim())) {
+      errs.ew_q_area = 'Select West, South, Central or North'
     }
 
     for (const [id] of STAFF_YN) {
@@ -713,22 +718,20 @@ export default function EstateWalkaboutNewInspectionForm({
                 {validationErrors.ew_q_role && <p style={errStyle}>{validationErrors.ew_q_role}</p>}
               </div>
               <div>
-                <label style={labelStyle}>Estate / area *</label>
-                <input
+                <label style={labelStyle}>Estate area *</label>
+                <select
                   value={answers.ew_q_area}
                   onChange={(e) => setField('ew_q_area', e.target.value)}
-                  style={inputStyleErr(!!validationErrors.ew_q_area)}
-                />
+                  style={selectStyle(!!validationErrors.ew_q_area)}
+                >
+                  <option value="">— Select… —</option>
+                  {ESTATE_AREA_OPTIONS.map((area) => (
+                    <option key={area} value={area}>
+                      {area}
+                    </option>
+                  ))}
+                </select>
                 {validationErrors.ew_q_area && <p style={errStyle}>{validationErrors.ew_q_area}</p>}
-              </div>
-              <div>
-                <label style={labelStyle}>Postcode *</label>
-                <input
-                  value={answers.ew_q_postcode}
-                  onChange={(e) => setField('ew_q_postcode', e.target.value)}
-                  style={inputStyleErr(!!validationErrors.ew_q_postcode)}
-                />
-                {validationErrors.ew_q_postcode && <p style={errStyle}>{validationErrors.ew_q_postcode}</p>}
               </div>
               <div>
                 <label style={labelStyle}>Planned date *</label>

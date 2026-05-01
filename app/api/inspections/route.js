@@ -268,7 +268,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
   const plannedVisitDate = answers?.ew_q_planned_date || ''
   const responsiblePerson = await getActivePersonName(sqlFn, answers?.ew_q_responsible)
   const role = String(answers?.ew_q_role || '').trim()
-  const estateArea = String(answers?.ew_q_area || estateName || '').trim()
+  const estateArea = String(answers?.ew_q_area || '').trim()
   const exactLocation = String(answers?.ew_it_bulk_refuse_exact_location || locationLine || estateArea || '').trim()
   const comments = String(answers?.ew_it_bulk_refuse_comments || answers?.ew_it_comments || '').trim()
   const photoUrls = collectBulkRefusePhotoUrls({ answerExtras, answers })
