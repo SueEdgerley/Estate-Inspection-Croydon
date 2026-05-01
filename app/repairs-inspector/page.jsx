@@ -161,7 +161,7 @@ export default function RepairsInspectorFormPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || data.details || 'Failed to update action')
-      setMessage('Repair action updated.')
+      setMessage('Repair action updated successfully')
       await loadActions()
       setSelectedId(data.id || selectedAction.id)
     } catch (error) {
