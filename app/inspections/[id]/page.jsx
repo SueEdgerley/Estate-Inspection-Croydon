@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import GenerateRepairsUpdatePdfButton from '@/app/components/GenerateRepairsUpdatePdfButton'
+import GenerateWalkaboutActionPlanPdfButton from '@/app/components/GenerateWalkaboutActionPlanPdfButton'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
@@ -141,6 +142,11 @@ export default function InspectionDetail() {
       console.error('reloadInspection', e)
     }
   }
+
+  const isWalkaboutInspection =
+    String(inspection?.type || '').toLowerCase() === 'estate_walkabout' ||
+    String(inspection?.template_name || '').toLowerCase().includes('walkabout') ||
+    String(inspection?.template_key || '').toLowerCase() === 'estate_walkabout'
 
   if (loading) {
     return <div style={{ padding: '2rem' }}>Loading inspection...</div>
@@ -317,6 +323,7 @@ export default function InspectionDetail() {
         </h2>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {id && <GenerateRepairsUpdatePdfButton inspectionId={id} />}
+          {id && isWalkaboutInspection && <GenerateWalkaboutActionPlanPdfButton inspectionId={id} />}
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <InspectionFullPdfControls
               inspectionId={inspection.id}
