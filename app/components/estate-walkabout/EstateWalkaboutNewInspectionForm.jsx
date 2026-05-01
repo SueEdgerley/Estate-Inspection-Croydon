@@ -985,6 +985,8 @@ export default function EstateWalkaboutNewInspectionForm({
           templateId={ESTATE_WALKABOUT_TEMPLATE_ID}
           templateKey="estate_walkabout"
           templateName="Estate Walkabout"
+          guideUrl="/guides/best-practice-guide.pdf"
+          openInNewTab
         />
       </div>
     </div>

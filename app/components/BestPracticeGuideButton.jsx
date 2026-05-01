@@ -8,8 +8,8 @@ export default function BestPracticeGuideButton({
   templateId = '',
   templateKey = '',
   templateName = '',
-  guideUrl = '',
-  openInNewTab = false,
+  guideUrl = '/guides/best-practice-guide.pdf',
+  openInNewTab = true,
 }) {
   const [open, setOpen] = useState(false)
   const [guide, setGuide] = useState(guideUrl ? { title, file_url: guideUrl } : null)

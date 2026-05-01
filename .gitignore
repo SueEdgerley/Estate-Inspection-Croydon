@@ -64,3 +64,7 @@ env/
 *.backup
 .vercel
 .env*.local
+
+# Large local guide assets
+public/guides/1830-R04-A - HQ Print Ready PDF.pdf.zip
+public/guides/best-practice-guide.pdf

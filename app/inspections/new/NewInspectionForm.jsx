@@ -1362,12 +1362,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       sections: inspectionRenderSections,
     })
   }, [selectedTemplate, inspectionRenderSections])
-  const showBestPracticeGuide =
-    !!selectedTemplate &&
-    !isCaretakerTemplate(selectedTemplate) &&
-    (isNVTemplate(selectedTemplate) ||
-      isEsmInspectionFormTemplate(selectedTemplate) ||
-      isGroundsMaintenanceTemplate(selectedTemplate))
+  const showBestPracticeGuide = !!selectedTemplate
 
   const debugPseudoInspection = useMemo(
     () =>
@@ -2125,6 +2120,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           templateId={selectedTemplate?.id || ''}
           templateKey={selectedTemplate?.template_key || ''}
           templateName={selectedTemplate?.name || selectedTemplate?.template_name || ''}
+          guideUrl="/guides/best-practice-guide.pdf"
+          openInNewTab
         />
       )}
     </div>

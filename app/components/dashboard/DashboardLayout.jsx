@@ -11,6 +11,7 @@ export default function DashboardLayout({ children }) {
     { href: '/inspections', label: 'Inspections', icon: '🔍' },
     { href: '/actions', label: 'Actions', icon: '⚡' },
     { href: '/templates', label: 'Templates', icon: '📋' },
+    { href: '/guides/best-practice-guide.pdf', label: 'Best Practice Guide', icon: '📘', external: true },
   ]
 
   const isActive = (href) => {
@@ -64,6 +65,8 @@ export default function DashboardLayout({ children }) {
             <Link
               key={item.href}
               href={item.href}
+              target={item.external ? '_blank' : undefined}
+              rel={item.external ? 'noopener noreferrer' : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
