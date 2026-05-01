@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic'
 
 // GET - Fetch all actions
 export async function GET(request) {
+  let searchParams
   try {
     const { userId } = await auth()
     if (!userId) {
@@ -29,7 +30,7 @@ export async function GET(request) {
         { status: 503 }
       )
     }
-    const { searchParams } = new URL(request.url)
+    searchParams = new URL(request.url).searchParams
     const inspectionId = searchParams.get('inspection_id')
     const questionId = searchParams.get('question_id')
 
@@ -104,9 +105,9 @@ export async function GET(request) {
     return NextResponse.json(result.rows)
   } catch (error) {
     console.error('Error fetching actions:', {
-      inspectionId: searchParams?.get('inspection_id'),
+      inspectionId: searchParams?.get?.('inspection_id'),
       url: request.url,
-      error,
+      error: error?.message || String(error),
     })
     return NextResponse.json(
       { error: 'Failed to fetch actions', details: error?.message || String(error) },
