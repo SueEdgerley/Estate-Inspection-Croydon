@@ -130,6 +130,7 @@ function mapSnapshotQuestion(q, qIndex) {
     action_category: q.action_category ?? q.category ?? null,
     create_action_on_yes: q.create_action_on_yes,
     create_action_on_no: q.create_action_on_no ?? true,
+    esm_q4_abandoned_vehicle: q.esm_q4_abandoned_vehicle ?? false,
     require_comment_on_yes: q.require_comment_on_yes ?? false,
     require_comment_on_no: q.require_comment_on_no ?? true,
     require_photo_on_yes: q.require_photo_on_yes ?? false,
@@ -994,27 +995,46 @@ export async function POST(request) {
           try {
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
             const isCaretakerAction = isCaretakerTemplate(template)
+            const isEsmQ4Action = q.esm_q4_abandoned_vehicle === true
             const qText = q.question_text || q.label || q.id
             const actionRecipient =
-              isCaretakerAction && extras.recipient_person_id && String(extras.recipient_person_id).trim()
+              (isCaretakerAction || isEsmQ4Action) && extras.recipient_person_id && String(extras.recipient_person_id).trim()
                 ? String(extras.recipient_person_id).trim()
                 : null
             const actionTitle = isCaretakerAction
               ? `${section.title || section.name || 'Section'} - ${qText}`
+              : isEsmQ4Action
+                ? `${section.title || section.name || 'Section'} - ${qText}`
               : residentMessage
+            const esmQ4Description = isEsmQ4Action
+              ? [
+                  qText,
+                  `Answer: ${String(answer ?? '')}`,
+                  extras.authorisation_text ? `Authorisation: ${String(extras.authorisation_text).trim()}` : null,
+                  comment ? `Comment/location: ${comment}` : null,
+                  extras.cost_code ? `Cost code: ${String(extras.cost_code).trim()}` : null,
+                  actionRecipient ? `Recipient: ${actionRecipient}` : null,
+                ].filter(Boolean).join('\n')
+              : ''
             const actionDescription = isCaretakerAction
               ? [qText, comment].filter(Boolean).join('\n\n')
+              : isEsmQ4Action
+                ? esmQ4Description
               : residentMessage
+            const actionCostCode =
+              isEsmQ4Action && extras.cost_code && String(extras.cost_code).trim()
+                ? String(extras.cost_code).trim()
+                : null
             await sql`
               INSERT INTO actions (
                 id, inspection_id, section_id, section_name, question_id,
                 category, priority, title, description, location, status,
-                comment, recipient_person_id, auto_created, photo_urls
+                comment, recipient_person_id, auto_created, photo_urls, cost_code
               )
               VALUES (
                 ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
                 ${category}, null, ${actionTitle}, ${actionDescription}, null, 'open',
-                ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(allPhotoUrls)}
+                ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(allPhotoUrls)}, ${actionCostCode}
               )
             `
             const actionForPoster = {

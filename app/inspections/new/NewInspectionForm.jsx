@@ -191,6 +191,21 @@ const CARETAKER_YN_COLORS = {
   NA: { border: '#64748b', bg: '#f1f5f9', selectedBg: '#64748b', text: '#334155' },
 }
 
+const ESM_Q4_COST_CODES = [
+  'C20395.641620.0000 (South central)',
+  'C20400.641620.0000 (North)',
+  'C203410.641620.0000 (East)',
+]
+
+const ESM_Q4_RECIPIENTS = [
+  'Adam Curtis',
+  'Kingsey Eze',
+  'Stanley Enyinnaya',
+  'Mike Thomas',
+  'Angela Bradford',
+  'Karen Reid',
+]
+
 function CaretakerYesNoButtons({ id, value, onChange }) {
   const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
   return (
@@ -233,6 +248,8 @@ function InspectionQuestion({
   errorComment,
   errorPhotos,
   errorRecipient,
+  errorAuthorisation,
+  errorCostCode,
   answerExtras,
   onAnswerExtras,
   createActionOnNo,
@@ -402,8 +419,10 @@ function InspectionQuestion({
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
+  const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
   const showActionBlock =
     qType === 'yes_no' &&
+    !esmQ4AbandonedVehicle &&
     ((isNo && createActionOnNo) ||
       (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
@@ -434,7 +453,15 @@ function InspectionQuestion({
   const handleChange = (val) => {
     onChange(question.id, val)
     if (qType === 'yes_no' && onAnswerExtras) {
-      if (caretakerYesTriggersFollowUp && (val === 'No' || val === 'NA')) {
+      if (esmQ4AbandonedVehicle && (val === 'No' || val === 'NA')) {
+        onAnswerExtras(question.id, {
+          comment: '',
+          photo_urls: [],
+          authorisation_text: '',
+          cost_code: '',
+          recipient_person_id: '',
+        })
+      } else if (caretakerYesTriggersFollowUp && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
       } else if (commentWhen === 'on_yes' && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [] })
@@ -525,6 +552,103 @@ function InspectionQuestion({
             value={yesNoNaValue}
             onChange={(val) => handleChange(val)}
           />
+        )}
+        {esmQ4AbandonedVehicle && isYes && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
+            <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#374151' }}>
+              Action will be created automatically
+            </p>
+            {photoBlock}
+            <label htmlFor={`authorisation-${question.id}`} style={{ display: 'block', marginTop: '0.75rem', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              I hereby give authorisation…
+            </label>
+            <textarea
+              id={`authorisation-${question.id}`}
+              value={extras.authorisation_text || ''}
+              onChange={(e) => setExtras({ authorisation_text: e.target.value })}
+              rows={3}
+              placeholder="I hereby give authorisation to AVS for the removal of the following vehicle(s): colour, make/model, registration"
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: errorAuthorisation ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+              }}
+            />
+            {errorAuthorisation && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisation}</p>}
+            <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Comment/location
+            </label>
+            <textarea
+              id={`comment-${question.id}`}
+              value={extras.comment || ''}
+              onChange={(e) => setExtras({ comment: e.target.value })}
+              rows={3}
+              placeholder="Location, door number, access codes, or other details"
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+              }}
+            />
+            {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+            <label htmlFor={`cost-code-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Cost code
+            </label>
+            <select
+              id={`cost-code-${question.id}`}
+              value={extras.cost_code || ''}
+              onChange={(e) => setExtras({ cost_code: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: errorCostCode ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                backgroundColor: 'white',
+                marginBottom: '0.75rem',
+              }}
+            >
+              <option value="">Select cost code…</option>
+              {ESM_Q4_COST_CODES.map((costCode) => (
+                <option key={costCode} value={costCode}>
+                  {costCode}
+                </option>
+              ))}
+            </select>
+            {errorCostCode && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorCostCode}</p>}
+            <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Who does this need to go to?
+            </label>
+            <select
+              id={`recipient-${question.id}`}
+              value={extras.recipient_person_id || ''}
+              onChange={(e) => setExtras({ recipient_person_id: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: errorRecipient ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                backgroundColor: 'white',
+              }}
+            >
+              <option value="">Select recipient…</option>
+              {ESM_Q4_RECIPIENTS.map((recipient) => (
+                <option key={recipient} value={recipient}>
+                  {recipient}
+                </option>
+              ))}
+            </select>
+            {errorRecipient && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorRecipient}</p>}
+          </div>
         )}
         {showCommentPhotoBlock && (
           <div ref={isNvTemplate ? expandedSectionRef : undefined} style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
@@ -1273,6 +1397,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       [`${questionId}_comment`]: undefined,
       [`${questionId}_photos`]: undefined,
       [`${questionId}_recipient`]: undefined,
+      [`${questionId}_authorisation`]: undefined,
+      [`${questionId}_cost_code`]: undefined,
     }))
   }
 
@@ -1329,6 +1455,23 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
           if (photoRequired && photoUrls.length === 0) {
             errs[`${q.id}_photos`] = 'At least one photo is required'
+          }
+          if (q.esm_q4_abandoned_vehicle === true && isYes) {
+            if (photoUrls.length === 0) {
+              errs[`${q.id}_photos`] = 'At least one photo is required'
+            }
+            if (!(extras.authorisation_text || '').trim()) {
+              errs[`${q.id}_authorisation`] = 'Authorisation is required'
+            }
+            if (!(extras.comment || '').trim()) {
+              errs[`${q.id}_comment`] = 'Comment/location is required'
+            }
+            if (!(extras.cost_code || '').trim()) {
+              errs[`${q.id}_cost_code`] = 'Please select a cost code'
+            }
+            if (!(extras.recipient_person_id || '').trim()) {
+              errs[`${q.id}_recipient`] = 'Please select a recipient'
+            }
           }
           if (q.caretaker_recipient_on_yes && isYes && !(extras.recipient_person_id || '').trim()) {
             errs[`${q.id}_recipient`] = 'Please select a recipient'
@@ -1868,6 +2011,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       errorComment: validationErrors[`${q.id}_comment`],
                       errorPhotos: validationErrors[`${q.id}_photos`],
                       errorRecipient: validationErrors[`${q.id}_recipient`],
+                      errorAuthorisation: validationErrors[`${q.id}_authorisation`],
+                      errorCostCode: validationErrors[`${q.id}_cost_code`],
                       answerExtras: answerExtras[q.id],
                       onAnswerExtras: (questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras })),
                       createActionOnNo: q.create_action_on_no,
