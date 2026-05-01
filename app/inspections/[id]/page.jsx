@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import GenerateRepairsUpdatePdfButton from '@/app/components/GenerateRepairsUpdatePdfButton'
 import GenerateWalkaboutActionPlanPdfButton from '@/app/components/GenerateWalkaboutActionPlanPdfButton'
+import GenerateWalkaboutResidentPosterPdfButton from '@/app/components/GenerateWalkaboutResidentPosterPdfButton'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
@@ -324,6 +325,7 @@ export default function InspectionDetail() {
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {id && <GenerateRepairsUpdatePdfButton inspectionId={id} />}
           {id && isWalkaboutInspection && <GenerateWalkaboutActionPlanPdfButton inspectionId={id} />}
+          {id && isWalkaboutInspection && <GenerateWalkaboutResidentPosterPdfButton inspectionId={id} />}
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <InspectionFullPdfControls
               inspectionId={inspection.id}
