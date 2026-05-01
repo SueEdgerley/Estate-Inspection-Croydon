@@ -188,13 +188,14 @@ function EstateQuestionInstructionBlock({ question }) {
 const CARETAKER_YN_COLORS = {
   Yes: { border: '#15803d', bg: '#dcfce7', selectedBg: '#16a34a', text: '#14532d' },
   No: { border: '#b91c1c', bg: '#fee2e2', selectedBg: '#dc2626', text: '#7f1d1d' },
+  NA: { border: '#64748b', bg: '#f1f5f9', selectedBg: '#64748b', text: '#334155' },
 }
 
 function CaretakerYesNoButtons({ id, value, onChange }) {
-  const selected = value === 'Yes' || value === 'No' ? value : ''
+  const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {['Yes', 'No'].map((label, idx) => {
+      {['Yes', 'No', 'NA'].map((label, idx) => {
         const sel = selected === label
         const colors = CARETAKER_YN_COLORS[label]
         return (
@@ -435,6 +436,8 @@ function InspectionQuestion({
     if (qType === 'yes_no' && onAnswerExtras) {
       if (caretakerYesTriggersFollowUp && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
+      } else if (commentWhen === 'on_yes' && (val === 'No' || val === 'NA')) {
+        onAnswerExtras(question.id, { comment: '', photo_urls: [] })
       } else if (!caretakerYesTriggersFollowUp && (val === 'Yes' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [] })
       }
