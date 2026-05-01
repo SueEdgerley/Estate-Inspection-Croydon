@@ -54,6 +54,7 @@ function actionLabel(action) {
 
 export default function RepairsInspectorFormPage() {
   const [actions, setActions] = useState([])
+  const [requestedActionId, setRequestedActionId] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -95,8 +96,16 @@ export default function RepairsInspectorFormPage() {
   }
 
   useEffect(() => {
+    setRequestedActionId(new URLSearchParams(window.location.search).get('action') || '')
     loadActions()
   }, [])
+
+  useEffect(() => {
+    if (!requestedActionId || actions.length === 0) return
+    if (actions.some((action) => action.id === requestedActionId)) {
+      setSelectedId(requestedActionId)
+    }
+  }, [actions, requestedActionId])
 
   useEffect(() => {
     if (!selectedAction) return

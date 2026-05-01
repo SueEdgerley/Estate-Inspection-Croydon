@@ -42,6 +42,8 @@ export async function GET() {
           OR lower(COALESCE(a.title, '')) LIKE '%repair%'
           OR lower(COALESCE(a.description, '')) LIKE '%repair%'
           OR lower(COALESCE(a.comment, '')) LIKE '%repair%'
+          OR lower(COALESCE(i.type, '')) = 'repairs_inspector'
+          OR lower(COALESCE(i.template_id, '')) = 'repairs_inspector_direct'
           OR lower(COALESCE(p.name, '')) LIKE '%repair%'
           OR lower(COALESCE(p.job_title, '')) LIKE '%repair%'
           OR lower(COALESCE(p.category, '')) LIKE '%repair%'

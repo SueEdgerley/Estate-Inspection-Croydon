@@ -33,6 +33,7 @@ export default function RepairsInspectorNewFormPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [createdActionId, setCreatedActionId] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -109,6 +110,7 @@ export default function RepairsInspectorNewFormPage() {
     event.preventDefault()
     setError('')
     setMessage('')
+    setCreatedActionId('')
 
     if (!form.estate_block.trim()) {
       setError('Estate/block is required')
@@ -147,6 +149,7 @@ export default function RepairsInspectorNewFormPage() {
       if (!response.ok) throw new Error(data.error || data.details || 'Failed to create repair action')
 
       setMessage('Repair action created successfully.')
+      setCreatedActionId(data.action_id || '')
       setForm(initialForm)
     } catch (err) {
       setError(err?.message || 'Failed to create repair action')
@@ -311,11 +314,17 @@ export default function RepairsInspectorNewFormPage() {
               <Link href="/actions" style={secondaryButtonStyle}>
                 View in Issues/Actions
               </Link>
+              {createdActionId ? (
+                <Link href={`/repairs-inspector?action=${encodeURIComponent(createdActionId)}`} style={secondaryButtonStyle}>
+                  Update this repair
+                </Link>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {
                   setMessage('')
                   setError('')
+                  setCreatedActionId('')
                 }}
                 style={primaryButtonStyle}
               >
