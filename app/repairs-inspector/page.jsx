@@ -174,15 +174,9 @@ export default function RepairsInspectorFormPage() {
   return (
     <div style={{ maxWidth: 980 }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div>
           <Link href="/actions" style={{ color: '#1d4ed8', textDecoration: 'none', fontSize: '0.875rem' }}>
             Back to actions
-          </Link>
-          <Link href="/repairs-inspector/new" style={choiceStyle}>
-            Log New Repair
-          </Link>
-          <Link href="/repairs-inspector" style={activeChoiceStyle}>
-            Update Existing Repair
           </Link>
         </div>
         <h1 style={{ margin: '0.75rem 0 0', fontSize: '2rem', color: '#111827' }}>
@@ -396,20 +390,3 @@ const photoStyle = {
   border: '1px solid #d1d5db',
 }
 
-const choiceStyle = {
-  padding: '0.75rem 1.25rem',
-  borderRadius: '0.5rem',
-  border: '1px solid #cbd5e1',
-  color: '#1d4ed8',
-  textDecoration: 'none',
-  fontWeight: 700,
-  background: '#fff',
-  display: 'inline-block',
-}
-
-const activeChoiceStyle = {
-  ...choiceStyle,
-  background: '#1d4ed8',
-  color: '#fff',
-  borderColor: '#1d4ed8',
-}
