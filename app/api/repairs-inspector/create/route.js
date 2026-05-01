@@ -29,7 +29,7 @@ export async function POST(request) {
 
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()
-    await ensureRepairActionFields(sql)
+    const repairFieldsAvailable = await ensureRepairActionFields(sql)
 
     const user = await currentUser().catch(() => null)
     const body = await request.json().catch(() => ({}))
@@ -67,8 +67,8 @@ export async function POST(request) {
       userId
     const inspectorEmail = user?.primaryEmailAddress?.emailAddress || userId
     let linkedLocation = {
-      estate_id: estateId || null,
-      block_id: blockId || null,
+      estate_id: null,
+      block_id: null,
       label: estateBlock,
       area,
     }
@@ -95,39 +95,77 @@ export async function POST(request) {
           label: [row.estate_name, row.block_name].filter(Boolean).join(' / ') || estateBlock,
           area: row.estate_area || area,
         }
+      } else {
+        console.warn('[repairs-inspector/create] submitted estate/block was not found; saving repair with text location only', {
+          estateId,
+          blockId,
+        })
       }
     }
 
-    await sql`
-      INSERT INTO inspections (
-        id, type, location_label, inspector_name, inspector_id,
-        template_id, template_name, submitted_at, status, is_scheduled,
-        title, description, estate_id, block_id, work_type
-      )
-      VALUES (
-        ${inspectionId}, 'repairs_inspector', ${linkedLocation.label || estateBlock}, ${inspectorName}, ${inspectorEmail},
-        'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
-        ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}, ${description},
-        ${linkedLocation.estate_id}, ${linkedLocation.block_id}, 'repairs_inspector'
-      )
-    `
+    try {
+      await sql`
+        INSERT INTO inspections (
+          id, type, location_label, inspector_name, inspector_id,
+          template_id, template_name, submitted_at, status, is_scheduled,
+          title, description, estate_id, block_id, work_type
+        )
+        VALUES (
+          ${inspectionId}, 'repairs_inspector', ${linkedLocation.label || estateBlock}, ${inspectorName}, ${inspectorEmail},
+          'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
+          ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}, ${description},
+          ${linkedLocation.estate_id}, ${linkedLocation.block_id}, 'repairs_inspector'
+        )
+      `
+    } catch (inspectionInsertError) {
+      console.warn('[repairs-inspector/create] full inspection insert failed; retrying core inspection insert:', inspectionInsertError?.message || inspectionInsertError)
+      await sql`
+        INSERT INTO inspections (
+          id, type, location_label, inspector_name, inspector_id,
+          template_id, template_name, submitted_at, status, is_scheduled,
+          title, description
+        )
+        VALUES (
+          ${inspectionId}, 'repairs_inspector', ${linkedLocation.label || estateBlock}, ${inspectorName}, ${inspectorEmail},
+          'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
+          ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}, ${description}
+        )
+      `
+    }
 
-    await sql`
-      INSERT INTO actions (
-        id, inspection_id, section_id, section_name, question_id,
-        category, priority, title, description, location, status,
-        comment, auto_created, photo_urls, block_id, job_number, expected_completion_date,
-        repair_notes, repair_photo_url, repair_updated_at
-      )
-      VALUES (
-        ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
-        'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-        ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${linkedLocation.block_id}, ${jobNumber || null},
-        ${expectedCompletionDate || null}, ${repairNotes || null}, ${primaryPhotoUrl},
-        CURRENT_TIMESTAMP
-      )
-      RETURNING *
-    `
+    try {
+      if (!repairFieldsAvailable) throw new Error('Optional repair fields unavailable')
+      await sql`
+        INSERT INTO actions (
+          id, inspection_id, section_id, section_name, question_id,
+          category, priority, title, description, location, status,
+          comment, auto_created, photo_urls, block_id, job_number, expected_completion_date,
+          repair_notes, repair_photo_url, repair_updated_at
+        )
+        VALUES (
+          ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
+          'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
+          ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${linkedLocation.block_id}, ${jobNumber || null},
+          ${expectedCompletionDate || null}, ${repairNotes || null}, ${primaryPhotoUrl},
+          CURRENT_TIMESTAMP
+        )
+        RETURNING *
+      `
+    } catch (insertError) {
+      console.warn('[repairs-inspector/create] full repair action insert failed; retrying core action insert:', insertError?.message || insertError)
+      await sql`
+        INSERT INTO actions (
+          id, inspection_id, section_id, section_name, question_id,
+          category, priority, title, description, location, status,
+          comment, auto_created, photo_urls
+        )
+        VALUES (
+          ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
+          'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
+          ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}
+        )
+      `
+    }
 
     return NextResponse.json(
       {
