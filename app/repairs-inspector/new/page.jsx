@@ -325,10 +325,7 @@ export default function RepairsInspectorNewFormPage() {
           </div>
         ) : null}
 
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-          <Link href="/repairs-inspector" style={secondaryButtonStyle}>
-            Update Existing Repair
-          </Link>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             type="submit"
             disabled={saving}
