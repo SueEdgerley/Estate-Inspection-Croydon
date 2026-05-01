@@ -90,9 +90,11 @@ export async function GET(request) {
       }
       
       result = await query
+      if (inspectionId && !questionId) {
+        console.log('[Actions API] Query successful for inspection_id:', inspectionId, '- found', result.rows.length, 'actions')
+      }
     } catch (dbError) {
-      // If table doesn't exist or other DB error, return empty array
-      console.warn('Actions query failed, returning empty array:', dbError?.message || dbError)
+      console.error('[Actions API] Query failed for inspection_id:', inspectionId, 'error:', dbError?.message || dbError)
       result = { rows: [] }
     }
     return NextResponse.json(result.rows)
