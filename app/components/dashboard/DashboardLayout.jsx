@@ -10,6 +10,7 @@ export default function DashboardLayout({ children }) {
     { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { href: '/inspections', label: 'Inspections', icon: '🔍' },
     { href: '/actions', label: 'Actions', icon: '⚡' },
+    { href: '/repairs-inspector', label: 'Repairs Inspector', icon: '🛠️' },
     { href: '/templates', label: 'Templates', icon: '📋' },
     { href: '/guides/best-practice-guide.pdf', label: 'Best Practice Guide', icon: '📘', external: true },
   ]

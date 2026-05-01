@@ -38,15 +38,36 @@ async function generate(request, { params }) {
 
     const actionsResult = await sql`
       SELECT
-        id, inspection_id, section_id, section_name, question_id,
-        category, priority, title, description, location, status, comment,
-        photo_urls, job_number, expected_completion_date, created_at, updated_at
-      FROM actions
-      WHERE inspection_id = ${id}
+        a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+        a.category, a.priority, a.title, a.description, a.location, a.status, a.comment,
+        a.photo_urls, a.job_number, a.expected_completion_date,
+        a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+        a.created_at, a.updated_at,
+        p.name AS recipient_name,
+        p.job_title AS recipient_job_title,
+        p.category AS recipient_category
+      FROM actions a
+      LEFT JOIN people p ON p.id = a.recipient_person_id
+      WHERE a.inspection_id = ${id}
+        AND (
+          lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
+          OR lower(COALESCE(a.category, '')) LIKE '%repair%'
+          OR lower(COALESCE(a.section_name, '')) LIKE '%repair%'
+          OR lower(COALESCE(a.title, '')) LIKE '%repair%'
+          OR lower(COALESCE(a.description, '')) LIKE '%repair%'
+          OR lower(COALESCE(a.comment, '')) LIKE '%repair%'
+          OR lower(COALESCE(p.name, '')) LIKE '%repair%'
+          OR lower(COALESCE(p.job_title, '')) LIKE '%repair%'
+          OR lower(COALESCE(p.category, '')) LIKE '%repair%'
+          OR NULLIF(TRIM(COALESCE(a.job_number, '')), '') IS NOT NULL
+          OR a.expected_completion_date IS NOT NULL
+          OR NULLIF(TRIM(COALESCE(a.repair_notes, '')), '') IS NOT NULL
+          OR NULLIF(TRIM(COALESCE(a.repair_photo_url, '')), '') IS NOT NULL
+        )
       ORDER BY
-        CASE WHEN status = 'completed' THEN 1 ELSE 0 END,
-        updated_at DESC,
-        created_at DESC
+        CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END,
+        a.updated_at DESC,
+        a.created_at DESC
     `
 
     const pdfBuffer = await buildRepairsUpdatePdf({

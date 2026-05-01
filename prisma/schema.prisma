@@ -331,6 +331,9 @@ model Action {
   issuePdfUrl           String?  @map("issue_pdf_url") @db.Text
   jobNumber             String?  @map("job_number") @db.VarChar(100)
   expectedCompletionDate DateTime? @map("expected_completion_date") @db.Date
+  repairNotes           String?  @map("repair_notes") @db.Text
+  repairPhotoUrl        String?  @map("repair_photo_url") @db.Text
+  repairUpdatedAt       DateTime? @map("repair_updated_at") @db.Timestamptz
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

@@ -21,7 +21,8 @@ export async function GET(request, { params }) {
       SELECT 
         id, inspection_id, section_id, section_name, question_id,
         category, priority, title, description, location, status,
-        comment, recipient_person_id, auto_created,
+        comment, recipient_person_id, auto_created, photo_urls, issue_pdf_url,
+        job_number, expected_completion_date, repair_notes, repair_photo_url, repair_updated_at,
         created_at, updated_at
       FROM actions
       WHERE id = ${id}
@@ -74,6 +75,9 @@ export async function PUT(request, { params }) {
     if (data.description !== undefined) {
       updates.push(sql`description = ${data.description}`)
     }
+    if (data.location !== undefined) {
+      updates.push(sql`location = ${data.location}`)
+    }
     if (data.status !== undefined) {
       updates.push(sql`status = ${data.status}`)
     }
@@ -82,6 +86,26 @@ export async function PUT(request, { params }) {
     }
     if (data.recipient_person_id !== undefined) {
       updates.push(sql`recipient_person_id = ${data.recipient_person_id}`)
+    }
+    if (data.job_number !== undefined) {
+      updates.push(sql`job_number = ${data.job_number || null}`)
+    }
+    if (data.expected_completion_date !== undefined) {
+      updates.push(sql`expected_completion_date = ${data.expected_completion_date || null}`)
+    }
+    if (data.repair_notes !== undefined) {
+      updates.push(sql`repair_notes = ${data.repair_notes || null}`)
+    }
+    if (data.repair_photo_url !== undefined) {
+      updates.push(sql`repair_photo_url = ${data.repair_photo_url || null}`)
+    }
+    if (
+      data.job_number !== undefined ||
+      data.expected_completion_date !== undefined ||
+      data.repair_notes !== undefined ||
+      data.repair_photo_url !== undefined
+    ) {
+      updates.push(sql`repair_updated_at = CURRENT_TIMESTAMP`)
     }
     
     updates.push(sql`updated_at = CURRENT_TIMESTAMP`)

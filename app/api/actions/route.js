@@ -50,7 +50,9 @@ export async function GET(request) {
             a.location,
             a.status, a.comment, a.recipient_person_id, a.auto_created,
             a.block_id, a.cost_code, a.issue_pdf_url,
-            a.created_at, a.updated_at, a.expected_completion_date,
+            a.job_number, a.expected_completion_date,
+            a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+            a.created_at, a.updated_at,
             'Inspector' AS created_by,
             'Assigned' AS assigned_to
           FROM actions a
@@ -65,7 +67,9 @@ export async function GET(request) {
             a.location,
             a.status, a.comment, a.recipient_person_id, a.auto_created,
             a.block_id, a.cost_code, a.issue_pdf_url,
-            a.created_at, a.updated_at, a.expected_completion_date,
+            a.job_number, a.expected_completion_date,
+            a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+            a.created_at, a.updated_at,
             'Inspector' AS created_by,
             'Assigned' AS assigned_to
           FROM actions a
@@ -80,7 +84,9 @@ export async function GET(request) {
             a.location,
             a.status, a.comment, a.recipient_person_id, a.auto_created,
             a.block_id, a.cost_code, a.issue_pdf_url,
-            a.created_at, a.updated_at, a.expected_completion_date,
+            a.job_number, a.expected_completion_date,
+            a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+            a.created_at, a.updated_at,
             'Inspector' AS created_by,
             'Assigned' AS assigned_to
           FROM actions a
@@ -172,7 +178,10 @@ export async function POST(request) {
         block_id,
         cost_code,
         auto_created,
-        expected_completion_date
+        expected_completion_date,
+        repair_notes,
+        repair_photo_url,
+        repair_updated_at
       ) VALUES (
         ${id},
         ${data.inspection_id || null},
@@ -190,7 +199,10 @@ export async function POST(request) {
         ${data.block_id || null},
         ${data.cost_code || null},
         ${data.auto_created || false},
-        ${expectedCompletionDate}
+        ${expectedCompletionDate},
+        ${data.repair_notes || null},
+        ${data.repair_photo_url || null},
+        ${data.repair_notes || data.repair_photo_url ? new Date() : null}
       )
       RETURNING *
     `

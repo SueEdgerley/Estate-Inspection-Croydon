@@ -19,6 +19,7 @@ const ALL_NAV_ITEMS = [
   { href: '/inspections', label: 'Manage Inspections', navKey: 'inspections' },
   { href: '/inspections/ad-hoc', label: 'Create Inspections', navKey: 'inspectionsAdHoc' },
   { href: '/actions', label: 'Issues / Actions', navKey: 'actions' },
+  { href: '/repairs-inspector', label: 'Repairs Inspector', navKey: 'repairsInspector' },
   { href: '/templates', label: 'Forms', navKey: 'templates' },
   { href: '/reports/inspections', label: 'Inspection reports', navKey: 'inspectionReports' },
   { href: '/import', label: 'Import', navKey: 'import' },

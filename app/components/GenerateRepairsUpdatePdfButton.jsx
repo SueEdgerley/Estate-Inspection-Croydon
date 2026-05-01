@@ -48,7 +48,7 @@ export default function GenerateRepairsUpdatePdfButton({ inspectionId }) {
         cursor: loading ? 'not-allowed' : 'pointer',
       }}
     >
-      {loading ? 'Generating...' : 'Repairs update PDF'}
+      {loading ? 'Generating...' : 'Repairs poster PDF'}
     </button>
   )
 }
