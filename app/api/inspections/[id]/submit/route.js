@@ -6,6 +6,7 @@ import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import {
   extractCaretakerRecipients,
   findRecipientQuestion,
+  isCaretakerTemplate,
 } from '@/lib/caretaker-template'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import {
@@ -28,6 +29,7 @@ import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-s
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
+import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   tryGenerateAndStoreIssueJobCardPdf,
   formatAssignedTeamLabel,
@@ -118,6 +120,13 @@ export async function POST(request, { params }) {
         { error: 'Forbidden: your role cannot submit this inspection type' },
         { status: 403 }
       )
+    }
+    if (
+      templateForRoleCheck &&
+      (isCaretakerTemplate(templateForRoleCheck) || isEsmInspectionFormTemplate(templateForRoleCheck)) &&
+      !String(inspection.block_id || '').trim()
+    ) {
+      return NextResponse.json({ error: 'Location is required' }, { status: 400 })
     }
 
     const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)

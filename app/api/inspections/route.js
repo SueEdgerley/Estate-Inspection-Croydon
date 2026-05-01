@@ -9,11 +9,13 @@ import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
+import { isCaretakerTemplate } from '@/lib/caretaker-template'
 import {
   isEstateWalkaboutTemplate,
   ESTATE_WALKABOUT_CHECKLIST_QID,
   getCanonicalEstateWalkaboutTemplateForInsert,
 } from '@/lib/estate-walkabout-template'
+import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   createEstateWalkaboutActionsFromPayload,
   sendEstateWalkaboutRepairActionNotification,
@@ -653,6 +655,10 @@ export async function POST(request) {
         { error: 'Forbidden: your role cannot use this form template' },
         { status: 403 }
       )
+    }
+
+    if ((isCaretakerTemplate(template) || isEsmInspectionFormTemplate(template)) && !String(bodyBlockId || '').trim()) {
+      return NextResponse.json({ error: 'Location is required' }, { status: 400 })
     }
 
     await ensureDatabase()

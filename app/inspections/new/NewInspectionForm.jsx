@@ -1141,6 +1141,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
     return undefined
   }, [templates, templateId])
+  const locationRequiredForSelectedTemplate = Boolean(
+    selectedTemplate &&
+      !isNVTemplate(selectedTemplate) &&
+      (isCaretakerTemplate(selectedTemplate) || isEsmInspectionFormTemplate(selectedTemplate))
+  )
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
   const estateInspectionFormV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
   const inspectionRenderSections = useMemo(() => {
@@ -1219,6 +1224,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
     if (!templateId) errs.template_id = 'Select a template'
     if (!selectedTemplate) return { ...errs }
+    if (locationRequiredForSelectedTemplate && !postgresBlockId.trim()) {
+      errs.block_id = 'Please select a location'
+    }
 
     inspectionRenderSections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
@@ -1523,9 +1531,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
           >
             Location
+            {locationRequiredForSelectedTemplate && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
           </label>
           <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-            Optional: choose a location from the list, or leave blank and use the location note below.
+            {locationRequiredForSelectedTemplate
+              ? 'If the exact location is not in the dropdown, users should select the closest option and provide full details in the notes/comments field.'
+              : 'Optional: choose a location from the list, or leave blank and use the location note below.'}
           </p>
           <select
             id="postgres_block_id"
@@ -1535,6 +1546,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               setPostgresBlockId(e.target.value)
               setValidationErrors((prev) => ({ ...prev, block_id: undefined }))
             }}
+            required={locationRequiredForSelectedTemplate}
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -1545,7 +1557,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               minHeight: 44,
             }}
           >
-            <option value="">— None selected —</option>
+            <option value="">{locationRequiredForSelectedTemplate ? '— Select location —' : '— None selected —'}</option>
             {locationBlocks.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -1573,7 +1585,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               color: '#374151',
             }}
           >
-            Location note (optional)
+            Location notes/comments (optional)
           </label>
           <input
             type="text"
@@ -1581,7 +1593,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             name="location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Stairwell, entrance, or flat number"
+            placeholder="e.g. Stairwell, entrance, flat number, or exact location details"
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -1844,7 +1856,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               htmlFor="description"
               style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}
             >
-              Description
+              {locationRequiredForSelectedTemplate ? 'Notes / comments' : 'Description'}
             </label>
             <textarea
               id="description"
@@ -1852,7 +1864,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              placeholder="Additional notes..."
+              placeholder={locationRequiredForSelectedTemplate ? 'Add any notes/comments, including full details if the closest dropdown location was selected.' : 'Additional notes...'}
               style={{
                 width: '100%',
                 padding: '0.75rem',
