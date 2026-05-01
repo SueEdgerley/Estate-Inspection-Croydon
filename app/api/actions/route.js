@@ -84,7 +84,6 @@ export async function GET(request) {
         FROM actions a
         ORDER BY a.created_at DESC
       `
-      `
     }
     
     const result = await query
