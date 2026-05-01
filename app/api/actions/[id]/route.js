@@ -21,13 +21,25 @@ export async function GET(request, { params }) {
     await ensureRepairActionFields(sql)
     const result = await sql`
       SELECT 
-        id, inspection_id, section_id, section_name, question_id,
-        category, priority, title, description, location, status,
-        comment, recipient_person_id, auto_created, photo_urls, issue_pdf_url,
-        job_number, expected_completion_date, repair_notes, repair_photo_url, repair_updated_at,
-        created_at, updated_at
-      FROM actions
-      WHERE id = ${id}
+        a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+        a.category, a.priority, a.title, a.description, a.location, a.status,
+        a.comment, a.recipient_person_id, a.auto_created, a.photo_urls, a.issue_pdf_url,
+        a.job_number, a.expected_completion_date, a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+        a.created_at, a.updated_at,
+        COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+        p.name AS assigned_to,
+        p.email AS assigned_to_email,
+        i.title AS inspection_title,
+        i.template_name AS inspection_template_name,
+        i.type AS inspection_type,
+        i.due_date AS inspection_due_date,
+        COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
+      FROM actions a
+      LEFT JOIN inspections i ON i.id = a.inspection_id
+      LEFT JOIN estates e ON e.id = i.estate_id
+      LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
+      LEFT JOIN people p ON p.id = a.recipient_person_id
+      WHERE a.id = ${id}
     `
 
     if (result.rows.length === 0) {

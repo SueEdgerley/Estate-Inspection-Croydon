@@ -55,9 +55,19 @@ export async function GET(request) {
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
             a.created_at, a.updated_at,
-            'Inspector' AS created_by,
-            'Assigned' AS assigned_to
+            COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+            p.name AS assigned_to,
+            p.email AS assigned_to_email,
+            i.title AS inspection_title,
+            i.template_name AS inspection_template_name,
+            i.type AS inspection_type,
+            i.due_date AS inspection_due_date,
+            COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
+          LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
+          LEFT JOIN people p ON p.id = a.recipient_person_id
           WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
           ORDER BY a.created_at DESC
         `
@@ -73,9 +83,19 @@ export async function GET(request) {
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
             a.created_at, a.updated_at,
-            'Inspector' AS created_by,
-            'Assigned' AS assigned_to
+            COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+            p.name AS assigned_to,
+            p.email AS assigned_to_email,
+            i.title AS inspection_title,
+            i.template_name AS inspection_template_name,
+            i.type AS inspection_type,
+            i.due_date AS inspection_due_date,
+            COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
+          LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
+          LEFT JOIN people p ON p.id = a.recipient_person_id
           WHERE a.inspection_id = ${inspectionId}
           ORDER BY a.created_at DESC
         `
@@ -91,9 +111,19 @@ export async function GET(request) {
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
             a.created_at, a.updated_at,
-            'Inspector' AS created_by,
-            'Assigned' AS assigned_to
+            COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+            p.name AS assigned_to,
+            p.email AS assigned_to_email,
+            i.title AS inspection_title,
+            i.template_name AS inspection_template_name,
+            i.type AS inspection_type,
+            i.due_date AS inspection_due_date,
+            COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
+          LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
+          LEFT JOIN people p ON p.id = a.recipient_person_id
           ORDER BY a.created_at DESC
           LIMIT 1000
         `
