@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
-import { getAppRoleContextForClerkUser, roleMayViewGlobalActionsList } from '@/lib/app-role-access'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
 
 export const runtime = 'nodejs'
@@ -12,12 +11,6 @@ export async function GET() {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const cu = await currentUser()
-    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
-    if (!roleMayViewGlobalActionsList(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()
