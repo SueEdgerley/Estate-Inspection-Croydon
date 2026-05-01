@@ -128,9 +128,13 @@ function mapSnapshotQuestion(q, qIndex) {
     is_required: q.is_required ?? false,
     category: q.category ?? null,
     action_category: q.action_category ?? q.category ?? null,
+    create_action_on_yes: q.create_action_on_yes,
     create_action_on_no: q.create_action_on_no ?? true,
+    require_comment_on_yes: q.require_comment_on_yes ?? false,
     require_comment_on_no: q.require_comment_on_no ?? true,
+    require_photo_on_yes: q.require_photo_on_yes ?? false,
     require_photo_on_no: q.require_photo_on_no ?? true,
+    caretaker_recipient_on_yes: q.caretaker_recipient_on_yes ?? false,
     triggers_issue_answer:
       q.triggers_issue_answer ?? q.triggers_issue_answers ?? q.issue_trigger_answers ?? null,
     action_trigger_on: q.action_trigger_on ?? q.issue_triggers_on ?? null,
@@ -989,23 +993,35 @@ export async function POST(request) {
         if (isIssue) {
           try {
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
+            const isCaretakerAction = isCaretakerTemplate(template)
+            const qText = q.question_text || q.label || q.id
+            const actionRecipient =
+              isCaretakerAction && extras.recipient_person_id && String(extras.recipient_person_id).trim()
+                ? String(extras.recipient_person_id).trim()
+                : null
+            const actionTitle = isCaretakerAction
+              ? `${section.title || section.name || 'Section'} - ${qText}`
+              : residentMessage
+            const actionDescription = isCaretakerAction
+              ? [qText, comment].filter(Boolean).join('\n\n')
+              : residentMessage
             await sql`
               INSERT INTO actions (
                 id, inspection_id, section_id, section_name, question_id,
                 category, priority, title, description, location, status,
-                comment, auto_created, photo_urls
+                comment, recipient_person_id, auto_created, photo_urls
               )
               VALUES (
                 ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
-                ${category}, null, ${residentMessage}, ${residentMessage}, null, 'open',
-                ${comment || null}, true, ${JSON.stringify(allPhotoUrls)}
+                ${category}, null, ${actionTitle}, ${actionDescription}, null, 'open',
+                ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(allPhotoUrls)}
               )
             `
             const actionForPoster = {
               id: actionId,
               category,
-              title: residentMessage,
-              description: residentMessage,
+              title: actionTitle,
+              description: actionDescription,
               comment: comment || null,
               photo_urls: allPhotoUrls,
               created_at: new Date(),

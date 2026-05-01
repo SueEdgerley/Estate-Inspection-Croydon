@@ -185,6 +185,45 @@ function EstateQuestionInstructionBlock({ question }) {
   )
 }
 
+const CARETAKER_YN_COLORS = {
+  Yes: { border: '#15803d', bg: '#dcfce7', selectedBg: '#16a34a', text: '#14532d' },
+  No: { border: '#b91c1c', bg: '#fee2e2', selectedBg: '#dc2626', text: '#7f1d1d' },
+}
+
+function CaretakerYesNoButtons({ id, value, onChange }) {
+  const selected = value === 'Yes' || value === 'No' ? value : ''
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {['Yes', 'No'].map((label, idx) => {
+        const sel = selected === label
+        const colors = CARETAKER_YN_COLORS[label]
+        return (
+          <button
+            key={label}
+            type="button"
+            id={idx === 0 && id ? id : undefined}
+            onClick={() => onChange(label)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: sel ? `2px solid ${colors.border}` : `1px solid ${colors.border}`,
+              background: sel ? colors.selectedBg : colors.bg,
+              color: sel ? '#fff' : colors.text,
+              fontWeight: 700,
+              boxShadow: sel ? `0 0 0 3px ${colors.bg}` : 'none',
+              minHeight: 42,
+              minWidth: 58,
+              cursor: 'pointer',
+            }}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function InspectionQuestion({
   question,
   value,
@@ -192,6 +231,7 @@ function InspectionQuestion({
   error,
   errorComment,
   errorPhotos,
+  errorRecipient,
   answerExtras,
   onAnswerExtras,
   createActionOnNo,
@@ -200,6 +240,7 @@ function InspectionQuestion({
   peopleOptions = [],
   standardInspectionForm = false,
   caretakerPartLabel = null,
+  caretakerTemplate = false,
   estateInspectionForm = false,
   estateChecklistIndex,
   estateDisplayNumber,
@@ -359,7 +400,11 @@ function InspectionQuestion({
     (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
-  const showActionBlock = qType === 'yes_no' && isNo && createActionOnNo
+  const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
+  const showActionBlock =
+    qType === 'yes_no' &&
+    ((isNo && createActionOnNo) ||
+      (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const showCommentPhotoBlock = (showComment || showActionBlock) || isExpanded
   const showPhotoInYesNoFollowUp =
@@ -387,8 +432,12 @@ function InspectionQuestion({
 
   const handleChange = (val) => {
     onChange(question.id, val)
-    if (qType === 'yes_no' && (val === 'Yes' || val === 'NA') && onAnswerExtras) {
-      onAnswerExtras(question.id, { comment: '', photo_urls: [] })
+    if (qType === 'yes_no' && onAnswerExtras) {
+      if (caretakerYesTriggersFollowUp && (val === 'No' || val === 'NA')) {
+        onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
+      } else if (!caretakerYesTriggersFollowUp && (val === 'Yes' || val === 'NA')) {
+        onAnswerExtras(question.id, { comment: '', photo_urls: [] })
+      }
     }
   }
 
@@ -465,11 +514,15 @@ function InspectionQuestion({
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
-        <YesNoNaButtons
-          id={id}
-          value={yesNoNaValue}
-          onChange={(val) => handleChange(val)}
-        />
+        {caretakerTemplate ? (
+          <CaretakerYesNoButtons id={id} value={yesNoNaValue} onChange={(val) => handleChange(val)} />
+        ) : (
+          <YesNoNaButtons
+            id={id}
+            value={yesNoNaValue}
+            onChange={(val) => handleChange(val)}
+          />
+        )}
         {showCommentPhotoBlock && (
           <div ref={isNvTemplate ? expandedSectionRef : undefined} style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
             {showActionBlock && (
@@ -480,7 +533,9 @@ function InspectionQuestion({
             {showComment && (
               <>
                 <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                  {isStdIssueRow
+                  {caretakerYesTriggersFollowUp
+                    ? 'Comment'
+                    : isStdIssueRow
                     ? 'Comment'
                     : `Resident-friendly message (for poster PDF)${commentWhen === 'always' || (commentWhen === 'on_no' && isNo) ? ' ' : ''}`}
                   {(commentWhen === 'always' ||
@@ -492,7 +547,7 @@ function InspectionQuestion({
                   name={`comment-${question.id}`}
                   value={extras.comment || ''}
                   onChange={(e) => setExtras({ comment: e.target.value })}
-                  placeholder="e.g. Please ensure the area is kept clear."
+                  placeholder={caretakerYesTriggersFollowUp ? 'Add details for the action' : 'e.g. Please ensure the area is kept clear.'}
                   rows={2}
                   style={{
                     ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
@@ -506,10 +561,10 @@ function InspectionQuestion({
                   }}
                 />
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
-                {question.caretaker_recipient_on_yes && isYes && Array.isArray(peopleOptions) && peopleOptions.length > 0 && (
+                {question.caretaker_recipient_on_yes && isYes && Array.isArray(peopleOptions) && (
                   <>
                     <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                      Who should this be sent to?
+                      Who does this need to be sent to <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <select
                       id={`recipient-${question.id}`}
@@ -518,7 +573,7 @@ function InspectionQuestion({
                       style={{
                         width: '100%',
                         padding: '0.75rem',
-                        border: '1px solid #d1d5db',
+                        border: errorRecipient ? '1px solid #ef4444' : '1px solid #d1d5db',
                         borderRadius: '0.375rem',
                         fontSize: '1rem',
                         backgroundColor: 'white',
@@ -532,6 +587,7 @@ function InspectionQuestion({
                         </option>
                       ))}
                     </select>
+                    {errorRecipient && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorRecipient}</p>}
                   </>
                 )}
               </>
@@ -1213,6 +1269,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       [questionId]: undefined,
       [`${questionId}_comment`]: undefined,
       [`${questionId}_photos`]: undefined,
+      [`${questionId}_recipient`]: undefined,
     }))
   }
 
@@ -1807,6 +1864,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       error: validationErrors[q.id],
                       errorComment: validationErrors[`${q.id}_comment`],
                       errorPhotos: validationErrors[`${q.id}_photos`],
+                      errorRecipient: validationErrors[`${q.id}_recipient`],
                       answerExtras: answerExtras[q.id],
                       onAnswerExtras: (questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras })),
                       createActionOnNo: q.create_action_on_no,
@@ -1815,6 +1873,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       peopleOptions,
                       standardInspectionForm: usesStandardInspectionFormUI(selectedTemplate),
                       caretakerPartLabel,
+                      caretakerTemplate: isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate),
                       estateInspectionForm,
                       estateChecklistIndex: estateChecklistIndexByQid.get(q.id),
                       estateDisplayNumber,
