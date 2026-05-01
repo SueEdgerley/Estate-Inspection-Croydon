@@ -39,54 +39,62 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
-    let query
-    if (inspectionId && questionId) {
-      query = sql`
-        SELECT 
-          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-          a.category, a.priority, a.title, a.description,
-          a.location,
-          a.status, a.comment, a.recipient_person_id, a.auto_created,
-          a.block_id, a.cost_code, a.issue_pdf_url,
-          a.created_at, a.updated_at, a.expected_completion_date,
-          'Inspector' AS created_by,
-          'Assigned' AS assigned_to
-        FROM actions a
-        WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
-        ORDER BY created_at DESC
-      `
-    } else if (inspectionId) {
-      query = sql`
-        SELECT 
-          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-          a.category, a.priority, a.title, a.description,
-          a.location,
-          a.status, a.comment, a.recipient_person_id, a.auto_created,
-          a.block_id, a.cost_code, a.issue_pdf_url,
-          a.created_at, a.updated_at, a.expected_completion_date,
-          'Inspector' AS created_by,
-          'Assigned' AS assigned_to
-        FROM actions a
-        WHERE a.inspection_id = ${inspectionId}
-        ORDER BY created_at DESC
-      `
-    } else {
-      query = sql`
-        SELECT 
-          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-          a.category, a.priority, a.title, a.description,
-          a.location,
-          a.status, a.comment, a.recipient_person_id, a.auto_created,
-          a.block_id, a.cost_code, a.issue_pdf_url,
-          a.created_at, a.updated_at, a.expected_completion_date,
-          'Inspector' AS created_by,
-          'Assigned' AS assigned_to
-        FROM actions a
-        ORDER BY a.created_at DESC
-      `
+    let result
+    try {
+      let query
+      if (inspectionId && questionId) {
+        query = sql`
+          SELECT 
+            a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+            a.category, a.priority, a.title, a.description,
+            a.location,
+            a.status, a.comment, a.recipient_person_id, a.auto_created,
+            a.block_id, a.cost_code, a.issue_pdf_url,
+            a.created_at, a.updated_at, a.expected_completion_date,
+            'Inspector' AS created_by,
+            'Assigned' AS assigned_to
+          FROM actions a
+          WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
+          ORDER BY a.created_at DESC
+        `
+      } else if (inspectionId) {
+        query = sql`
+          SELECT 
+            a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+            a.category, a.priority, a.title, a.description,
+            a.location,
+            a.status, a.comment, a.recipient_person_id, a.auto_created,
+            a.block_id, a.cost_code, a.issue_pdf_url,
+            a.created_at, a.updated_at, a.expected_completion_date,
+            'Inspector' AS created_by,
+            'Assigned' AS assigned_to
+          FROM actions a
+          WHERE a.inspection_id = ${inspectionId}
+          ORDER BY a.created_at DESC
+        `
+      } else {
+        query = sql`
+          SELECT 
+            a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+            a.category, a.priority, a.title, a.description,
+            a.location,
+            a.status, a.comment, a.recipient_person_id, a.auto_created,
+            a.block_id, a.cost_code, a.issue_pdf_url,
+            a.created_at, a.updated_at, a.expected_completion_date,
+            'Inspector' AS created_by,
+            'Assigned' AS assigned_to
+          FROM actions a
+          ORDER BY a.created_at DESC
+          LIMIT 1000
+        `
+      }
+      
+      result = await query
+    } catch (dbError) {
+      // If table doesn't exist or other DB error, return empty array
+      console.warn('Actions query failed, returning empty array:', dbError?.message || dbError)
+      result = { rows: [] }
     }
-    
-    const result = await query
     return NextResponse.json(result.rows)
   } catch (error) {
     console.error('Error fetching actions:', {
