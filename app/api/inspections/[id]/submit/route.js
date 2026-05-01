@@ -27,7 +27,10 @@ import { applyNeighbourhoodVoiceTemplatePatch } from '@/lib/neighbourhood-voice-
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
 import { createNeighbourhoodVoiceAutoActions } from '@/lib/neighbourhood-voice-submit-actions'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
-import { applyGroundsMaintenanceTemplateToSnapshot } from '@/lib/grounds-maintenance-template'
+import {
+  applyGroundsMaintenanceTemplateToSnapshot,
+  isGroundsMaintenanceTemplate,
+} from '@/lib/grounds-maintenance-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
@@ -123,7 +126,9 @@ export async function POST(request, { params }) {
     }
     if (
       templateForRoleCheck &&
-      (isCaretakerTemplate(templateForRoleCheck) || isEsmInspectionFormTemplate(templateForRoleCheck)) &&
+      (isCaretakerTemplate(templateForRoleCheck) ||
+        isEsmInspectionFormTemplate(templateForRoleCheck) ||
+        isGroundsMaintenanceTemplate(templateForRoleCheck)) &&
       !String(inspection.block_id || '').trim()
     ) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })

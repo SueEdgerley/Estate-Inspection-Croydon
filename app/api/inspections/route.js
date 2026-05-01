@@ -33,6 +33,7 @@ import {
 } from '@/lib/app-role-access'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
+import { isGroundsMaintenanceTemplate } from '@/lib/grounds-maintenance-template'
 import {
   countQuestionsInTemplate,
   logInspectionQuestionPipeline,
@@ -137,6 +138,7 @@ function mapSnapshotQuestion(q, qIndex) {
     require_photo_on_no: q.require_photo_on_no ?? true,
     caretaker_recipient_on_yes: q.caretaker_recipient_on_yes ?? false,
     caretaker_recipient_options: q.caretaker_recipient_options ?? null,
+    action_recipient_required_when: q.action_recipient_required_when ?? null,
     triggers_issue_answer:
       q.triggers_issue_answer ?? q.triggers_issue_answers ?? q.issue_trigger_answers ?? null,
     action_trigger_on: q.action_trigger_on ?? q.issue_triggers_on ?? null,
@@ -663,7 +665,12 @@ export async function POST(request) {
       )
     }
 
-    if ((isCaretakerTemplate(template) || isEsmInspectionFormTemplate(template)) && !String(bodyBlockId || '').trim()) {
+    if (
+      (isCaretakerTemplate(template) ||
+        isEsmInspectionFormTemplate(template) ||
+        isGroundsMaintenanceTemplate(template)) &&
+      !String(bodyBlockId || '').trim()
+    ) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })
     }
 
@@ -999,14 +1006,18 @@ export async function POST(request) {
             const isEsmQ4Action = q.esm_q4_abandoned_vehicle === true
             const qText = q.question_text || q.label || q.id
             const actionRecipient =
-              (isCaretakerAction || isEsmQ4Action) && extras.recipient_person_id && String(extras.recipient_person_id).trim()
+              (isCaretakerAction || isEsmQ4Action || q.action_recipient_required_when) &&
+              extras.recipient_person_id &&
+              String(extras.recipient_person_id).trim()
                 ? String(extras.recipient_person_id).trim()
                 : null
             const actionTitle = isCaretakerAction
               ? `${section.title || section.name || 'Section'} - ${qText}`
               : isEsmQ4Action
                 ? `${section.title || section.name || 'Section'} - ${qText}`
-              : residentMessage
+                : q.action_recipient_required_when
+                  ? `${section.title || section.name || 'Section'} - ${qText}`
+                  : residentMessage
             const esmQ4Description = isEsmQ4Action
               ? [
                   qText,
@@ -1021,11 +1032,16 @@ export async function POST(request) {
               ? [qText, comment].filter(Boolean).join('\n\n')
               : isEsmQ4Action
                 ? esmQ4Description
-              : residentMessage
+                : q.action_recipient_required_when
+                  ? [qText, comment, actionRecipient ? `Selected dropdown: ${actionRecipient}` : null].filter(Boolean).join('\n\n')
+                  : residentMessage
             const actionCostCode =
               isEsmQ4Action && extras.cost_code && String(extras.cost_code).trim()
                 ? String(extras.cost_code).trim()
                 : null
+            const actionLocation = q.action_recipient_required_when
+              ? (String(location || '').trim() || displayTitle || null)
+              : null
             await sql`
               INSERT INTO actions (
                 id, inspection_id, section_id, section_name, question_id,
@@ -1034,7 +1050,7 @@ export async function POST(request) {
               )
               VALUES (
                 ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
-                ${category}, null, ${actionTitle}, ${actionDescription}, null, 'open',
+                ${category}, null, ${actionTitle}, ${actionDescription}, ${actionLocation}, 'open',
                 ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(allPhotoUrls)}, ${actionCostCode}
               )
             `

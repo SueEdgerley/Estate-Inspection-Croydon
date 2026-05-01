@@ -69,6 +69,15 @@ function normalizeYesNoNaValue(val) {
   return ''
 }
 
+function showRecipientForAnswer(requiredWhen, answerValue) {
+  const normalized = normalizeYesNoNaValue(answerValue)
+  return (
+    requiredWhen === 'always' ||
+    (requiredWhen === 'on_yes' && normalized === 'Yes') ||
+    (requiredWhen === 'on_no' && normalized === 'No')
+  )
+}
+
 function parsePhotoAnswer(raw) {
   if (raw == null || raw === '') return []
   if (Array.isArray(raw)) return raw.filter((u) => typeof u === 'string' && u)
@@ -410,6 +419,11 @@ function InspectionQuestion({
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
+  const actionRecipientWhen = question.action_recipient_required_when
+  const showActionRecipient =
+    (actionRecipientWhen === 'on_yes' && isYes) ||
+    (actionRecipientWhen === 'on_no' && isNo) ||
+    actionRecipientWhen === 'always'
   const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
   const caretakerRecipientOptions = Array.isArray(question.caretaker_recipient_options)
     ? question.caretaker_recipient_options
@@ -421,6 +435,7 @@ function InspectionQuestion({
     qType === 'yes_no' &&
     !esmQ4AbandonedVehicle &&
     ((isNo && createActionOnNo) ||
+      showActionRecipient ||
       (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const showCommentPhotoBlock = (showComment || showActionBlock) || isExpanded
@@ -457,6 +472,8 @@ function InspectionQuestion({
           authorisation_text: '',
           cost_code: '',
         })
+      } else if (actionRecipientWhen && !showRecipientForAnswer(actionRecipientWhen, val)) {
+        onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
       } else if (caretakerYesTriggersFollowUp && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
       } else if (commentWhen === 'on_yes' && (val === 'No' || val === 'NA')) {
@@ -660,7 +677,7 @@ function InspectionQuestion({
                   }}
                 />
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
-                {question.caretaker_recipient_on_yes && isYes && Array.isArray(caretakerRecipientOptions) && (
+                {((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && Array.isArray(caretakerRecipientOptions) && (
                   <>
                     <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                       Who does this need to go to <span style={{ color: '#ef4444' }}>*</span>
@@ -1174,6 +1191,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const startWizard = async () => {
     if (!templateId || !selectedTemplate) return
+    if (locationRequiredForSelectedTemplate && !postgresBlockId.trim()) {
+      setValidationErrors((prev) => ({ ...prev, block_id: 'Please select a location' }))
+      setSubmitError('Please select a location')
+      return
+    }
     setStartingWizard(true)
     setSubmitError(null)
     try {
@@ -1299,7 +1321,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const locationRequiredForSelectedTemplate = Boolean(
     selectedTemplate &&
       !isNVTemplate(selectedTemplate) &&
-      (isCaretakerTemplate(selectedTemplate) || isEsmInspectionFormTemplate(selectedTemplate))
+      (isCaretakerTemplate(selectedTemplate) ||
+        isEsmInspectionFormTemplate(selectedTemplate) ||
+        isGroundsMaintenanceTemplate(selectedTemplate))
   )
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
   const estateInspectionFormV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
@@ -1443,6 +1467,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             }
           }
           if (q.caretaker_recipient_on_yes && isYes && !(extras.recipient_person_id || '').trim()) {
+            errs[`${q.id}_recipient`] = 'Please select a recipient'
+          }
+          if (q.action_recipient_required_when && showRecipientForAnswer(q.action_recipient_required_when, normalized) && !(extras.recipient_person_id || '').trim()) {
             errs[`${q.id}_recipient`] = 'Please select a recipient'
           }
           return
