@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 
@@ -12,7 +12,11 @@ const STATUS_OPTIONS = [
 ]
 
 const initialForm = {
+  location_id: '',
+  estate_id: '',
+  block_id: '',
   estate_block: '',
+  area: '',
   location: '',
   description: '',
   photo_urls: [],
@@ -24,20 +28,87 @@ const initialForm = {
 
 export default function RepairsInspectorNewFormPage() {
   const [form, setForm] = useState(initialForm)
+  const [locations, setLocations] = useState([])
+  const [loadingLocations, setLoadingLocations] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [created, setCreated] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadReferenceData() {
+      setLoadingLocations(true)
+      try {
+        const response = await fetch('/api/repairs-inspector/reference', {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!cancelled) setLocations(Array.isArray(data.locations) ? data.locations : [])
+      } catch (err) {
+        if (!cancelled) setError(err?.message || 'Failed to load estate/block list')
+      } finally {
+        if (!cancelled) setLoadingLocations(false)
+      }
+    }
+    loadReferenceData()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const selectedLocation = useMemo(
+    () => locations.find((location) => location.id === form.location_id) || null,
+    [locations, form.location_id]
+  )
+
+  const locationOptions = useMemo(() => {
+    if (!selectedLocation) return []
+    const sameEstate = selectedLocation.estate_id
+      ? locations.filter((location) => location.estate_id === selectedLocation.estate_id)
+      : [selectedLocation]
+    const seen = new Set()
+    return sameEstate.filter((location) => {
+      const label = location.label || location.block_name || location.estate_name
+      if (!label || seen.has(label)) return false
+      seen.add(label)
+      return true
+    })
+  }, [locations, selectedLocation])
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const chooseEstateBlock = (locationId) => {
+    const chosen = locations.find((location) => location.id === locationId)
+    if (!chosen) {
+      setForm((prev) => ({
+        ...prev,
+        location_id: '',
+        estate_id: '',
+        block_id: '',
+        estate_block: '',
+        area: '',
+        location: '',
+      }))
+      return
+    }
+    setForm((prev) => ({
+      ...prev,
+      location_id: chosen.id,
+      estate_id: chosen.estate_id || '',
+      block_id: chosen.block_id || '',
+      estate_block: chosen.label || '',
+      area: chosen.area || '',
+      location: chosen.label || '',
+    }))
   }
 
   async function submit(event) {
     event.preventDefault()
     setError('')
     setMessage('')
-    setCreated(null)
 
     if (!form.estate_block.trim()) {
       setError('Estate/block is required')
@@ -60,6 +131,9 @@ export default function RepairsInspectorNewFormPage() {
         credentials: 'include',
         body: JSON.stringify({
           estate_block: form.estate_block.trim(),
+          estate_id: form.estate_id || null,
+          block_id: form.block_id || null,
+          area: form.area || null,
           location: form.location.trim(),
           description: form.description.trim(),
           photo_urls: form.photo_urls,
@@ -72,8 +146,7 @@ export default function RepairsInspectorNewFormPage() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || data.details || 'Failed to create repair action')
 
-      setCreated(data)
-      setMessage('Repair action created.')
+      setMessage('Repair action created successfully.')
       setForm(initialForm)
     } catch (err) {
       setError(err?.message || 'Failed to create repair action')
@@ -85,11 +158,16 @@ export default function RepairsInspectorNewFormPage() {
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <Link href="/repairs-inspector" style={{ color: '#1d4ed8', textDecoration: 'none', fontSize: '0.875rem' }}>
-          Back to repairs update screen
-        </Link>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <Link href="/repairs-inspector/new" style={activeChoiceStyle}>
+            Log New Repair
+          </Link>
+          <Link href="/repairs-inspector" style={choiceStyle}>
+            Update Existing Repair
+          </Link>
+        </div>
         <h1 style={{ margin: '0.75rem 0 0', fontSize: '2rem', color: '#111827' }}>
-          Repairs Inspector Form
+          Log New Repair
         </h1>
         <p style={{ margin: '0.5rem 0 0', color: '#64748b' }}>
           Log a new repair directly while on site. This creates one Repairs action for tracking and posters.
@@ -104,25 +182,53 @@ export default function RepairsInspectorNewFormPage() {
               <label htmlFor="estate-block" style={labelStyle}>
                 Estate/block <span style={requiredStyle}>*</span>
               </label>
-              <input
+              <select
                 id="estate-block"
-                value={form.estate_block}
-                onChange={(event) => setField('estate_block', event.target.value)}
+                value={form.location_id}
+                onChange={(event) => chooseEstateBlock(event.target.value)}
                 style={inputStyle}
                 required
+                disabled={loadingLocations}
+              >
+                <option value="">{loadingLocations ? 'Loading estate/block list...' : 'Select estate/block...'}</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="area" style={labelStyle}>Area</label>
+              <input
+                id="area"
+                value={form.area || 'Not recorded'}
+                readOnly
+                style={{ ...inputStyle, background: '#f8fafc' }}
               />
             </div>
             <div>
               <label htmlFor="location" style={labelStyle}>
                 Location <span style={requiredStyle}>*</span>
               </label>
-              <input
+              <select
                 id="location"
                 value={form.location}
                 onChange={(event) => setField('location', event.target.value)}
                 style={inputStyle}
                 required
-              />
+                disabled={!selectedLocation}
+              >
+                <option value="">{selectedLocation ? 'Select closest location...' : 'Select estate/block first'}</option>
+                {locationOptions.map((location) => (
+                  <option key={location.id} value={location.label}>
+                    {location.label}
+                  </option>
+                ))}
+              </select>
+              <p style={{ margin: '0.4rem 0 0', color: '#64748b', fontSize: '0.8125rem' }}>
+                If the exact location is not listed, select the closest option and add details in notes/comments.
+              </p>
             </div>
           </div>
           <label htmlFor="description" style={labelStyle}>
@@ -197,14 +303,31 @@ export default function RepairsInspectorNewFormPage() {
 
         {error ? <p style={{ color: '#b91c1c', margin: 0 }}>{error}</p> : null}
         {message ? (
-          <p style={{ color: '#166534', margin: 0 }}>
-            {message} {created?.action_id ? `Action ID: ${created.action_id}` : ''}
-          </p>
+          <div style={{ ...cardStyle, borderColor: '#bbf7d0', background: '#f0fdf4' }}>
+            <p style={{ color: '#166534', margin: '0 0 0.75rem', fontWeight: 700 }}>
+              {message}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <Link href="/actions" style={secondaryButtonStyle}>
+                View in Issues/Actions
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage('')
+                  setError('')
+                }}
+                style={primaryButtonStyle}
+              >
+                Log another repair
+              </button>
+            </div>
+          </div>
         ) : null}
 
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <Link href="/repairs-inspector" style={secondaryButtonStyle}>
-            Update existing actions
+            Update Existing Repair
           </Link>
           <button
             type="submit"
@@ -288,4 +411,16 @@ const secondaryButtonStyle = {
   textDecoration: 'none',
   fontWeight: 700,
   background: '#fff',
+}
+
+const choiceStyle = {
+  ...secondaryButtonStyle,
+  display: 'inline-block',
+}
+
+const activeChoiceStyle = {
+  ...choiceStyle,
+  background: '#1d4ed8',
+  color: '#fff',
+  borderColor: '#1d4ed8',
 }

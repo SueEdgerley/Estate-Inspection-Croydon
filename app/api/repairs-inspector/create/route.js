@@ -33,7 +33,10 @@ export async function POST(request) {
 
     const user = await currentUser().catch(() => null)
     const body = await request.json().catch(() => ({}))
+    const estateId = clean(body.estate_id)
+    const blockId = clean(body.block_id)
     const estateBlock = clean(body.estate_block)
+    const area = clean(body.area)
     const location = clean(body.location)
     const description = clean(body.description)
     const jobNumber = clean(body.job_number)
@@ -43,7 +46,7 @@ export async function POST(request) {
     const photoUrls = photoUrlsFromBody(body.photo_urls || body.repair_photo_url)
     const primaryPhotoUrl = photoUrls[0] || null
 
-    if (!estateBlock) {
+    if (!estateBlock && !estateId && !blockId) {
       return NextResponse.json({ error: 'Estate/block is required' }, { status: 400 })
     }
     if (!location) {
@@ -63,17 +66,49 @@ export async function POST(request) {
       user?.primaryEmailAddress?.emailAddress ||
       userId
     const inspectorEmail = user?.primaryEmailAddress?.emailAddress || userId
+    let linkedLocation = {
+      estate_id: estateId || null,
+      block_id: blockId || null,
+      label: estateBlock,
+      area,
+    }
+
+    if (blockId || estateId) {
+      const locationResult = await sql`
+        SELECT
+          b.id AS block_id,
+          b.name AS block_name,
+          e.id AS estate_id,
+          e.name AS estate_name,
+          e.area AS estate_area
+        FROM blocks b
+        FULL OUTER JOIN estates e ON e.id = b.estate_id
+        WHERE (${blockId || null} IS NOT NULL AND b.id = ${blockId || null})
+          OR (${blockId || null} IS NULL AND ${estateId || null} IS NOT NULL AND e.id = ${estateId || null})
+        LIMIT 1
+      `
+      const row = locationResult.rows[0]
+      if (row) {
+        linkedLocation = {
+          estate_id: row.estate_id || estateId || null,
+          block_id: row.block_id || blockId || null,
+          label: [row.estate_name, row.block_name].filter(Boolean).join(' / ') || estateBlock,
+          area: row.estate_area || area,
+        }
+      }
+    }
 
     await sql`
       INSERT INTO inspections (
         id, type, location_label, inspector_name, inspector_id,
         template_id, template_name, submitted_at, status, is_scheduled,
-        title, description
+        title, description, estate_id, block_id, work_type
       )
       VALUES (
-        ${inspectionId}, 'repairs_inspector', ${estateBlock}, ${inspectorName}, ${inspectorEmail},
+        ${inspectionId}, 'repairs_inspector', ${linkedLocation.label || estateBlock}, ${inspectorName}, ${inspectorEmail},
         'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
-        ${`Repairs Inspector - ${estateBlock}`}, ${description}
+        ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}, ${description},
+        ${linkedLocation.estate_id}, ${linkedLocation.block_id}, 'repairs_inspector'
       )
     `
 
@@ -81,13 +116,13 @@ export async function POST(request) {
       INSERT INTO actions (
         id, inspection_id, section_id, section_name, question_id,
         category, priority, title, description, location, status,
-        comment, auto_created, photo_urls, job_number, expected_completion_date,
+        comment, auto_created, photo_urls, block_id, job_number, expected_completion_date,
         repair_notes, repair_photo_url, repair_updated_at
       )
       VALUES (
         ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
         'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-        ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${jobNumber || null},
+        ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${linkedLocation.block_id}, ${jobNumber || null},
         ${expectedCompletionDate || null}, ${repairNotes || null}, ${primaryPhotoUrl},
         CURRENT_TIMESTAMP
       )
