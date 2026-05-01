@@ -26,6 +26,7 @@ export async function GET() {
 
   let systemRole = null
   let jobTitle = null
+  let provisioningError = null
   try {
     if (getPgUrl()) {
       await ensureDatabase()
@@ -33,11 +34,19 @@ export async function GET() {
         clerkUser?.primaryEmailAddress?.emailAddress ??
         clerkUser?.emailAddresses?.[0]?.emailAddress ??
         null
+      if (!clerkUser) {
+        console.warn('[auth/me] Clerk session has userId but currentUser() returned null:', { userId })
+      }
       try {
         const displayName = [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ').trim() || null
         await ensureClerkUserProvisioned(userId, email, { displayName })
       } catch (provErr) {
-        console.warn('[auth/me] user provision failed:', provErr?.message)
+        provisioningError = provErr?.message || String(provErr)
+        console.error('[auth/me] user provision failed:', {
+          userId,
+          email,
+          error: provisioningError,
+        })
       }
       const result = await sql`
         SELECT
@@ -68,6 +77,7 @@ export async function GET() {
     systemRole,
     jobTitle,
     clerkIsAdmin,
+    provisioningError,
     roleUi,
   })
 }

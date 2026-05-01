@@ -175,7 +175,7 @@ export default function AppLayout({ children }) {
               }}
             >
             <SignedOut>
-              <SignInButton mode="modal">
+              <SignInButton mode="modal" fallbackRedirectUrl={pathname || '/'}>
                 <button
                   type="button"
                   style={{
@@ -193,7 +193,7 @@ export default function AppLayout({ children }) {
                   Sign in
                 </button>
               </SignInButton>
-              <SignUpButton mode="modal">
+              <SignUpButton mode="modal" fallbackRedirectUrl={pathname || '/'}>
                 <button
                   type="button"
                   style={{

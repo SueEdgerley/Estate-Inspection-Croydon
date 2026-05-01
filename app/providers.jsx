@@ -8,6 +8,8 @@ export function Providers({ children, publishableKey }) {
   return (
     <ClerkProvider
       {...(key ? { publishableKey: key } : {})}
+      signInUrl="/login"
+      signUpUrl="/sign-up"
       fallbackRedirectUrl="/"
     >
       {children}

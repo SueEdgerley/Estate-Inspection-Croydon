@@ -15,8 +15,8 @@ export default function LoginPage() {
       <SignIn
         routing="path"
         path="/login"
-        signUpUrl="/login"
-        forceRedirectUrl="/"
+        signUpUrl="/sign-up"
+        fallbackRedirectUrl="/"
         appearance={{
           elements: {
             rootBox: { margin: '0 auto' },
