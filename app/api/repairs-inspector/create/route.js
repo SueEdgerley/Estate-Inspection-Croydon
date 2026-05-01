@@ -153,18 +153,34 @@ export async function POST(request) {
       `
     } catch (insertError) {
       console.warn('[repairs-inspector/create] full repair action insert failed; retrying core action insert:', insertError?.message || insertError)
-      await sql`
-        INSERT INTO actions (
-          id, inspection_id, section_id, section_name, question_id,
-          category, priority, title, description, location, status,
-          comment, auto_created, photo_urls
-        )
-        VALUES (
-          ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
-          'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-          ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}
-        )
-      `
+      try {
+        await sql`
+          INSERT INTO actions (
+            id, inspection_id, section_id, section_name, question_id,
+            category, priority, title, description, location, status,
+            comment, auto_created, photo_urls
+          )
+          VALUES (
+            ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
+            'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
+            ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}
+          )
+        `
+      } catch (coreInsertError) {
+        console.warn('[repairs-inspector/create] core action insert failed; retrying minimum action insert:', coreInsertError?.message || coreInsertError)
+        await sql`
+          INSERT INTO actions (
+            id, inspection_id, section_id, section_name, question_id,
+            category, priority, title, description, location, status,
+            comment, auto_created
+          )
+          VALUES (
+            ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
+            'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
+            ${repairNotes || null}, false
+          )
+        `
+      }
     }
 
     return NextResponse.json(

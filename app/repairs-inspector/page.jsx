@@ -215,7 +215,7 @@ export default function RepairsInspectorFormPage() {
           </select>
           {actions.length === 0 && !loading && !loadError ? (
             <p style={{ margin: '0.75rem 0 0', color: '#64748b' }}>
-              No open repair-related actions found.
+              No repair actions available.
             </p>
           ) : null}
         </section>

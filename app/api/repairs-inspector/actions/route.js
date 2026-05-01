@@ -16,43 +16,125 @@ export async function GET() {
     await ensureDatabase()
     await ensureRepairActionFields(sql)
 
-    const result = await sql`
-      SELECT
-        a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-        a.category, a.priority, a.title, a.description, a.location, a.status, a.comment,
-        a.photo_urls, a.issue_pdf_url, a.job_number, a.expected_completion_date,
-        a.repair_notes, a.repair_photo_url, a.repair_updated_at,
-        a.created_at, a.updated_at,
-        i.title AS inspection_title,
-        i.submitted_at AS inspection_date,
-        COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name,
-        p.name AS recipient_name,
-        p.job_title AS recipient_job_title,
-        p.category AS recipient_category
-      FROM actions a
-      LEFT JOIN inspections i ON i.id = a.inspection_id
-      LEFT JOIN estates e ON e.id = i.estate_id
-      LEFT JOIN blocks b ON b.id = i.block_id
-      LEFT JOIN people p ON p.id = a.recipient_person_id
-      WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
-        AND (
-          lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
-          OR lower(COALESCE(a.category, '')) LIKE '%repair%'
-          OR lower(COALESCE(a.section_name, '')) LIKE '%repair%'
-          OR lower(COALESCE(a.title, '')) LIKE '%repair%'
-          OR lower(COALESCE(a.description, '')) LIKE '%repair%'
-          OR lower(COALESCE(a.comment, '')) LIKE '%repair%'
-          OR lower(COALESCE(i.type, '')) = 'repairs_inspector'
-          OR lower(COALESCE(i.template_id, '')) = 'repairs_inspector_direct'
-          OR lower(COALESCE(p.name, '')) LIKE '%repair%'
-          OR lower(COALESCE(p.job_title, '')) LIKE '%repair%'
-          OR lower(COALESCE(p.category, '')) LIKE '%repair%'
-        )
-      ORDER BY a.updated_at DESC, a.created_at DESC
-      LIMIT 500
-    `
+    try {
+      const result = await sql`
+        SELECT
+          a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+          a.category, a.priority, a.title, a.description, a.location, a.status, a.comment,
+          a.photo_urls, a.issue_pdf_url, a.job_number, a.expected_completion_date,
+          a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+          a.created_at, a.updated_at,
+          i.title AS inspection_title,
+          i.submitted_at AS inspection_date,
+          COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name,
+          p.name AS recipient_name,
+          p.job_title AS recipient_job_title,
+          p.category AS recipient_category
+        FROM actions a
+        LEFT JOIN inspections i ON i.id = a.inspection_id
+        LEFT JOIN estates e ON e.id = i.estate_id
+        LEFT JOIN blocks b ON b.id = i.block_id
+        LEFT JOIN people p ON p.id = a.recipient_person_id
+        WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
+          AND (
+            lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
+            OR lower(COALESCE(a.category, '')) LIKE '%repair%'
+            OR lower(COALESCE(a.section_name, '')) LIKE '%repair%'
+            OR lower(COALESCE(a.title, '')) LIKE '%repair%'
+            OR lower(COALESCE(a.description, '')) LIKE '%repair%'
+            OR lower(COALESCE(a.comment, '')) LIKE '%repair%'
+            OR lower(COALESCE(i.type, '')) = 'repairs_inspector'
+            OR lower(COALESCE(i.template_id, '')) = 'repairs_inspector_direct'
+            OR lower(COALESCE(p.name, '')) LIKE '%repair%'
+            OR lower(COALESCE(p.job_title, '')) LIKE '%repair%'
+            OR lower(COALESCE(p.category, '')) LIKE '%repair%'
+          )
+        ORDER BY a.updated_at DESC, a.created_at DESC
+        LIMIT 500
+      `
 
-    return NextResponse.json(result.rows)
+      return NextResponse.json(result.rows)
+    } catch (fullQueryError) {
+      console.warn('[repairs-inspector/actions] full query failed; retrying core action query:', fullQueryError?.message || fullQueryError)
+      try {
+        const fallback = await sql`
+          SELECT
+            a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+            a.category, a.priority, a.title, a.description, a.location, a.status, a.comment,
+            a.photo_urls,
+            NULL::text AS issue_pdf_url,
+            NULL::text AS job_number,
+            NULL::date AS expected_completion_date,
+            NULL::text AS repair_notes,
+            NULL::text AS repair_photo_url,
+            NULL::timestamptz AS repair_updated_at,
+            a.created_at, a.updated_at,
+            i.title AS inspection_title,
+            i.submitted_at AS inspection_date,
+            COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name,
+            NULL::text AS recipient_name,
+            NULL::text AS recipient_job_title,
+            NULL::text AS recipient_category
+          FROM actions a
+          LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = i.block_id
+          WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
+            AND (
+              lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
+              OR lower(COALESCE(a.category, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.section_name, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.title, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.description, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.comment, '')) LIKE '%repair%'
+              OR lower(COALESCE(i.type, '')) = 'repairs_inspector'
+              OR lower(COALESCE(i.template_id, '')) = 'repairs_inspector_direct'
+            )
+          ORDER BY a.updated_at DESC, a.created_at DESC
+          LIMIT 500
+        `
+
+        return NextResponse.json(fallback.rows)
+      } catch (fallbackQueryError) {
+        console.warn('[repairs-inspector/actions] core query failed; retrying minimum action query:', fallbackQueryError?.message || fallbackQueryError)
+        const minimum = await sql`
+          SELECT
+            a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+            a.category, a.priority, a.title, a.description, a.location, a.status, a.comment,
+            '[]'::jsonb AS photo_urls,
+            NULL::text AS issue_pdf_url,
+            NULL::text AS job_number,
+            NULL::date AS expected_completion_date,
+            NULL::text AS repair_notes,
+            NULL::text AS repair_photo_url,
+            NULL::timestamptz AS repair_updated_at,
+            a.created_at, a.updated_at,
+            i.title AS inspection_title,
+            i.submitted_at AS inspection_date,
+            COALESCE(i.location_label, i.title) AS estate_block_name,
+            NULL::text AS recipient_name,
+            NULL::text AS recipient_job_title,
+            NULL::text AS recipient_category
+          FROM actions a
+          LEFT JOIN inspections i ON i.id = a.inspection_id
+          WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
+            AND (
+              lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
+              OR lower(COALESCE(a.category, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.section_name, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.title, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.description, '')) LIKE '%repair%'
+              OR lower(COALESCE(a.comment, '')) LIKE '%repair%'
+              OR lower(COALESCE(i.type, '')) = 'repairs_inspector'
+              OR lower(COALESCE(i.template_id, '')) = 'repairs_inspector_direct'
+            )
+          ORDER BY a.updated_at DESC, a.created_at DESC
+          LIMIT 500
+        `
+
+        return NextResponse.json(minimum.rows)
+      }
+    }
   } catch (error) {
     console.error('[repairs-inspector/actions] GET:', error)
     return NextResponse.json(
