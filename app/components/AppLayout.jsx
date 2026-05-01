@@ -19,7 +19,8 @@ const ALL_NAV_ITEMS = [
   { href: '/inspections', label: 'Manage Inspections', navKey: 'inspections' },
   { href: '/inspections/ad-hoc', label: 'Create Inspections', navKey: 'inspectionsAdHoc' },
   { href: '/actions', label: 'Issues / Actions', navKey: 'actions' },
-  { href: '/repairs-inspector', label: 'Repairs Inspector', navKey: 'repairsInspector' },
+  { href: '/repairs-inspector', label: 'Repairs Updates', navKey: 'repairsInspector' },
+  { href: '/repairs-inspector/new', label: 'Repairs Form', navKey: 'repairsInspectorForm' },
   { href: '/templates', label: 'Forms', navKey: 'templates' },
   { href: '/reports/inspections', label: 'Inspection reports', navKey: 'inspectionReports' },
   { href: '/import', label: 'Import', navKey: 'import' },
@@ -102,6 +103,7 @@ export default function AppLayout({ children }) {
       return pathname.startsWith('/inspections/')
     }
     if (href === '/reports/inspections') return pathname?.startsWith('/reports/inspections')
+    if (href === '/repairs-inspector') return pathname === '/repairs-inspector'
     return pathname?.startsWith(href)
   }
 

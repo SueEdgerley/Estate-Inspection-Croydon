@@ -10,7 +10,8 @@ export default function DashboardLayout({ children }) {
     { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
     { href: '/inspections', label: 'Inspections', icon: '🔍' },
     { href: '/actions', label: 'Actions', icon: '⚡' },
-    { href: '/repairs-inspector', label: 'Repairs Inspector', icon: '🛠️' },
+    { href: '/repairs-inspector', label: 'Repairs Updates', icon: '🛠️' },
+    { href: '/repairs-inspector/new', label: 'Repairs Form', icon: '📝' },
     { href: '/templates', label: 'Templates', icon: '📋' },
     { href: '/guides/best-practice-guide.pdf', label: 'Best Practice Guide', icon: '📘', external: true },
   ]
@@ -19,6 +20,7 @@ export default function DashboardLayout({ children }) {
     if (href === '/dashboard') {
       return pathname === '/dashboard' || pathname === '/'
     }
+    if (href === '/repairs-inspector') return pathname === '/repairs-inspector'
     return pathname?.startsWith(href)
   }
 

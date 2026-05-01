@@ -165,11 +165,16 @@ export default function RepairsInspectorFormPage() {
   return (
     <div style={{ maxWidth: 980 }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <Link href="/actions" style={{ color: '#1d4ed8', textDecoration: 'none', fontSize: '0.875rem' }}>
-          Back to actions
-        </Link>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          <Link href="/actions" style={{ color: '#1d4ed8', textDecoration: 'none', fontSize: '0.875rem' }}>
+            Back to actions
+          </Link>
+          <Link href="/repairs-inspector/new" style={{ color: '#1d4ed8', textDecoration: 'none', fontSize: '0.875rem' }}>
+            Log new repair
+          </Link>
+        </div>
         <h1 style={{ margin: '0.75rem 0 0', fontSize: '2rem', color: '#111827' }}>
-          Repairs Inspector Form
+          Repairs Inspector Updates
         </h1>
         <p style={{ margin: '0.5rem 0 0', color: '#64748b' }}>
           Update existing repair actions with job details for resident repairs posters.
