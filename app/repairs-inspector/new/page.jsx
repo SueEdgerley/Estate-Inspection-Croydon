@@ -4,13 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 
-const STATUS_OPTIONS = [
-  { value: 'open', label: 'Open' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'closed', label: 'Closed' },
-]
-
 const initialForm = {
   location_id: '',
   estate_id: '',
@@ -20,10 +13,6 @@ const initialForm = {
   location: '',
   description: '',
   photo_urls: [],
-  job_number: '',
-  expected_completion_date: '',
-  status: 'open',
-  repair_notes: '',
 }
 
 export default function RepairsInspectorNewFormPage() {
@@ -33,7 +22,6 @@ export default function RepairsInspectorNewFormPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [createdActionId, setCreatedActionId] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -110,7 +98,6 @@ export default function RepairsInspectorNewFormPage() {
     event.preventDefault()
     setError('')
     setMessage('')
-    setCreatedActionId('')
 
     if (!form.estate_block.trim()) {
       setError('Estate/block is required')
@@ -139,17 +126,12 @@ export default function RepairsInspectorNewFormPage() {
           location: form.location.trim(),
           description: form.description.trim(),
           photo_urls: form.photo_urls,
-          job_number: form.job_number.trim() || null,
-          expected_completion_date: form.expected_completion_date || null,
-          status: form.status || 'open',
-          repair_notes: form.repair_notes.trim() || null,
         }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.error || data.details || 'Failed to create repair action')
 
       setMessage('Repair action created successfully.')
-      setCreatedActionId(data.action_id || '')
       setForm(initialForm)
     } catch (err) {
       setError(err?.message || 'Failed to create repair action')
@@ -258,52 +240,6 @@ export default function RepairsInspectorNewFormPage() {
           />
         </section>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Tracking update</h2>
-          <div style={gridStyle}>
-            <div>
-              <label htmlFor="job-number" style={labelStyle}>Job number</label>
-              <input
-                id="job-number"
-                value={form.job_number}
-                onChange={(event) => setField('job_number', event.target.value)}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label htmlFor="expected-date" style={labelStyle}>Expected completion date</label>
-              <input
-                id="expected-date"
-                type="date"
-                value={form.expected_completion_date}
-                onChange={(event) => setField('expected_completion_date', event.target.value)}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label htmlFor="status" style={labelStyle}>Status</label>
-              <select
-                id="status"
-                value={form.status}
-                onChange={(event) => setField('status', event.target.value)}
-                style={inputStyle}
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <label htmlFor="repair-notes" style={labelStyle}>Repair notes/update</label>
-          <textarea
-            id="repair-notes"
-            value={form.repair_notes}
-            onChange={(event) => setField('repair_notes', event.target.value)}
-            rows={5}
-            style={textareaStyle}
-          />
-        </section>
-
         {error ? <p style={{ color: '#b91c1c', margin: 0 }}>{error}</p> : null}
         {message ? (
           <div style={{ ...cardStyle, borderColor: '#bbf7d0', background: '#f0fdf4' }}>
@@ -314,17 +250,11 @@ export default function RepairsInspectorNewFormPage() {
               <Link href="/actions" style={secondaryButtonStyle}>
                 View in Issues/Actions
               </Link>
-              {createdActionId ? (
-                <Link href={`/repairs-inspector?action=${encodeURIComponent(createdActionId)}`} style={secondaryButtonStyle}>
-                  Update this repair
-                </Link>
-              ) : null}
               <button
                 type="button"
                 onClick={() => {
                   setMessage('')
                   setError('')
-                  setCreatedActionId('')
                 }}
                 style={primaryButtonStyle}
               >
