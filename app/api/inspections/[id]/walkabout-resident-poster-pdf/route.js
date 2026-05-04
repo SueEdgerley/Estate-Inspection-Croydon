@@ -144,7 +144,6 @@ async function generate(request, { params }) {
         photo_urls, job_number, expected_completion_date, created_at, updated_at
       FROM actions
       WHERE inspection_id = ${id}
-        AND auto_created = true
       ORDER BY section_name ASC, created_at ASC
     `
 
