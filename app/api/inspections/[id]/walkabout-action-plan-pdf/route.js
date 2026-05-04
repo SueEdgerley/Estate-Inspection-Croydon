@@ -43,6 +43,48 @@ function answerDisplay(row) {
   return ''
 }
 
+function cleanDisplayText(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (/^https?:\/\//i.test(text)) return ''
+  if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) return ''
+  return text
+}
+
+function parseLabelledActionDescription(description) {
+  const fields = {}
+  for (const line of String(description || '').split(/\r?\n/)) {
+    const match = line.match(/^\s*([^:]+):\s*(.*)\s*$/)
+    if (!match) continue
+    const key = match[1].trim().toLowerCase()
+    const value = cleanDisplayText(match[2])
+    if (!value || value === '—' || key === 'inspection' || key === 'estate / area' || key === 'photos') continue
+    fields[key] = value
+  }
+  return fields
+}
+
+function cleanIssueTitle(action, templateQuestion) {
+  const parsed = parseLabelledActionDescription(action?.description)
+  const title = cleanDisplayText(action?.title).replace(/^Walkabout\s*[—-]\s*/i, '').trim()
+  return cleanDisplayText(parsed.item || templateQuestion || title)
+}
+
+function cleanActionSummary(action, fallback = '') {
+  const parsed = parseLabelledActionDescription(action?.description)
+  return cleanDisplayText(
+    action?.comment ||
+      parsed['action summary'] ||
+      parsed.comment ||
+      fallback
+  )
+}
+
+function actionJobNumber(action) {
+  const parsed = parseLabelledActionDescription(action?.description)
+  return cleanDisplayText(action?.job_number || parsed['order raised number'] || parsed['job number'])
+}
+
 function buildQuestionLookup(templateVersion) {
   const questions = new Map()
   const sections = new Map()
@@ -123,7 +165,7 @@ async function generate(request, { params }) {
       SELECT
         id, inspection_id, section_id, section_name, question_id,
         category, title, description, location, status, comment,
-        photo_urls, created_at, updated_at
+        photo_urls, job_number, created_at, updated_at
       FROM actions
       WHERE inspection_id = ${id}
         AND auto_created = true
@@ -154,6 +196,7 @@ async function generate(request, { params }) {
     for (const row of answersResult.rows || []) {
       const questionId = String(row.question_id || '')
       if (!questionId) continue
+      if (questionId === 'ew_checklist_json') continue
       const meta = questions.get(questionId) || {}
       const notes = unpackNvWizardNotes(row.notes)
       const structuredPhotos = [
@@ -170,10 +213,14 @@ async function generate(request, { params }) {
 
       addOrMergeItem(itemsByKey, questionId, {
         section: meta.section || sections.get(String(row.section_id || '')) || action?.section_name || row.section_id || '',
-        question: meta.question || action?.title || questionId,
-        comment: comment || action?.comment || action?.description || answerDisplay(row),
+        question: cleanIssueTitle(action, meta.question || questionId),
+        issue: cleanIssueTitle(action, meta.question || questionId),
+        comment: cleanDisplayText(comment || cleanActionSummary(action) || answerDisplay(row)),
+        actionSummary: cleanDisplayText(comment || cleanActionSummary(action) || answerDisplay(row)),
         location: action?.location || inspection.location_label || inspection.estate_block_name || '',
         status: action?.status || 'Open',
+        jobNumber: actionJobNumber(action),
+        raisedBy: cleanDisplayText(inspection.inspector_name || inspection.inspector_id),
         hasPhoto,
       })
     }
@@ -181,12 +228,19 @@ async function generate(request, { params }) {
     for (const action of actionsResult.rows || []) {
       const questionId = String(action.question_id || action.id || '')
       if (!questionId) continue
+      const templateQuestion = questions.get(questionId)?.question || ''
+      const issue = cleanIssueTitle(action, templateQuestion)
+      const actionSummary = cleanActionSummary(action)
       addOrMergeItem(itemsByKey, questionId, {
         section: action.section_name || questions.get(questionId)?.section || '',
-        question: questions.get(questionId)?.question || action.title || questionId,
-        comment: action.comment || action.description || action.title || '',
+        question: issue,
+        issue,
+        comment: actionSummary,
+        actionSummary,
         location: action.location || inspection.location_label || inspection.estate_block_name || '',
         status: action.status || 'Open',
+        jobNumber: actionJobNumber(action),
+        raisedBy: cleanDisplayText(inspection.inspector_name || inspection.inspector_id),
         hasPhoto: parsePhotoUrls(action.photo_urls).length > 0,
       })
     }
