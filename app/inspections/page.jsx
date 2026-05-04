@@ -999,7 +999,11 @@ export default function InspectionsListPage() {
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#374151' }}>
-                          {row.issues_count != null ? row.issues_count : '–'}
+                          {row.issues_count != null
+                            ? row.open_issues_count != null
+                              ? `${row.issues_count} (${row.open_issues_count} open)`
+                              : row.issues_count
+                            : '–'}
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

@@ -448,12 +448,28 @@ export async function GET(request) {
       (pdfCols) =>
         `SELECT i.id, i.type, i.work_type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
              i.due_date, i.submitted_at, i.grading, ${pdfCols},
-             i.status, i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
+             CASE
+               WHEN i.submitted_at IS NOT NULL THEN 'submitted'
+               WHEN lower(COALESCE(i.status, '')) IN ('completed', 'complete') THEN 'completed'
+               ELSE 'draft'
+             END AS status,
+             i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
              e.name AS estate_name, b.name AS block_name,
-             (SELECT COUNT(*)::int FROM actions a WHERE a.inspection_id = i.id) AS issues_count
+             COALESCE(action_counts.issues_count, 0)::int AS issues_count,
+             COALESCE(action_counts.open_issues_count, 0)::int AS open_issues_count
       FROM inspections i
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = i.block_id
+      LEFT JOIN (
+        SELECT
+          inspection_id,
+          COUNT(*)::int AS issues_count,
+          COUNT(*) FILTER (
+            WHERE lower(trim(COALESCE(status, ''))) NOT IN ('completed', 'complete')
+          )::int AS open_issues_count
+        FROM actions
+        GROUP BY inspection_id
+      ) action_counts ON action_counts.inspection_id = i.id
       WHERE ${whereText}
       ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
       LIMIT $${limitPlaceholder}`,
