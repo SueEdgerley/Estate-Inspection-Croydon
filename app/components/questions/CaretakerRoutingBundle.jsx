@@ -12,6 +12,7 @@ export default function CaretakerRoutingBundle({
   errorComment,
   errorPhotos,
   textareaStyle = {},
+  textareaClassName,
   peopleOptions = [],
   mobileStacked = false,
 }) {
@@ -35,6 +36,7 @@ export default function CaretakerRoutingBundle({
         Comment
       </label>
       <textarea
+        className={textareaClassName}
         id={`route-comment-${question.id}`}
         value={ex.comment || ''}
         onChange={(e) => set({ comment: e.target.value })}

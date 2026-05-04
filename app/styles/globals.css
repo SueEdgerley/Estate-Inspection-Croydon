@@ -68,6 +68,18 @@ a {
   opacity: 1;
 }
 
+.inspection-comment-textarea {
+  background-color: #f5f0e6 !important;
+  color: #111827 !important;
+  color-scheme: light;
+  border-color: #d1d5db !important;
+}
+
+.inspection-comment-textarea::placeholder {
+  color: #4b5563;
+  opacity: 1;
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;

@@ -77,6 +77,16 @@ const smallButtonStyle = {
   cursor: 'pointer',
 }
 
+const COMMENT_TEXTAREA_SURFACE = {
+  backgroundColor: '#F5F0E6',
+  color: '#111827',
+  colorScheme: 'light',
+  borderColor: '#d1d5db',
+  boxSizing: 'border-box',
+  maxWidth: '100%',
+  minWidth: 0,
+}
+
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
   const depAnswer = answers[question.depends_on_question_id]
@@ -293,6 +303,7 @@ function InspectionQuestion({
   estateChecklistIndex,
   estateDisplayNumber,
   mobileStackedForm = false,
+  lightCommentTextarea = false,
 }) {
   const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
   const rawCostBlob = `${question.question_text || ''} ${question.label || ''}`.toLowerCase()
@@ -492,6 +503,12 @@ function InspectionQuestion({
   const stdInspection = standardInspectionForm && !isNvTemplate
   const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(eq)
   const isStdIssueRow = stdInspection && questionIsStandardInspectionIssueRow(question)
+  const textareaSurface = isNvTemplate
+    ? NV_TEXTAREA_SURFACE
+    : lightCommentTextarea
+      ? COMMENT_TEXTAREA_SURFACE
+      : {}
+  const commentTextareaClassName = !isNvTemplate && lightCommentTextarea ? 'inspection-comment-textarea' : undefined
   const questionWrapStyle = {
     marginBottom: mobileStackedForm ? '1.15rem' : '1rem',
     width: '100%',
@@ -589,7 +606,8 @@ function InspectionQuestion({
           onAnswerExtras={onAnswerExtras}
           errorComment={errorComment}
           errorPhotos={errorPhotos}
-          textareaStyle={isNvTemplate ? NV_TEXTAREA_SURFACE : {}}
+          textareaStyle={textareaSurface}
+          textareaClassName={commentTextareaClassName}
           peopleOptions={peopleOptions}
           mobileStacked={mobileStackedForm}
         />
@@ -626,12 +644,14 @@ function InspectionQuestion({
               I hereby give authorisation…
             </label>
             <textarea
+              className={commentTextareaClassName}
               id={`authorisation-${question.id}`}
               value={extras.authorisation_text || ''}
               onChange={(e) => setExtras({ authorisation_text: e.target.value })}
               rows={3}
               placeholder="I hereby give authorisation to AVS for the removal of the following vehicle(s): colour, make/model, registration"
               style={{
+                ...textareaSurface,
                 width: '100%',
                 padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                 border: errorAuthorisation ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -648,12 +668,14 @@ function InspectionQuestion({
               Comment/location
             </label>
             <textarea
+              className={commentTextareaClassName}
               id={`comment-${question.id}`}
               value={extras.comment || ''}
               onChange={(e) => setExtras({ comment: e.target.value })}
               rows={3}
               placeholder="Location, door number, access codes, or other details"
               style={{
+                ...textareaSurface,
                 width: '100%',
                 padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                 border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -715,6 +737,7 @@ function InspectionQuestion({
                     (commentWhen === 'on_yes' && isYes)) && <span style={{ color: '#ef4444' }}>*</span>}
                 </label>
                 <textarea
+                  className={commentTextareaClassName}
                   id={`comment-${question.id}`}
                   name={`comment-${question.id}`}
                   value={extras.comment || ''}
@@ -722,7 +745,7 @@ function InspectionQuestion({
                   placeholder={caretakerYesTriggersFollowUp ? 'Add details for the action' : 'e.g. Please ensure the area is kept clear.'}
                   rows={2}
                   style={{
-                    ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
+                    ...textareaSurface,
                     width: '100%',
                     padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                     border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -819,13 +842,14 @@ function InspectionQuestion({
               {isRequired && hasGrade ? <span style={{ color: '#ef4444' }}>*</span> : null}
             </label>
             <textarea
+              className={commentTextareaClassName}
               id={`comment-${question.id}`}
               name={`comment-${question.id}`}
               value={extras.comment || ''}
               onChange={(e) => setExtras({ comment: e.target.value })}
               rows={2}
               style={{
-                ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
+                ...textareaSurface,
                 width: '100%',
                 padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                 border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -990,13 +1014,14 @@ function InspectionQuestion({
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         <textarea
+          className={commentTextareaClassName}
           id={id}
           name={id}
           value={value ?? ''}
           onChange={(e) => handleChange(e.target.value)}
           rows={4}
           style={{
-            ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
+            ...textareaSurface,
             width: '100%',
             padding: '0.75rem',
             border: error ? '1px solid #ef4444' : '1px solid #d1d5db',
@@ -1407,6 +1432,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       selectedTemplate &&
       !isNVTemplate(selectedTemplate) &&
       (isCaretakerTemplate(selectedTemplate) || isEsmInspectionFormTemplate(selectedTemplate))
+  )
+  const lightCommentTextareaForTemplate = Boolean(
+    selectedTemplate &&
+      !isNVTemplate(selectedTemplate) &&
+      (isCaretakerTemplate(selectedTemplate) ||
+        isEsmInspectionFormTemplate(selectedTemplate) ||
+        isGroundsMaintenanceTemplate(selectedTemplate))
   )
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
@@ -2246,6 +2278,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       estateChecklistIndex: estateChecklistIndexByQid.get(q.id),
                       estateDisplayNumber,
                       mobileStackedForm: mobileStackedInspectionForm,
+                      lightCommentTextarea: lightCommentTextareaForTemplate,
                     }
                     return estateInspectionForm ? (
                       <li key={q.id} style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}>
@@ -2287,6 +2320,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               {locationRequiredForSelectedTemplate ? 'Notes / comments' : 'Description'}
             </label>
             <textarea
+              className={lightCommentTextareaForTemplate ? 'inspection-comment-textarea' : undefined}
               id="description"
               name="description"
               value={description}
@@ -2294,6 +2328,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               rows={3}
               placeholder={locationRequiredForSelectedTemplate ? 'Add any notes/comments, including full details if the closest dropdown location was selected.' : 'Additional notes...'}
               style={{
+                ...(lightCommentTextareaForTemplate ? COMMENT_TEXTAREA_SURFACE : {}),
                 width: '100%',
                 padding: '0.75rem',
                 border: '1px solid #d1d5db',

@@ -127,6 +127,16 @@ const smallButtonStyle = {
   cursor: 'pointer',
 }
 
+const commentTextareaStyle = {
+  backgroundColor: '#F5F0E6',
+  color: '#111827',
+  colorScheme: 'light',
+  borderColor: '#d1d5db',
+  boxSizing: 'border-box',
+  maxWidth: '100%',
+  minWidth: 0,
+}
+
 function emptyAnswers() {
   const keys = [
     ...HEADER_KEYS,
@@ -590,10 +600,11 @@ export default function EstateWalkaboutNewInspectionForm({
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Comments</label>
               <textarea
+                className="inspection-comment-textarea"
                 value={answers[`${qid}_comment`] || ''}
                 onChange={(e) => setField(`${qid}_comment`, e.target.value)}
                 rows={3}
-                style={{ ...inputStyle, minHeight: 72 }}
+                style={{ ...inputStyle, ...commentTextareaStyle, minHeight: 72 }}
                 placeholder="Add comments"
               />
             </div>
@@ -631,10 +642,11 @@ export default function EstateWalkaboutNewInspectionForm({
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Comments for bulk refuse removal</label>
               <textarea
+                className="inspection-comment-textarea"
                 value={answers.ew_it_bulk_refuse_comments || ''}
                 onChange={(e) => setField('ew_it_bulk_refuse_comments', e.target.value)}
                 rows={3}
-                style={{ ...inputStyle, minHeight: 72 }}
+                style={{ ...inputStyle, ...commentTextareaStyle, minHeight: 72 }}
                 placeholder="Add details for the removal team"
               />
             </div>
@@ -715,10 +727,11 @@ export default function EstateWalkaboutNewInspectionForm({
     <div style={{ marginBottom: 18 }}>
       <label style={labelStyle}>{title}</label>
       <textarea
+        className="inspection-comment-textarea"
         value={answers[qid] || ''}
         onChange={(e) => setField(qid, e.target.value)}
         rows={3}
-        style={{ ...inputStyle, minHeight: 72 }}
+        style={{ ...inputStyle, ...commentTextareaStyle, minHeight: 72 }}
       />
     </div>
   )
@@ -842,7 +855,7 @@ export default function EstateWalkaboutNewInspectionForm({
             </div>
             <div>
               <label style={labelStyle}>Description (optional)</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} style={{ ...inputStyle, minHeight: 72 }} />
+              <textarea className="inspection-comment-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} style={{ ...inputStyle, ...commentTextareaStyle, minHeight: 72 }} />
             </div>
           </section>
 
@@ -1070,11 +1083,13 @@ export default function EstateWalkaboutNewInspectionForm({
                   <div style={{ fontWeight: 700, marginBottom: 12, color: EW.text }}>Additional item {idx + 1}</div>
                   <label style={labelStyle}>Inspection item description *</label>
                   <textarea
+                    className="inspection-comment-textarea"
                     value={it.description}
                     onChange={(e) => updateItem(it.id, { description: e.target.value })}
                     rows={2}
                     style={{
                       ...inputStyle,
+                      ...commentTextareaStyle,
                       minHeight: 64,
                       borderColor: validationErrors[`checklist_desc_${it.id}`] ? '#ef4444' : EW.border,
                     }}
@@ -1094,11 +1109,13 @@ export default function EstateWalkaboutNewInspectionForm({
                     <div style={{ marginTop: 8 }}>
                       <label style={labelStyle}>Action Summary *</label>
                       <textarea
+                        className="inspection-comment-textarea"
                         value={it.action_summary}
                         onChange={(e) => updateItem(it.id, { action_summary: e.target.value })}
                         rows={3}
                         style={{
                           ...inputStyle,
+                          ...commentTextareaStyle,
                           minHeight: 80,
                           borderColor: validationErrors[`checklist_${it.id}`] ? '#ef4444' : EW.border,
                         }}
