@@ -43,6 +43,39 @@ function answerDisplay(row) {
   return ''
 }
 
+function cleanPosterText(value) {
+  return String(value || '').trim()
+}
+
+function descriptionFromJson(value) {
+  const raw = cleanPosterText(value)
+  if (!raw) return ''
+  if (!((raw.startsWith('[') && raw.endsWith(']')) || (raw.startsWith('{') && raw.endsWith('}')))) return ''
+  try {
+    const parsed = JSON.parse(raw)
+    const first = Array.isArray(parsed) ? parsed.find((item) => item && typeof item === 'object') : parsed
+    return cleanPosterText(first?.description)
+  } catch {
+    return ''
+  }
+}
+
+function labelledValue(value, label) {
+  const labelPattern = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = String(value || '').match(new RegExp(`^\\s*${labelPattern}\\s*:\\s*(.*)\\s*$`, 'im'))
+  return cleanPosterText(match?.[1])
+}
+
+function cleanIssueTextFromAction(action, fallback = '') {
+  if (!action) return cleanPosterText(fallback)
+  return (
+    cleanPosterText(action.item_text) ||
+    descriptionFromJson(action.description) ||
+    labelledValue(action.description, 'Item') ||
+    cleanPosterText(fallback)
+  )
+}
+
 function buildQuestionLookup(templateVersion) {
   const questions = new Map()
   const sections = new Map()
@@ -190,6 +223,7 @@ async function generate(request, { params }) {
         section: meta.section || sections.get(String(row.section_id || '')) || action?.section_name || row.section_id || '',
         question: meta.question || action?.title || questionId,
         title: action?.title || meta.question || questionId,
+        item_text: cleanIssueTextFromAction(action, meta.question || questionId),
         comment: comment || action?.comment || action?.description || answerDisplay(row),
         description: action?.description || '',
         location: action?.location || inspection.location_label || inspection.estate_block_name || '',
@@ -209,6 +243,7 @@ async function generate(request, { params }) {
         section: action.section_name || questions.get(questionId)?.section || '',
         question: questions.get(questionId)?.question || action.title || questionId,
         title: action.title || questionId,
+        item_text: cleanIssueTextFromAction(action, questions.get(questionId)?.question || action.title || questionId),
         comment: action.comment || action.description || action.title || '',
         description: action.description || '',
         location: action.location || inspection.location_label || inspection.estate_block_name || '',
