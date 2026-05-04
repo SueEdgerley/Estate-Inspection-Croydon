@@ -16,6 +16,15 @@ function normalizeStatus(value) {
   return ['open', 'in_progress', 'completed', 'closed'].includes(status) ? status : 'open'
 }
 
+function normalizeDateOnly(value) {
+  const date = clean(value)
+  if (!date) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error('Expected completion date must be in YYYY-MM-DD format')
+  }
+  return date
+}
+
 function photoUrlsFromBody(value) {
   if (Array.isArray(value)) return value.filter((url) => typeof url === 'string' && url.trim())
   if (typeof value === 'string' && value.trim()) return [value.trim()]
@@ -40,7 +49,7 @@ export async function POST(request) {
     const location = clean(body.location)
     const description = clean(body.description)
     const jobNumber = clean(body.job_number)
-    const expectedCompletionDate = clean(body.expected_completion_date)
+    const expectedCompletionDate = normalizeDateOnly(body.expected_completion_date)
     const status = normalizeStatus(body.status)
     const repairNotes = clean(body.repair_notes)
     const photoUrls = photoUrlsFromBody(body.photo_urls || body.repair_photo_url)
@@ -133,55 +142,26 @@ export async function POST(request) {
       `
     }
 
-    try {
-      if (!repairFieldsAvailable) throw new Error('Optional repair fields unavailable')
-      await sql`
-        INSERT INTO actions (
-          id, inspection_id, section_id, section_name, question_id,
-          category, priority, title, description, location, status,
-          comment, auto_created, photo_urls, block_id, job_number, expected_completion_date,
-          repair_notes, repair_photo_url, repair_updated_at
-        )
-        VALUES (
-          ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
-          'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-          ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${linkedLocation.block_id}, ${jobNumber || null},
-          ${expectedCompletionDate || null}, ${repairNotes || null}, ${primaryPhotoUrl},
-          CURRENT_TIMESTAMP
-        )
-        RETURNING *
-      `
-    } catch (insertError) {
-      console.warn('[repairs-inspector/create] full repair action insert failed; retrying core action insert:', insertError?.message || insertError)
-      try {
-        await sql`
-          INSERT INTO actions (
-            id, inspection_id, section_id, section_name, question_id,
-            category, priority, title, description, location, status,
-            comment, auto_created, photo_urls
-          )
-          VALUES (
-            ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
-            'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-            ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}
-          )
-        `
-      } catch (coreInsertError) {
-        console.warn('[repairs-inspector/create] core action insert failed; retrying minimum action insert:', coreInsertError?.message || coreInsertError)
-        await sql`
-          INSERT INTO actions (
-            id, inspection_id, section_id, section_name, question_id,
-            category, priority, title, description, location, status,
-            comment, auto_created
-          )
-          VALUES (
-            ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
-            'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-            ${repairNotes || null}, false
-          )
-        `
-      }
+    if (!repairFieldsAvailable) {
+      throw new Error('Repair action columns could not be verified or created on actions table')
     }
+
+    await sql`
+      INSERT INTO actions (
+        id, inspection_id, section_id, section_name, question_id,
+        category, priority, title, description, location, status,
+        comment, auto_created, photo_urls, block_id, job_number, expected_completion_date,
+        repair_notes, repair_photo_url, repair_updated_at
+      )
+      VALUES (
+        ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
+        'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
+        ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${linkedLocation.block_id}, ${jobNumber || null},
+        ${expectedCompletionDate}, ${repairNotes || null}, ${primaryPhotoUrl},
+        CURRENT_TIMESTAMP
+      )
+      RETURNING *
+    `
 
     return NextResponse.json(
       {
@@ -192,9 +172,10 @@ export async function POST(request) {
       { status: 201 }
     )
   } catch (error) {
-    console.error('[repairs-inspector/create] POST:', error)
+    const message = error?.message || String(error)
+    console.error('[repairs-inspector/create] POST failed:', message)
     return NextResponse.json(
-      { error: 'Failed to create repair action', details: error?.message || String(error) },
+      { error: message, details: message },
       { status: 500 }
     )
   }

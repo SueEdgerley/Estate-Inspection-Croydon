@@ -6,6 +6,27 @@ import { ensureRepairActionFields } from '@/lib/repair-action-fields'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const STATUS_VALUES = ['open', 'in_progress', 'completed', 'closed']
+
+function normalizeStatus(value) {
+  const status = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (!status) return 'open'
+  if (!STATUS_VALUES.includes(status)) {
+    throw new Error(`Invalid repair status "${value}"`)
+  }
+  return status
+}
+
+function normalizeDateOnly(value) {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const date = String(value).trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error('Expected completion date must be in YYYY-MM-DD format')
+  }
+  return date
+}
+
 // GET - Get action by ID
 export async function GET(request, { params }) {
   try {
@@ -73,8 +94,19 @@ export async function PUT(request, { params }) {
     const { id } = await params
     const data = await request.json()
     const repairFieldsAvailable = await ensureRepairActionFields(sql)
+    if (!repairFieldsAvailable) {
+      throw new Error('Repair action columns could not be verified or created on actions table')
+    }
 
-    const buildUpdateQuery = ({ includeRepairFields = true, includeJobDate = true } = {}) => {
+    const normalizedData = {
+      ...data,
+      ...(data.status !== undefined ? { status: normalizeStatus(data.status) } : {}),
+      ...(data.expected_completion_date !== undefined
+        ? { expected_completion_date: normalizeDateOnly(data.expected_completion_date) }
+        : {}),
+    }
+
+    const buildUpdateQuery = () => {
       const clauses = []
       const values = []
       const add = (column, value) => {
@@ -82,32 +114,25 @@ export async function PUT(request, { params }) {
         clauses.push(`${column} = $${values.length}`)
       }
 
-      if (data.category !== undefined) add('category', data.category)
-      if (data.priority !== undefined) add('priority', data.priority)
-      if (data.title !== undefined) add('title', data.title)
-      if (data.description !== undefined) add('description', data.description)
-      if (data.location !== undefined) add('location', data.location)
-      if (data.status !== undefined) add('status', data.status)
-      if (data.comment !== undefined) add('comment', data.comment)
-      if (data.recipient_person_id !== undefined) add('recipient_person_id', data.recipient_person_id)
-      if (includeJobDate && data.job_number !== undefined) add('job_number', data.job_number || null)
-      if (includeJobDate && data.expected_completion_date !== undefined) {
-        add('expected_completion_date', data.expected_completion_date || null)
+      if (normalizedData.category !== undefined) add('category', normalizedData.category)
+      if (normalizedData.priority !== undefined) add('priority', normalizedData.priority)
+      if (normalizedData.title !== undefined) add('title', normalizedData.title)
+      if (normalizedData.description !== undefined) add('description', normalizedData.description)
+      if (normalizedData.location !== undefined) add('location', normalizedData.location)
+      if (normalizedData.status !== undefined) add('status', normalizedData.status)
+      if (normalizedData.comment !== undefined) add('comment', normalizedData.comment)
+      if (normalizedData.recipient_person_id !== undefined) add('recipient_person_id', normalizedData.recipient_person_id)
+      if (normalizedData.job_number !== undefined) add('job_number', normalizedData.job_number || null)
+      if (normalizedData.expected_completion_date !== undefined) {
+        add('expected_completion_date', normalizedData.expected_completion_date)
       }
-      if (includeRepairFields && data.repair_notes !== undefined) {
-        add('repair_notes', data.repair_notes || null)
-      } else if (!includeRepairFields && data.repair_notes !== undefined && data.comment === undefined) {
-        add('comment', data.repair_notes || null)
-      }
-      if (includeRepairFields && data.repair_photo_url !== undefined) {
-        add('repair_photo_url', data.repair_photo_url || null)
-      }
+      if (normalizedData.repair_notes !== undefined) add('repair_notes', normalizedData.repair_notes || null)
+      if (normalizedData.repair_photo_url !== undefined) add('repair_photo_url', normalizedData.repair_photo_url || null)
       if (
-        includeRepairFields &&
-        (data.job_number !== undefined ||
-          data.expected_completion_date !== undefined ||
-          data.repair_notes !== undefined ||
-          data.repair_photo_url !== undefined)
+        normalizedData.job_number !== undefined ||
+        normalizedData.expected_completion_date !== undefined ||
+        normalizedData.repair_notes !== undefined ||
+        normalizedData.repair_photo_url !== undefined
       ) {
         clauses.push('repair_updated_at = CURRENT_TIMESTAMP')
       }
@@ -121,26 +146,13 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const updateQuery = buildUpdateQuery({ includeRepairFields: repairFieldsAvailable, includeJobDate: true })
+    const updateQuery = buildUpdateQuery()
 
-    if (updateQuery.count === 0) {
+    if (updateQuery.count === 1) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
     }
 
-    let result
-    try {
-      result = await sql.query(updateQuery.text, updateQuery.values)
-    } catch (fullUpdateError) {
-      console.warn('[actions/:id] full update failed; retrying without optional repair fields:', fullUpdateError?.message || fullUpdateError)
-      const fallbackUpdateQuery = buildUpdateQuery({ includeRepairFields: false, includeJobDate: true })
-      try {
-        result = await sql.query(fallbackUpdateQuery.text, fallbackUpdateQuery.values)
-      } catch (fallbackUpdateError) {
-        console.warn('[actions/:id] fallback update failed; retrying status/notes core update only:', fallbackUpdateError?.message || fallbackUpdateError)
-        const minimumUpdateQuery = buildUpdateQuery({ includeRepairFields: false, includeJobDate: false })
-        result = await sql.query(minimumUpdateQuery.text, minimumUpdateQuery.values)
-      }
-    }
+    const result = await sql.query(updateQuery.text, updateQuery.values)
 
     if (result.rows.length === 0) {
       return NextResponse.json(
@@ -151,9 +163,10 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json(result.rows[0])
   } catch (error) {
-    console.error('Error updating action:', error)
+    const message = error?.message || String(error)
+    console.error('Error updating action:', message)
     return NextResponse.json(
-      { error: 'Failed to update action', details: error.message },
+      { error: message, details: message },
       { status: 500 }
     )
   }
