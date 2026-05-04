@@ -18,6 +18,29 @@ function formatDate(value) {
   return date.toLocaleDateString('en-GB')
 }
 
+function formatRaisedDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
+function cleanLabelText(value) {
+  return String(value || '')
+    .replace(/^Repairs Inspector\s*-\s*/i, '')
+    .trim()
+}
+
+function shortLabelText(value, maxLength = 70) {
+  const text = cleanLabelText(value).replace(/\s+/g, ' ')
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength - 1).trim()}...`
+}
+
 function dateInputValue(value) {
   if (!value) return ''
   const date = new Date(value)
@@ -43,13 +66,14 @@ function parsePhotoUrls(raw) {
 }
 
 function actionLabel(action) {
-  const parts = [
-    action.estate_block_name || action.inspection_title || 'Estate/block unknown',
-    action.location || 'No location',
-    action.description || action.comment || action.title || 'Repair action',
-    action.inspection_date ? `Inspection ${formatDate(action.inspection_date)}` : '',
-  ].filter(Boolean)
-  return parts.join(' - ')
+  const estateBlock = cleanLabelText(action.estate_block_name || action.inspection_title) || 'Estate/block unknown'
+  const location = cleanLabelText(action.location)
+  const issue = shortLabelText(action.description || action.comment || action.title || 'Repair action')
+  const raisedDate = formatRaisedDate(action.inspection_date || action.created_at)
+  const locationPart = location && location !== estateBlock ? ` - ${location}` : ''
+  const datePart = raisedDate ? ` (${raisedDate})` : ''
+
+  return `${estateBlock}${locationPart} - ${issue}${datePart}`
 }
 
 export default function RepairsInspectorFormPage() {
