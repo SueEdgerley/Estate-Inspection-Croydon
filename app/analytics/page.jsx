@@ -147,6 +147,10 @@ export default function AnalyticsPage() {
     if (overview) {
       lines.push(['Overview', 'completed_inspections', overview.completedInspections].map(escapeCsvCell).join(','))
       lines.push(['Overview', 'overall_score', overview.overallScore ?? ''].map(escapeCsvCell).join(','))
+      lines.push(['Scheduled timing', 'total_scheduled', overview.scheduledTiming?.totalScheduled ?? 0].map(escapeCsvCell).join(','))
+      lines.push(['Scheduled timing', 'completed_on_time', overview.scheduledTiming?.completedOnTime ?? 0].map(escapeCsvCell).join(','))
+      lines.push(['Scheduled timing', 'completed_late', overview.scheduledTiming?.completedLate ?? 0].map(escapeCsvCell).join(','))
+      lines.push(['Scheduled timing', 'missed', overview.scheduledTiming?.missed ?? 0].map(escapeCsvCell).join(','))
     }
     ;(performance?.caretakerCompleted || []).forEach((r) => {
       lines.push(['Caretaker completed', r.caretakerLabel, r.completedCount].map(escapeCsvCell).join(','))
