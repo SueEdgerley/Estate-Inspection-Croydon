@@ -48,6 +48,7 @@ import { getActionTriggerOn } from '@/lib/template-rules'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
+import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -165,6 +166,81 @@ function inspectionAnswerTriggersIssue(question, section, answer) {
   const direction = getActionTriggerOn(question, section)
   if (direction === 'yes') return norm === 'yes' && question.create_action_on_yes !== false
   return norm === 'no' && question.create_action_on_no !== false
+}
+
+function answerValueFromRow(row) {
+  if (!row) return ''
+  if (row.answer_value != null && String(row.answer_value).trim() !== '') return String(row.answer_value)
+  if (row.answer_text != null && String(row.answer_text).trim() !== '') return String(row.answer_text)
+  if (row.answer_boolean != null) return row.answer_boolean ? 'Yes' : 'No'
+  if (row.answer_number != null) return String(row.answer_number)
+  return ''
+}
+
+function safeParseJsonArray(raw) {
+  if (Array.isArray(raw)) return raw
+  const text = raw == null ? '' : String(raw).trim()
+  if (!text) return []
+  try {
+    const parsed = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function countResponseIssueSignals(templateVersion, answerRows) {
+  if (!templateVersion || typeof templateVersion !== 'object') return { count: 0, questionIds: [] }
+
+  const answersByQuestionId = new Map(
+    (answerRows || [])
+      .map((row) => [String(row.question_id || ''), row])
+      .filter(([questionId]) => questionId)
+  )
+  const questionIds = new Set()
+
+  for (const row of answerRows || []) {
+    if (row.question_id !== ESTATE_WALKABOUT_CHECKLIST_QID) continue
+    const checklistItems = safeParseJsonArray(row.answer_text ?? row.answer_value)
+    checklistItems.forEach((item, index) => {
+      if (item?.action_required === true || item?.raise_issue === true) {
+        questionIds.add(`${ESTATE_WALKABOUT_CHECKLIST_QID}:${item.id || item.item_id || index}`)
+      }
+    })
+  }
+
+  for (const section of templateVersion.sections || []) {
+    for (const question of section.questions || []) {
+      if (!question?.id) continue
+      const answerRow = answersByQuestionId.get(String(question.id))
+      if (!answerRow) continue
+
+      const answer = answerValueFromRow(answerRow)
+      if (inspectionAnswerTriggersIssue(question, section, answer)) {
+        questionIds.add(String(question.id))
+      }
+
+      const { structured } = unpackNvWizardNotes(answerRow.notes)
+      if (structured?.raise_issue === true) {
+        questionIds.add(`${question.id}:raise_issue`)
+      }
+      if (question.nv_render_kind === 'nv_standard' && question._nv_issue_category) {
+        const grade = String(answer || '').trim().toUpperCase()
+        if (grade === 'D' || (grade === 'C' && question._nv_create_issue_on_c)) {
+          questionIds.add(`${question.id}:nv_grade`)
+        }
+      }
+      if (question.nv_render_kind === 'nv_issues_report' && structured && typeof structured === 'object') {
+        Object.entries(structured).forEach(([key, value]) => {
+          if (/yes_no/i.test(key) && String(value || '').trim().toLowerCase() === 'yes') {
+            questionIds.add(`${question.id}:${key}`)
+          }
+        })
+      }
+    }
+  }
+
+  return { count: questionIds.size, questionIds: [...questionIds] }
 }
 
 function buildTemplateVersionSnapshot(template) {
@@ -491,26 +567,79 @@ export async function GET(request) {
       const countsByInspectionId = new Map(
         (actionCountsResult.rows || []).map((row) => [String(row.inspection_id), row])
       )
+      const inspectionDetailsResult = await getNeonQuery()(
+        `SELECT id::text AS id, template_version
+         FROM inspections
+         WHERE id::text IN (${actionCountPlaceholders})`,
+        inspectionIds
+      )
+      const answerRowsResult = await getNeonQuery()(
+        `SELECT inspection_id::text AS inspection_id, question_id, section_id, question_type,
+                answer_value, answer_text, answer_number, answer_boolean, notes
+         FROM inspection_answers
+         WHERE inspection_id::text IN (${actionCountPlaceholders})
+         ORDER BY section_id, question_id`,
+        inspectionIds
+      )
+      const answersByInspectionId = new Map()
+      for (const answerRow of answerRowsResult.rows || []) {
+        const key = String(answerRow.inspection_id)
+        if (!answersByInspectionId.has(key)) answersByInspectionId.set(key, [])
+        answersByInspectionId.get(key).push(answerRow)
+      }
+      const responseCountsByInspectionId = new Map()
+      for (const detailRow of inspectionDetailsResult.rows || []) {
+        let templateVersion = detailRow.template_version
+        if (typeof templateVersion === 'string') {
+          try {
+            templateVersion = JSON.parse(templateVersion)
+          } catch {
+            templateVersion = null
+          }
+        }
+        responseCountsByInspectionId.set(
+          String(detailRow.id),
+          countResponseIssueSignals(templateVersion, answersByInspectionId.get(String(detailRow.id)) || [])
+        )
+      }
       rowsWithActionCounts = rows.map((row) => {
         const counts = countsByInspectionId.get(String(row.id))
+        const responseCounts = responseCountsByInspectionId.get(String(row.id)) || { count: 0, questionIds: [] }
+        const actionTotal = Number(counts?.issues_count) || 0
+        const actionOpen = Number(counts?.open_issues_count) || 0
+        const responseTotal = Number(responseCounts.count) || 0
+        const totalIssues = Math.max(actionTotal, responseTotal)
         return {
           ...row,
-          issues_count: counts?.issues_count ?? 0,
-          open_issues_count: counts?.open_issues_count ?? 0,
+          issues_count: totalIssues,
+          open_issues_count: actionTotal > 0 ? Math.max(actionOpen, responseTotal) : responseTotal,
         }
       })
 
-      const sampleWithActions = (actionCountsResult.rows || [])[0]
-      const sampleInspection = sampleWithActions
-        ? rows.find((row) => String(row.id) === String(sampleWithActions.inspection_id))
-        : rows[0]
+      const sampleInspection =
+        rows.find((row) => {
+          const counts = countsByInspectionId.get(String(row.id))
+          const responseCounts = responseCountsByInspectionId.get(String(row.id))
+          return (Number(counts?.issues_count) || 0) === 0 && (Number(responseCounts?.count) || 0) > 0
+        }) ||
+        rows.find((row) => countsByInspectionId.has(String(row.id))) ||
+        rows[0]
       const sampleCounts = sampleInspection
         ? countsByInspectionId.get(String(sampleInspection.id))
         : null
-      console.log('[inspections list] action count trace', {
+      const sampleResponseCounts = sampleInspection
+        ? responseCountsByInspectionId.get(String(sampleInspection.id))
+        : null
+      const sampleDisplayedRow = sampleInspection
+        ? rowsWithActionCounts.find((row) => String(row.id) === String(sampleInspection.id))
+        : null
+      console.log('[inspections list] issue count trace', {
         inspection_id: sampleInspection?.id || null,
         matching_action_ids: sampleCounts?.action_ids || [],
         action_inspection_refs: sampleCounts?.action_inspection_refs || [],
+        response_issue_question_ids: sampleResponseCounts?.questionIds || [],
+        response_issue_count: sampleResponseCounts?.count || 0,
+        table_issues_count: sampleDisplayedRow?.issues_count ?? 0,
       })
     }
 
