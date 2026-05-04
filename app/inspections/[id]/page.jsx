@@ -9,6 +9,20 @@ import GenerateWalkaboutResidentPosterPdfButton from '@/app/components/GenerateW
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
+const ACTION_STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Complete' },
+]
+
+function formatActionStatus(value) {
+  const option = ACTION_STATUS_OPTIONS.find((item) => item.value === value)
+  if (option) return option.label
+  return String(value || 'open')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
 export default function InspectionDetail() {
   const params = useParams()
   // Match wizard: dynamic [id] can be string | string[]; never await useParams() (sync hook).
@@ -20,6 +34,16 @@ export default function InspectionDetail() {
   const [actions, setActions] = useState([])
   const [actionsLoading, setActionsLoading] = useState(true)
   const [actionsError, setActionsError] = useState(null)
+  const [people, setPeople] = useState([])
+  const [editingActionId, setEditingActionId] = useState('')
+  const [actionEditForm, setActionEditForm] = useState({
+    status: 'open',
+    comment: '',
+    recipient_person_id: '',
+  })
+  const [actionSaving, setActionSaving] = useState(false)
+  const [actionMessage, setActionMessage] = useState('')
+  const [actionSaveError, setActionSaveError] = useState('')
 
   useEffect(() => {
     if (!id) {
@@ -61,7 +85,7 @@ export default function InspectionDetail() {
     }
   }, [id])
 
-  useEffect(() => {
+  const loadActions = async ({ quiet = false } = {}) => {
     if (!id) {
       setActions([])
       setActionsLoading(false)
@@ -69,57 +93,73 @@ export default function InspectionDetail() {
       return
     }
 
-    let cancelled = false
-    const loadActions = async () => {
-      setActionsLoading(true)
-      setActionsError(null)
-      try {
-        const response = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}`, {
-          cache: 'no-store',
-          credentials: 'include',
-        })
-        const data = await response.json().catch((jsonError) => {
-          console.error('Invalid JSON response from /api/actions:', jsonError)
-          return null
-        })
+    if (!quiet) setActionsLoading(true)
+    setActionsError(null)
+    try {
+      const response = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}`, {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      const data = await response.json().catch((jsonError) => {
+        console.error('Invalid JSON response from /api/actions:', jsonError)
+        return null
+      })
 
-        if (cancelled) return
-        if (response.ok) {
-          const actionsData = Array.isArray(data)
-            ? data
-            : Array.isArray(data?.rows)
-            ? data.rows
-            : null
+      if (response.ok) {
+        const actionsData = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.rows)
+          ? data.rows
+          : null
 
-          if (actionsData) {
-            setActions(actionsData)
-            setActionsError(null)
-          } else {
-            console.warn('Unexpected /api/actions payload for inspection', id, data)
-            setActions([])
-            setActionsError(null)
-          }
+        if (actionsData) {
+          setActions(actionsData)
+          setActionsError(null)
         } else {
-          console.error('Actions API returned non-OK status', response.status, data)
+          console.warn('Unexpected /api/actions payload for inspection', id, data)
           setActions([])
-          setActionsError(data?.error || data?.details || `Could not load actions (${response.status})`)
+          setActionsError(null)
         }
+      } else {
+        console.error('Actions API returned non-OK status', response.status, data)
+        setActions([])
+        setActionsError(data?.error || data?.details || `Could not load actions (${response.status})`)
+      }
+    } catch (error) {
+      console.error('Error loading actions:', error)
+      setActions([])
+      setActionsError(error?.message || 'Failed to load actions')
+    } finally {
+      if (!quiet) setActionsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!id) {
+      setActions([])
+      setActionsLoading(false)
+      setActionsError(null)
+      return undefined
+    }
+    loadActions()
+  }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPeople() {
+      try {
+        const response = await fetch('/api/people', { credentials: 'include', cache: 'no-store' })
+        const data = await response.json().catch(() => [])
+        if (!cancelled && response.ok && Array.isArray(data)) setPeople(data)
       } catch (error) {
-        if (!cancelled) {
-          console.error('Error loading actions:', error)
-          setActions([])
-          setActionsError(error?.message || 'Failed to load actions')
-        }
-      } finally {
-        if (!cancelled) setActionsLoading(false)
+        console.warn('Could not load people for action assignment:', error)
       }
     }
-
-    loadActions()
+    loadPeople()
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [])
 
   const formatDate = (dateString) => {
     if (!dateString) return '-'
@@ -141,6 +181,47 @@ export default function InspectionDetail() {
       if (response.ok) setInspection(data)
     } catch (e) {
       console.error('reloadInspection', e)
+    }
+  }
+
+  const startEditAction = (action) => {
+    setEditingActionId(action.id)
+    setActionEditForm({
+      status: action.status || 'open',
+      comment: action.comment || '',
+      recipient_person_id: action.recipient_person_id || '',
+    })
+    setActionMessage('')
+    setActionSaveError('')
+  }
+
+  const saveActionUpdate = async (actionId) => {
+    setActionSaving(true)
+    setActionMessage('')
+    setActionSaveError('')
+    try {
+      const response = await fetch(`/api/actions/${encodeURIComponent(actionId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          status: actionEditForm.status || 'open',
+          comment: actionEditForm.comment.trim() || null,
+          recipient_person_id: actionEditForm.recipient_person_id || null,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setActionSaveError(data?.details || data?.error || `Could not update action (${response.status})`)
+        return
+      }
+      setActionMessage('Action updated.')
+      setEditingActionId('')
+      await loadActions({ quiet: true })
+    } catch (error) {
+      setActionSaveError(error?.message || 'Could not update action')
+    } finally {
+      setActionSaving(false)
     }
   }
 
@@ -270,6 +351,8 @@ export default function InspectionDetail() {
         <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
           Actions logged during this inspection will appear here.
         </p>
+        {actionMessage ? <p style={{ color: '#166534', marginBottom: '1rem' }}>{actionMessage}</p> : null}
+        {actionSaveError ? <p style={{ color: '#b91c1c', marginBottom: '1rem' }}>{actionSaveError}</p> : null}
         {actionsLoading ? (
           <p style={{ color: '#6b7280' }}>Loading actions...</p>
         ) : actionsError ? (
@@ -281,16 +364,23 @@ export default function InspectionDetail() {
             {actions.map((action) => (
               <div
                 key={action.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => startEditAction(action)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') startEditAction(action)
+                }}
                 style={{
                   padding: '1rem',
                   borderRadius: '0.5rem',
                   backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  border: editingActionId === action.id ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  cursor: 'pointer',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
                   <div style={{ fontSize: '1rem', fontWeight: 600, color: '#111827' }}>{action.title || 'Action'}</div>
-                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{action.status || 'open'}</div>
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{formatActionStatus(action.status)}</div>
                 </div>
                 {action.category ? (
                   <div style={{ marginTop: '0.25rem', color: '#475569' }}>{action.category}</div>
@@ -304,6 +394,103 @@ export default function InspectionDetail() {
                 {action.location ? (
                   <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
                     Location: {action.location}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    startEditAction(action)
+                  }}
+                  style={{
+                    marginTop: '0.9rem',
+                    padding: '0.5rem 0.85rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid #2563eb',
+                    background: '#fff',
+                    color: '#1d4ed8',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit
+                </button>
+                {editingActionId === action.id ? (
+                  <div
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      marginTop: '1rem',
+                      padding: '1rem',
+                      borderRadius: '0.5rem',
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                    }}
+                  >
+                    <div style={{ display: 'grid', gap: '0.85rem' }}>
+                      <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>
+                        Status
+                        <select
+                          value={actionEditForm.status}
+                          onChange={(event) => setActionEditForm((prev) => ({ ...prev, status: event.target.value }))}
+                          style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '1rem' }}
+                        >
+                          {ACTION_STATUS_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>
+                        Notes / update comments
+                        <textarea
+                          value={actionEditForm.comment}
+                          onChange={(event) => setActionEditForm((prev) => ({ ...prev, comment: event.target.value }))}
+                          rows={3}
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '0.375rem',
+                            fontSize: '1rem',
+                            fontFamily: 'inherit',
+                          }}
+                        />
+                      </label>
+                      {people.length > 0 ? (
+                        <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>
+                          Assigned to
+                          <select
+                            value={actionEditForm.recipient_person_id}
+                            onChange={(event) => setActionEditForm((prev) => ({ ...prev, recipient_person_id: event.target.value }))}
+                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '1rem' }}
+                          >
+                            <option value="">Unassigned</option>
+                            {people.map((person) => (
+                              <option key={person.id} value={person.id}>
+                                {person.name || person.email || person.id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditingActionId('')}
+                          disabled={actionSaving}
+                          style={{ padding: '0.6rem 0.9rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', background: '#fff', cursor: 'pointer' }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveActionUpdate(action.id)}
+                          disabled={actionSaving}
+                          style={{ padding: '0.6rem 0.9rem', border: 'none', borderRadius: '0.375rem', background: actionSaving ? '#9ca3af' : '#2563eb', color: '#fff', fontWeight: 700, cursor: actionSaving ? 'wait' : 'pointer' }}
+                        >
+                          {actionSaving ? 'Saving...' : 'Update action'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>
