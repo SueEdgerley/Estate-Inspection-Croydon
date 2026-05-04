@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import GenerateRepairsUpdatePdfButton from '@/app/components/GenerateRepairsUpdatePdfButton'
@@ -34,12 +34,10 @@ export default function InspectionDetail() {
   const [actions, setActions] = useState([])
   const [actionsLoading, setActionsLoading] = useState(true)
   const [actionsError, setActionsError] = useState(null)
-  const [people, setPeople] = useState([])
   const [editingActionId, setEditingActionId] = useState('')
   const [actionEditForm, setActionEditForm] = useState({
     status: 'open',
     comment: '',
-    recipient_person_id: '',
   })
   const [actionSaving, setActionSaving] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
@@ -85,7 +83,7 @@ export default function InspectionDetail() {
     }
   }, [id])
 
-  const loadActions = async ({ quiet = false } = {}) => {
+  const loadActions = useCallback(async ({ quiet = false } = {}) => {
     if (!id) {
       setActions([])
       setActionsLoading(false)
@@ -132,7 +130,7 @@ export default function InspectionDetail() {
     } finally {
       if (!quiet) setActionsLoading(false)
     }
-  }
+  }, [id])
 
   useEffect(() => {
     if (!id) {
@@ -142,24 +140,7 @@ export default function InspectionDetail() {
       return undefined
     }
     loadActions()
-  }, [id])
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadPeople() {
-      try {
-        const response = await fetch('/api/people', { credentials: 'include', cache: 'no-store' })
-        const data = await response.json().catch(() => [])
-        if (!cancelled && response.ok && Array.isArray(data)) setPeople(data)
-      } catch (error) {
-        console.warn('Could not load people for action assignment:', error)
-      }
-    }
-    loadPeople()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  }, [id, loadActions])
 
   const formatDate = (dateString) => {
     if (!dateString) return '-'
@@ -189,7 +170,6 @@ export default function InspectionDetail() {
     setActionEditForm({
       status: action.status || 'open',
       comment: action.comment || '',
-      recipient_person_id: action.recipient_person_id || '',
     })
     setActionMessage('')
     setActionSaveError('')
@@ -207,7 +187,6 @@ export default function InspectionDetail() {
         body: JSON.stringify({
           status: actionEditForm.status || 'open',
           comment: actionEditForm.comment.trim() || null,
-          recipient_person_id: actionEditForm.recipient_person_id || null,
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -215,6 +194,9 @@ export default function InspectionDetail() {
         setActionSaveError(data?.details || data?.error || `Could not update action (${response.status})`)
         return
       }
+      setActions((currentActions) =>
+        currentActions.map((action) => (action.id === actionId ? { ...action, ...data } : action))
+      )
       setActionMessage('Action updated.')
       setEditingActionId('')
       await loadActions({ quiet: true })
@@ -364,12 +346,7 @@ export default function InspectionDetail() {
             {actions.map((action) => (
               <div
                 key={action.id}
-                role="button"
-                tabIndex={0}
                 onClick={() => startEditAction(action)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') startEditAction(action)
-                }}
                 style={{
                   padding: '1rem',
                   borderRadius: '0.5rem',
@@ -455,23 +432,6 @@ export default function InspectionDetail() {
                           }}
                         />
                       </label>
-                      {people.length > 0 ? (
-                        <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>
-                          Assigned to
-                          <select
-                            value={actionEditForm.recipient_person_id}
-                            onChange={(event) => setActionEditForm((prev) => ({ ...prev, recipient_person_id: event.target.value }))}
-                            style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '1rem' }}
-                          >
-                            <option value="">Unassigned</option>
-                            {people.map((person) => (
-                              <option key={person.id} value={person.id}>
-                                {person.name || person.email || person.id}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
                       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button
                           type="button"
