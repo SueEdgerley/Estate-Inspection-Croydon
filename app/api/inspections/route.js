@@ -972,6 +972,15 @@ export async function POST(request) {
       for (const q of section.questions || []) {
         const answer = answers[q.id]
         if (answer === undefined || answer === null) continue
+        if (
+          isEstateWalkaboutTemplate(template) &&
+          q.question_type === 'yes_no' &&
+          String(q.id || '').startsWith('ew_it_')
+        ) {
+          // Walkabout inspection-item actions are created by the dedicated helper above,
+          // which also handles idempotency for reopened/submitted records.
+          continue
+        }
         const extras = answer_extras[q.id] || {}
         const answerCommentKey = `${q.id}_comment`
         const answerComment = typeof answers[answerCommentKey] === 'string' ? answers[answerCommentKey].trim() : ''
