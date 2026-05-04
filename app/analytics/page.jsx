@@ -1015,15 +1015,68 @@ export default function AnalyticsPage() {
                           </ul>
                         </div>
                         <div>
-                          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Top blocks with C/D</h2>
-                          <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#374151' }}>
-                            {(gradeRisk.topBlocks || []).map((b) => (
-                              <li key={`${b.block_name}-${b.estate_name}`}>
-                                {b.block_name}
-                                {b.estate_name ? ` (${b.estate_name})` : ''}: <strong>{b.cnt}</strong>
-                              </li>
-                            ))}
-                          </ul>
+                          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Locations with most C/D grades</h2>
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                              <thead>
+                                <tr style={{ backgroundColor: photobook.soft }}>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Location</th>
+                                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>C grades</th>
+                                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>D grades</th>
+                                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Total C/D</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(gradeRisk.topBlocks || []).length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} style={{ padding: '0.75rem', color: '#6b7280' }}>No C/D answers in this window.</td>
+                                  </tr>
+                                ) : (
+                                  (gradeRisk.topBlocks || []).map((b) => (
+                                    <tr key={b.location_label} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{b.location_label}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{b.c_count}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{b.d_count}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: 700 }}>{b.total_cd}</td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div>
+                          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>C/D grades by location and category</h2>
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                              <thead>
+                                <tr style={{ backgroundColor: photobook.soft }}>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Location</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Category</th>
+                                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>C count</th>
+                                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>D count</th>
+                                  <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Total C/D</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(gradeRisk.byLocationCategory || []).length === 0 ? (
+                                  <tr>
+                                    <td colSpan={5} style={{ padding: '0.75rem', color: '#6b7280' }}>No C/D category rows in this window.</td>
+                                  </tr>
+                                ) : (
+                                  (gradeRisk.byLocationCategory || []).map((row) => (
+                                    <tr key={`${row.location_label}-${row.category}`} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{row.location_label}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{row.category}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{row.c_count}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{row.d_count}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: 700 }}>{row.total_cd}</td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </>
                     )}
