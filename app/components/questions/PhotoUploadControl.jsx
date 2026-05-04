@@ -14,6 +14,7 @@ export default function PhotoUploadControl({
   disabled,
   label = 'Add photo',
   multiple = true,
+  mobileStacked = false,
 }) {
   const photoUrls = Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []
   const [uploading, setUploading] = useState(false)
@@ -133,12 +134,14 @@ export default function PhotoUploadControl({
           onClick={() => inputRef.current?.click()}
           disabled={disabled || uploading}
           style={{
-            padding: '0.5rem 1rem',
+            padding: mobileStacked ? '0.75rem 1rem' : '0.5rem 1rem',
+            minHeight: mobileStacked ? 48 : undefined,
+            width: mobileStacked ? '100%' : undefined,
             backgroundColor: uploading ? '#9ca3af' : '#3b82f6',
             color: 'white',
             border: 'none',
             borderRadius: '0.375rem',
-            fontSize: '0.875rem',
+            fontSize: mobileStacked ? '1rem' : '0.875rem',
             fontWeight: 500,
             cursor: disabled || uploading ? 'not-allowed' : 'pointer',
           }}

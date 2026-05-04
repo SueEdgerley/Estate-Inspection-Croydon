@@ -11,12 +11,12 @@ import { colours, yesColour, noColour, naColour, minTapHeight } from '@/lib/nv-t
  */
 const OPTIONS = ['Yes', 'No', 'NA']
 
-export default function YesNoNaButtons({ id, value, onChange, disabled = false }) {
+export default function YesNoNaButtons({ id, value, onChange, disabled = false, mobileStacked = false }) {
   const normalized = value == null ? '' : String(value).trim()
   const selected = OPTIONS.includes(normalized) ? normalized : ''
 
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: mobileStacked ? '0.625rem' : '0.5rem', flexWrap: 'wrap', width: '100%' }}>
       {OPTIONS.map((opt, idx) => {
         const isSelected = selected === opt
         const isYes = opt === 'Yes'
@@ -36,14 +36,16 @@ export default function YesNoNaButtons({ id, value, onChange, disabled = false }
             onClick={() => onChange(opt)}
             style={{
               padding: '12px 16px',
-              minHeight: minTapHeight,
+              minHeight: mobileStacked ? 50 : minTapHeight,
+              minWidth: mobileStacked ? 86 : undefined,
+              flex: mobileStacked ? '1 1 86px' : undefined,
               backgroundColor: bg,
               color,
               border: `2px solid ${border}`,
               borderRadius: '0.375rem',
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontWeight: isSelected ? 600 : 500,
-              fontSize: '0.9375rem',
+              fontSize: mobileStacked ? '1rem' : '0.9375rem',
               opacity: disabled ? 0.7 : 1,
             }}
           >

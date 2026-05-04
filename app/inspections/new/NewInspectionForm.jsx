@@ -234,10 +234,10 @@ const ESM_Q4_COST_CODES = [
   'C203410.641620.0000 (East)',
 ]
 
-function CaretakerYesNoButtons({ id, value, onChange }) {
+function CaretakerYesNoButtons({ id, value, onChange, mobileStacked = false }) {
   const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: mobileStacked ? 10 : 8, flexWrap: 'wrap', width: '100%' }}>
       {['Yes', 'No', 'NA'].map((label, idx) => {
         const sel = selected === label
         const colors = CARETAKER_YN_COLORS[label]
@@ -255,8 +255,10 @@ function CaretakerYesNoButtons({ id, value, onChange }) {
               color: sel ? '#fff' : colors.text,
               fontWeight: 700,
               boxShadow: sel ? `0 0 0 3px ${colors.bg}` : 'none',
-              minHeight: 42,
-              minWidth: 58,
+              minHeight: mobileStacked ? 50 : 42,
+              minWidth: mobileStacked ? 86 : 58,
+              flex: mobileStacked ? '1 1 86px' : undefined,
+              fontSize: mobileStacked ? '1rem' : undefined,
               cursor: 'pointer',
             }}
           >
@@ -290,6 +292,7 @@ function InspectionQuestion({
   estateInspectionForm = false,
   estateChecklistIndex,
   estateDisplayNumber,
+  mobileStackedForm = false,
 }) {
   const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
   const rawCostBlob = `${question.question_text || ''} ${question.label || ''}`.toLowerCase()
@@ -489,6 +492,20 @@ function InspectionQuestion({
   const stdInspection = standardInspectionForm && !isNvTemplate
   const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(eq)
   const isStdIssueRow = stdInspection && questionIsStandardInspectionIssueRow(question)
+  const questionWrapStyle = {
+    marginBottom: mobileStackedForm ? '1.15rem' : '1rem',
+    width: '100%',
+    boxSizing: 'border-box',
+  }
+  const followUpStyle = {
+    marginTop: '1rem',
+    padding: mobileStackedForm ? '1rem' : '1rem',
+    background: showActionBlock ? '#fef3c7' : '#f9fafb',
+    borderRadius: mobileStackedForm ? '0.5rem' : '0.375rem',
+    border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}`,
+    width: '100%',
+    boxSizing: 'border-box',
+  }
 
   const handleChange = (val) => {
     onChange(question.id, val)
@@ -530,12 +547,13 @@ function InspectionQuestion({
         required={photoRequired}
         error={errorPhotos}
         label="Add photo"
+        mobileStacked={mobileStackedForm}
       />
     </div>
   )
 
   const buttonGroup = (optionList, firstButtonId) => (
-    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: mobileStackedForm ? 10 : '10px', flexWrap: 'wrap', width: '100%' }}>
       {(optionList || []).map((opt, idx) => {
         const label = typeof opt === 'string' ? opt : (opt?.label ?? opt?.value ?? opt)
         const val = typeof opt === 'string' ? opt : (opt?.value ?? opt?.label ?? opt)
@@ -547,10 +565,12 @@ function InspectionQuestion({
             id={idx === 0 && firstButtonId ? firstButtonId : undefined}
             onClick={() => handleChange(val)}
             style={getGradeButtonStyle(label, isSelected, {
-              padding: '12px 16px',
-              minHeight: 48,
-              fontSize: '0.9375rem',
-              borderRadius: '0.375rem',
+              padding: mobileStackedForm ? '12px 14px' : '12px 16px',
+              minHeight: mobileStackedForm ? 50 : 48,
+              minWidth: mobileStackedForm ? 64 : undefined,
+              flex: mobileStackedForm ? '1 1 64px' : undefined,
+              fontSize: mobileStackedForm ? '1rem' : '0.9375rem',
+              borderRadius: mobileStackedForm ? '0.5rem' : '0.375rem',
             })}
           >
             {label}
@@ -562,7 +582,7 @@ function InspectionQuestion({
 
   if (qType === 'caretaker_routing_bundle') {
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         <CaretakerRoutingBundle
           question={question}
           answerExtras={answerExtras}
@@ -571,6 +591,7 @@ function InspectionQuestion({
           errorPhotos={errorPhotos}
           textareaStyle={isNvTemplate ? NV_TEXTAREA_SURFACE : {}}
           peopleOptions={peopleOptions}
+          mobileStacked={mobileStackedForm}
         />
       </div>
     )
@@ -578,7 +599,7 @@ function InspectionQuestion({
 
   if (qType === 'yes_no') {
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {displayPrimaryLabel}
@@ -586,16 +607,17 @@ function InspectionQuestion({
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         {caretakerTemplate ? (
-          <CaretakerYesNoButtons id={id} value={yesNoNaValue} onChange={(val) => handleChange(val)} />
+          <CaretakerYesNoButtons id={id} value={yesNoNaValue} onChange={(val) => handleChange(val)} mobileStacked={mobileStackedForm} />
         ) : (
           <YesNoNaButtons
             id={id}
             value={yesNoNaValue}
             onChange={(val) => handleChange(val)}
+            mobileStacked={mobileStackedForm}
           />
         )}
         {esmQ4AbandonedVehicle && isYes && (
-          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
+          <div style={{ ...followUpStyle, background: '#f9fafb', borderColor: '#e5e7eb' }}>
             <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#374151' }}>
               Action will be created automatically
             </p>
@@ -611,12 +633,14 @@ function InspectionQuestion({
               placeholder="I hereby give authorisation to AVS for the removal of the following vehicle(s): colour, make/model, registration"
               style={{
                 width: '100%',
-                padding: '0.5rem',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                 border: errorAuthorisation ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '0.375rem',
-                fontSize: '0.875rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                 fontFamily: 'inherit',
                 marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 96 : undefined,
+                boxSizing: 'border-box',
               }}
             />
             {errorAuthorisation && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisation}</p>}
@@ -631,12 +655,14 @@ function InspectionQuestion({
               placeholder="Location, door number, access codes, or other details"
               style={{
                 width: '100%',
-                padding: '0.5rem',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                 border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '0.375rem',
-                fontSize: '0.875rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                 fontFamily: 'inherit',
                 marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 96 : undefined,
+                boxSizing: 'border-box',
               }}
             />
             {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
@@ -655,6 +681,8 @@ function InspectionQuestion({
                 fontSize: '1rem',
                 backgroundColor: 'white',
                 marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 48 : undefined,
+                boxSizing: 'border-box',
               }}
             >
               <option value="">Select cost code…</option>
@@ -668,7 +696,7 @@ function InspectionQuestion({
           </div>
         )}
         {showCommentPhotoBlock && (
-          <div ref={isNvTemplate ? expandedSectionRef : undefined} style={{ marginTop: '1rem', padding: '1rem', background: showActionBlock ? '#fef3c7' : '#f9fafb', borderRadius: '0.375rem', border: `1px solid ${showActionBlock ? '#f59e0b' : '#e5e7eb'}` }}>
+          <div ref={isNvTemplate ? expandedSectionRef : undefined} style={followUpStyle}>
             {showActionBlock && (
               <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e' }}>
                 Action will be created automatically
@@ -696,12 +724,14 @@ function InspectionQuestion({
                   style={{
                     ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
                     width: '100%',
-                    padding: '0.5rem',
+                    padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                     border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
                     borderRadius: '0.375rem',
-                    fontSize: '0.875rem',
+                    fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                     fontFamily: 'inherit',
                     marginBottom: '0.75rem',
+                    minHeight: mobileStackedForm ? 96 : undefined,
+                    boxSizing: 'border-box',
                   }}
                 />
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
@@ -722,6 +752,8 @@ function InspectionQuestion({
                         fontSize: '1rem',
                         backgroundColor: 'white',
                         marginBottom: '0.75rem',
+                        minHeight: mobileStackedForm ? 48 : undefined,
+                        boxSizing: 'border-box',
                       }}
                     >
                       <option value="">Select recipient…</option>
@@ -766,7 +798,7 @@ function InspectionQuestion({
           ? true
           : eq.caretaker_graded_always_extras && needComment && hasGrade
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         {nvHeading}
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {displayPrimaryLabel}
@@ -778,7 +810,7 @@ function InspectionQuestion({
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
         {buttonGroup(gradingOpts, id)}
         {showGradedExtras && (
-          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '0.375rem', border: '1px solid #e5e7eb' }}>
+          <div style={{ marginTop: '0.75rem', padding: mobileStackedForm ? '1rem' : '0.75rem', background: '#f9fafb', borderRadius: mobileStackedForm ? '0.5rem' : '0.375rem', border: '1px solid #e5e7eb', width: '100%', boxSizing: 'border-box' }}>
             <p style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.875rem', color: '#374151' }}>
               {needPhoto ? 'Comment and photo' : 'Comment'}
             </p>
@@ -795,12 +827,14 @@ function InspectionQuestion({
               style={{
                 ...(isNvTemplate ? NV_TEXTAREA_SURFACE : {}),
                 width: '100%',
-                padding: '0.5rem',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
                 border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '0.375rem',
-                fontSize: '0.875rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                 fontFamily: 'inherit',
                 marginBottom: needPhoto ? '0.75rem' : 0,
+                minHeight: mobileStackedForm ? 96 : undefined,
+                boxSizing: 'border-box',
               }}
             />
             {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
@@ -811,6 +845,7 @@ function InspectionQuestion({
                 onChange={(urls) => setExtras({ photo_urls: urls })}
                 label="Add photo"
                 error={errorPhotos}
+                mobileStacked={mobileStackedForm}
               />
             )}
           </div>
@@ -827,6 +862,7 @@ function InspectionQuestion({
               label="Add photo"
               multiple={false}
               error={errorPhotos}
+              mobileStacked={mobileStackedForm}
             />
           </div>
         )}
@@ -848,7 +884,7 @@ function InspectionQuestion({
           ? estateApiCostCodes.map(({ value: v, label: lab }) => ({ value: v, label: lab || v }))
           : []
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
@@ -866,6 +902,8 @@ function InspectionQuestion({
             borderRadius: '0.375rem',
             fontSize: '1rem',
             backgroundColor: 'white',
+            minHeight: mobileStackedForm ? 48 : undefined,
+            boxSizing: 'border-box',
           }}
         >
           <option value="">Select...</option>
@@ -884,13 +922,13 @@ function InspectionQuestion({
   if (qType === 'rating') {
     const max = 5
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
         </label>
         {estateInspectionForm ? <EstateQuestionInstructionBlock question={question} /> : null}
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', width: '100%' }}>
           {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
             <button
               key={n}
@@ -905,6 +943,8 @@ function InspectionQuestion({
                 borderRadius: '0.375rem',
                 cursor: 'pointer',
                 fontWeight: value === n ? 600 : 500,
+                minHeight: mobileStackedForm ? 48 : undefined,
+                flex: mobileStackedForm ? '1 1 56px' : undefined,
               }}
             >
               {n}
@@ -920,7 +960,7 @@ function InspectionQuestion({
   if (qType === 'photo') {
     const urls = parsePhotoAnswer(value).slice(0, 1)
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         {nvHeading}
         <label htmlFor={`photo-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {displayPrimaryLabel}
@@ -934,6 +974,7 @@ function InspectionQuestion({
           multiple={false}
           required={isRequired}
           error={errorPhotos || error}
+          mobileStacked={mobileStackedForm}
         />
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -942,7 +983,7 @@ function InspectionQuestion({
 
   if (qType === 'long_text') {
     return (
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={questionWrapStyle}>
         <label htmlFor={id} style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, color: '#374151' }}>
           {displayPrimaryLabel}
           {isRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
@@ -962,7 +1003,8 @@ function InspectionQuestion({
             borderRadius: '0.375rem',
             fontSize: '1rem',
             fontFamily: 'inherit',
-            minHeight: 100,
+            minHeight: mobileStackedForm ? 120 : 100,
+            boxSizing: 'border-box',
           }}
         />
         {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
@@ -1360,6 +1402,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   )
   const estateInspectionForm = Boolean(selectedTemplate && isEstateInspectionFormTemplate(selectedTemplate))
   const estateInspectionFormV2 = Boolean(selectedTemplate && isEstateInspectionFormV2Template(selectedTemplate))
+  const mobileStackedInspectionForm = Boolean(
+    isMobile &&
+      selectedTemplate &&
+      !isNVTemplate(selectedTemplate) &&
+      (isCaretakerTemplate(selectedTemplate) || isEsmInspectionFormTemplate(selectedTemplate))
+  )
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
     if (isEstateInspectionFormTemplate(selectedTemplate) && !isEsmInspectionFormTemplate(selectedTemplate)) {
@@ -1877,6 +1925,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           borderRadius: '0.5rem',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           maxWidth: isMobile ? '100%' : '800px',
+          width: mobileStackedInspectionForm ? '100%' : undefined,
+          boxSizing: 'border-box',
         }}
       >
         {submitError && (
@@ -2094,9 +2144,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               <div
                 key={section.id}
                 style={{
-                  marginBottom: '2rem',
-                  paddingBottom: '1.5rem',
-                  borderBottom: '1px solid #e5e7eb',
+                  marginBottom: mobileStackedInspectionForm ? '1rem' : '2rem',
+                  padding: mobileStackedInspectionForm ? '1rem' : '0 0 1.5rem',
+                  border: mobileStackedInspectionForm ? '1px solid #e5e7eb' : 'none',
+                  borderBottom: mobileStackedInspectionForm ? '1px solid #e5e7eb' : '1px solid #e5e7eb',
+                  borderRadius: mobileStackedInspectionForm ? '0.75rem' : 0,
+                  backgroundColor: mobileStackedInspectionForm ? '#fff' : 'transparent',
+                  boxSizing: 'border-box',
                 }}
               >
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
@@ -2191,9 +2245,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       estateInspectionForm,
                       estateChecklistIndex: estateChecklistIndexByQid.get(q.id),
                       estateDisplayNumber,
+                      mobileStackedForm: mobileStackedInspectionForm,
                     }
                     return estateInspectionForm ? (
-                      <li key={q.id} style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                      <li key={q.id} style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}>
                         <InspectionQuestion {...qProps} />
                       </li>
                     ) : (
