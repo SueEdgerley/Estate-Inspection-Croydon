@@ -51,6 +51,43 @@ a {
   text-decoration: none;
 }
 
+select {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  background-color: #ffffff !important;
+  color-scheme: light;
+  opacity: 1;
+  max-width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+select option,
+select optgroup {
+  color: #111827;
+  background-color: #ffffff;
+}
+
+select option[value=""] {
+  color: #6b7280;
+}
+
+select:disabled,
+select[aria-disabled="true"] {
+  color: #4b5563 !important;
+  -webkit-text-fill-color: #4b5563 !important;
+  background-color: #f3f4f6 !important;
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  select {
+    min-height: 44px;
+    font-size: 16px;
+    line-height: 1.25;
+  }
+}
+
 /* NV inspection wizard: page padding 16px mobile, 24px desktop; light form controls (see lib/nv-resident-field-surfaces.js) */
 .nv-wizard-page {
   padding: 16px;
