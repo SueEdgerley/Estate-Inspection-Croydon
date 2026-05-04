@@ -250,6 +250,24 @@ export default function AppLayout({ children }) {
               </Link>
             ))}
           </nav>
+          <SignedIn>
+            {roleUi?.accessMessage ? (
+              <div
+                role="status"
+                style={{
+                  padding: '0.45rem 0.65rem',
+                  border: '1px solid #f59e0b',
+                  borderRadius: '0.375rem',
+                  background: '#fffbeb',
+                  color: '#92400e',
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.35,
+                }}
+              >
+                {roleUi.accessMessage}
+              </div>
+            ) : null}
+          </SignedIn>
         </div>
       </header>
       <main style={{
