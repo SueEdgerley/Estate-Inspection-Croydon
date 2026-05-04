@@ -410,7 +410,7 @@ export default function AnalyticsPage() {
               <input type="date" value={issueDateTo} onChange={(e) => setIssueDateTo(e.target.value)} />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>C/D — grading scheme</span>
+              <span style={{ fontWeight: 600 }}>Grading scheme</span>
               <select value={gradeCategory} onChange={(e) => setGradeCategory(e.target.value)} style={{ padding: '0.4rem' }}>
                 <option value="all">All schemes</option>
                 {(filterOptions?.gradingSchemes || []).map((c) => (
@@ -421,7 +421,7 @@ export default function AnalyticsPage() {
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>C/D — block</span>
+              <span style={{ fontWeight: 600 }}>Block</span>
               <select value={gradeBlockId} onChange={(e) => setGradeBlockId(e.target.value)} style={{ padding: '0.4rem' }}>
                 <option value="all">All blocks</option>
                 {(filterOptions?.blocks || []).map((b) => (
@@ -432,7 +432,7 @@ export default function AnalyticsPage() {
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>C/D — area</span>
+              <span style={{ fontWeight: 600 }}>Area</span>
               <select value={gradeArea} onChange={(e) => setGradeArea(e.target.value)} style={{ padding: '0.4rem' }}>
                 <option value="all">All areas</option>
                 {(filterOptions?.areas || []).map((a) => (
@@ -443,13 +443,13 @@ export default function AnalyticsPage() {
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>C/D — template</span>
+              <span style={{ fontWeight: 600 }}>Form</span>
               <select
                 value={gradeTemplateName}
                 onChange={(e) => setGradeTemplateName(e.target.value)}
                 style={{ padding: '0.4rem' }}
               >
-                <option value="all">All templates</option>
+                <option value="all">All forms</option>
                 {(filterOptions?.templateNames || []).map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -1021,6 +1021,8 @@ export default function AnalyticsPage() {
                               <thead>
                                 <tr style={{ backgroundColor: photobook.soft }}>
                                   <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Location</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Area</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Form</th>
                                   <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>C grades</th>
                                   <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>D grades</th>
                                   <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Total C/D</th>
@@ -1029,12 +1031,14 @@ export default function AnalyticsPage() {
                               <tbody>
                                 {(gradeRisk.topBlocks || []).length === 0 ? (
                                   <tr>
-                                    <td colSpan={4} style={{ padding: '0.75rem', color: '#6b7280' }}>No C/D answers in this window.</td>
+                                    <td colSpan={6} style={{ padding: '0.75rem', color: '#6b7280' }}>No C/D answers in this window.</td>
                                   </tr>
                                 ) : (
                                   (gradeRisk.topBlocks || []).map((b) => (
                                     <tr key={b.location_label} style={{ borderTop: '1px solid #e5e7eb' }}>
                                       <td style={{ padding: '0.6rem 0.75rem' }}>{b.location_label}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{b.area || '—'}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{b.form_name || '—'}</td>
                                       <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{b.c_count}</td>
                                       <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{b.d_count}</td>
                                       <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: 700 }}>{b.total_cd}</td>
@@ -1051,8 +1055,10 @@ export default function AnalyticsPage() {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                               <thead>
                                 <tr style={{ backgroundColor: photobook.soft }}>
-                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Location</th>
-                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Category</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Location / block</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Area</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Form</th>
+                                  <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Category / question area</th>
                                   <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>C count</th>
                                   <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>D count</th>
                                   <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Total C/D</th>
@@ -1061,12 +1067,14 @@ export default function AnalyticsPage() {
                               <tbody>
                                 {(gradeRisk.byLocationCategory || []).length === 0 ? (
                                   <tr>
-                                    <td colSpan={5} style={{ padding: '0.75rem', color: '#6b7280' }}>No C/D category rows in this window.</td>
+                                    <td colSpan={7} style={{ padding: '0.75rem', color: '#6b7280' }}>No C/D category rows in this window.</td>
                                   </tr>
                                 ) : (
                                   (gradeRisk.byLocationCategory || []).map((row) => (
-                                    <tr key={`${row.location_label}-${row.category}`} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                    <tr key={`${row.location_label}-${row.area}-${row.form_name}-${row.category}`} style={{ borderTop: '1px solid #e5e7eb' }}>
                                       <td style={{ padding: '0.6rem 0.75rem' }}>{row.location_label}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{row.area || '—'}</td>
+                                      <td style={{ padding: '0.6rem 0.75rem' }}>{row.form_name || '—'}</td>
                                       <td style={{ padding: '0.6rem 0.75rem' }}>{row.category}</td>
                                       <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{row.c_count}</td>
                                       <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{row.d_count}</td>
