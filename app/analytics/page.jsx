@@ -940,7 +940,7 @@ export default function AnalyticsPage() {
                 {tab === 'grades' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     {!gradeRisk && (
-                      <p style={{ color: '#6b7280' }}>Graded-answer analytics view is not available on this database.</p>
+                      <p style={{ color: '#6b7280' }}>No C/D grade data is available for this filter.</p>
                     )}
                     {gradeRisk?.error && (
                       <p style={{ color: '#b91c1c' }}>Could not load C/D analysis: {gradeRisk.error}</p>
