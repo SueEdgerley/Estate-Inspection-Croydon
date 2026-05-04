@@ -449,10 +449,12 @@ export async function GET(request) {
         `SELECT i.id, i.type, i.work_type, i.location_label, i.inspector_name, i.inspector_id, i.template_id, i.template_name,
              i.due_date, i.submitted_at, i.grading, ${pdfCols},
              CASE
-               WHEN i.submitted_at IS NOT NULL THEN 'submitted'
-               WHEN lower(COALESCE(i.status, '')) IN ('completed', 'complete') THEN 'completed'
+               WHEN i.submitted_at IS NOT NULL OR lower(trim(COALESCE(i.status, ''))) = 'submitted' THEN 'submitted'
+               WHEN lower(trim(COALESCE(i.status, ''))) IN ('completed', 'complete') THEN 'completed'
+               WHEN NULLIF(trim(COALESCE(i.status, '')), '') IS NOT NULL THEN lower(trim(i.status))
                ELSE 'draft'
              END AS status,
+             i.status AS raw_status,
              i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
              e.name AS estate_name, b.name AS block_name,
              COALESCE(action_counts.issues_count, 0)::int AS issues_count,
@@ -465,11 +467,11 @@ export async function GET(request) {
           inspection_id,
           COUNT(*)::int AS issues_count,
           COUNT(*) FILTER (
-            WHERE lower(trim(COALESCE(status, ''))) NOT IN ('completed', 'complete')
+            WHERE lower(trim(COALESCE(status, ''))) IN ('open', 'in progress', 'in_progress')
           )::int AS open_issues_count
         FROM actions
         GROUP BY inspection_id
-      ) action_counts ON action_counts.inspection_id = i.id
+      ) action_counts ON action_counts.inspection_id::text = i.id::text
       WHERE ${whereText}
       ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
       LIMIT $${limitPlaceholder}`,

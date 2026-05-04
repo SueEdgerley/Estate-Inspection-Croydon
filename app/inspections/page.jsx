@@ -208,6 +208,25 @@ export default function InspectionsListPage() {
     return '–'
   }
 
+  const templateDisplay = (row) =>
+    row.template_name?.trim() ||
+    row.work_type?.trim() ||
+    row.type?.trim() ||
+    '–'
+
+  const statusDisplay = (row) => {
+    const raw = String(row.status || '').trim()
+    if (!raw) return 'Draft'
+    return raw.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  }
+
+  const issuesDisplay = (row) => {
+    const total = Number(row.issues_count) || 0
+    if (total <= 0) return '0'
+    const open = Number(row.open_issues_count) || 0
+    return `${total} ${total === 1 ? 'issue' : 'issues'} / ${open} open`
+  }
+
   /** Aligns DB `type` strings with filter option values (see photobook import: estate_walkabout). */
   const normalizeInspectionType = (raw) =>
     String(raw || '')
@@ -983,7 +1002,7 @@ export default function InspectionsListPage() {
                         </td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.estate_name ?? '–'}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.block_name ?? '–'}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.template_name ?? '–'}</td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{templateDisplay(row)}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.submitted_at || row.created_at)}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>
@@ -995,15 +1014,11 @@ export default function InspectionsListPage() {
                             backgroundColor: row.status === 'submitted' ? '#d1fae5' : '#f3f4f6',
                             color: row.status === 'submitted' ? '#065f46' : '#6b7280',
                           }}>
-                            {row.status ?? 'draft'}
+                            {statusDisplay(row)}
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#374151' }}>
-                          {row.issues_count != null
-                            ? row.open_issues_count != null
-                              ? `${row.issues_count} (${row.open_issues_count} open)`
-                              : row.issues_count
-                            : '–'}
+                          {issuesDisplay(row)}
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
