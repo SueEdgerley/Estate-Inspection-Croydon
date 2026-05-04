@@ -100,19 +100,37 @@ export async function POST(request) {
     }
 
     if (blockId || estateId) {
-      const locationResult = await sql`
-        SELECT
-          b.id AS block_id,
-          b.name AS block_name,
-          e.id AS estate_id,
-          e.name AS estate_name,
-          e.area AS estate_area
-        FROM blocks b
-        FULL OUTER JOIN estates e ON e.id = b.estate_id
-        WHERE (${blockId || null} IS NOT NULL AND b.id = ${blockId || null})
-          OR (${blockId || null} IS NULL AND ${estateId || null} IS NOT NULL AND e.id = ${estateId || null})
-        LIMIT 1
-      `
+      const locationQuerySql = blockId
+        ? 'SELECT b.id AS block_id, b.name AS block_name, e.id AS estate_id, e.name AS estate_name, e.area AS estate_area FROM blocks b LEFT JOIN estates e ON e.id = b.estate_id WHERE b.id = $1::text LIMIT 1'
+        : 'SELECT NULL::text AS block_id, NULL::text AS block_name, e.id AS estate_id, e.name AS estate_name, e.area AS estate_area FROM estates e WHERE e.id = $1::text LIMIT 1'
+      console.log('[repairs-inspector/create] location lookup:', {
+        query: locationQuerySql,
+        payload: debugPayload,
+      })
+      const locationResult = blockId
+        ? await sql`
+            SELECT
+              b.id AS block_id,
+              b.name AS block_name,
+              e.id AS estate_id,
+              e.name AS estate_name,
+              e.area AS estate_area
+            FROM blocks b
+            LEFT JOIN estates e ON e.id = b.estate_id
+            WHERE b.id = ${blockId}::text
+            LIMIT 1
+          `
+        : await sql`
+            SELECT
+              NULL::text AS block_id,
+              NULL::text AS block_name,
+              e.id AS estate_id,
+              e.name AS estate_name,
+              e.area AS estate_area
+            FROM estates e
+            WHERE e.id = ${estateId}::text
+            LIMIT 1
+          `
       const row = locationResult.rows[0]
       if (row) {
         linkedLocation = {
@@ -129,6 +147,11 @@ export async function POST(request) {
       }
     }
 
+    console.log('[repairs-inspector/create] inspection insert:', {
+      query:
+        'INSERT INTO inspections (id, type, location_label, inspector_name, inspector_id, template_id, template_name, submitted_at, status, is_scheduled, title, description, estate_id, block_id, work_type) VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text, CURRENT_TIMESTAMP, $8::text, $9::boolean, $10::text, $11::text, $12::text, $13::text, $14::text)',
+      payload: debugPayload,
+    })
     try {
       await sql`
         INSERT INTO inspections (
@@ -137,10 +160,10 @@ export async function POST(request) {
           title, description, estate_id, block_id, work_type
         )
         VALUES (
-          ${inspectionId}, 'repairs_inspector', ${linkedLocation.label || estateBlock}, ${inspectorName}, ${inspectorEmail},
+          ${inspectionId}::text, 'repairs_inspector', ${linkedLocation.label || estateBlock}::text, ${inspectorName}::text, ${inspectorEmail}::text,
           'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
-          ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}, ${description},
-          ${linkedLocation.estate_id}, ${linkedLocation.block_id}, 'repairs_inspector'
+          ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}::text, ${description}::text,
+          ${linkedLocation.estate_id}::text, ${linkedLocation.block_id}::text, 'repairs_inspector'
         )
       `
     } catch (inspectionInsertError) {
@@ -152,13 +175,18 @@ export async function POST(request) {
           title, description
         )
         VALUES (
-          ${inspectionId}, 'repairs_inspector', ${linkedLocation.label || estateBlock}, ${inspectorName}, ${inspectorEmail},
+          ${inspectionId}::text, 'repairs_inspector', ${linkedLocation.label || estateBlock}::text, ${inspectorName}::text, ${inspectorEmail}::text,
           'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
-          ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}, ${description}
+          ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}::text, ${description}::text
         )
       `
     }
 
+    console.log('[repairs-inspector/create] action insert:', {
+      query:
+        'INSERT INTO actions (id, inspection_id, section_id, section_name, question_id, category, priority, title, description, location, status, comment, auto_created, photo_urls, block_id, job_number, expected_completion_date, repair_notes, repair_photo_url, repair_updated_at) VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, NULL, $7::text, $8::text, $9::text, $10::text, $11::text, $12::boolean, $13::jsonb, $14::text, $15::text, $16::date, $17::text, $18::text, CURRENT_TIMESTAMP)',
+      payload: debugPayload,
+    })
     await sql`
       INSERT INTO actions (
         id, inspection_id, section_id, section_name, question_id,
@@ -167,10 +195,10 @@ export async function POST(request) {
         repair_notes, repair_photo_url, repair_updated_at
       )
       VALUES (
-        ${actionId}, ${inspectionId}, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
-        'repairs', null, ${description.slice(0, 500)}, ${description}, ${location}, ${status},
-        ${repairNotes || null}, false, ${JSON.stringify(photoUrls)}, ${linkedLocation.block_id}, ${jobNumber || null},
-        ${expectedCompletionDate}, ${repairNotes || null}, ${primaryPhotoUrl},
+        ${actionId}::text, ${inspectionId}::text, 'repairs_inspector', 'Repairs Inspector Form', 'repair_issue',
+        'repairs', null, ${description.slice(0, 500)}::text, ${description}::text, ${location}::text, ${status}::text,
+        ${repairNotes || null}::text, false, ${JSON.stringify(photoUrls)}::jsonb, ${linkedLocation.block_id}::text, ${jobNumber || null}::text,
+        ${expectedCompletionDate}::date, ${repairNotes || null}::text, ${primaryPhotoUrl}::text,
         CURRENT_TIMESTAMP
       )
       RETURNING *

@@ -147,9 +147,6 @@ export default function RepairsInspectorNewFormPage() {
           <Link href="/repairs-inspector/new" style={activeChoiceStyle}>
             Log New Repair
           </Link>
-          <Link href="/repairs-inspector" style={choiceStyle}>
-            Update Existing Repair
-          </Link>
         </div>
         <h1 style={{ margin: '0.75rem 0 0', fontSize: '2rem', color: '#111827' }}>
           Log New Repair

@@ -180,9 +180,6 @@ export default function RepairsInspectorFormPage() {
           </Link>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-          <Link href="/repairs-inspector/new" style={choiceStyle}>
-            Log New Repair
-          </Link>
           <Link href="/repairs-inspector" style={activeChoiceStyle}>
             Update Existing Repair
           </Link>
