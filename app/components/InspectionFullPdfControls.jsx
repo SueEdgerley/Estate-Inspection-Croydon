@@ -15,6 +15,7 @@ export default function InspectionFullPdfControls({
   onAfterGenerate,
   variant = 'links',
   linkStyle = {},
+  forceRegenerate = false,
 }) {
   const [busy, setBusy] = useState(false)
   const fromProp =
@@ -34,10 +35,10 @@ export default function InspectionFullPdfControls({
   }
 
   const ensurePdfUrl = async () => {
-    if (url) return url
+    if (url && !forceRegenerate) return url
     setBusy(true)
     try {
-      const res = await fetch(`/api/inspections/${inspectionId}/report-pdf`, {
+      const res = await fetch(`/api/inspections/${inspectionId}/report-pdf${forceRegenerate ? '?regenerate=1' : ''}`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -98,7 +99,7 @@ export default function InspectionFullPdfControls({
     }
   }
 
-  if (url) {
+  if (url && !forceRegenerate) {
     if (variant === 'icons') {
       return (
         <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
