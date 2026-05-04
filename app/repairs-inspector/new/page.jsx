@@ -129,7 +129,7 @@ export default function RepairsInspectorNewFormPage() {
         }),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error || data.details || 'Failed to create repair action')
+      if (!response.ok) throw new Error(data.details || data.error || `Request failed (${response.status})`)
 
       setMessage('Repair action created successfully.')
       setForm(initialForm)
