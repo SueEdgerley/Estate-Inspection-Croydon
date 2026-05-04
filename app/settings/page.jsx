@@ -70,6 +70,8 @@ export default function SettingsPage() {
   const [recipientForm, setRecipientForm] = useState({ name: '', email: '' })
   const [editingUserId, setEditingUserId] = useState(null)
   const [editUser, setEditUser] = useState({ email: '', role: '' })
+  const [editingStaffId, setEditingStaffId] = useState(null)
+  const [editStaff, setEditStaff] = useState({ name: '', email: '', job_title: '', active: true })
   const [editingRecipientId, setEditingRecipientId] = useState(null)
   const [editRecipient, setEditRecipient] = useState({ name: '', email: '' })
   const [saving, setSaving] = useState(false)
@@ -173,6 +175,55 @@ export default function SettingsPage() {
     }
   }
 
+  const saveStaffEdit = async (id) => {
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const res = await fetch(`/api/admin/staff-people/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: editStaff.name.trim(),
+          email: editStaff.email.trim(),
+          job_title: editStaff.job_title || null,
+          active: editStaff.active !== false,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.details || data.error || `Update failed (${res.status})`)
+      setStaffDirectory((prev) => prev.map((row) => (row.id === id ? { ...row, ...data } : row)))
+      setEditingStaffId(null)
+      await refreshStaffDirectory()
+    } catch (err) {
+      setLoadError(err.message || 'Could not update staff member')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deactivateStaffMember = async (staff) => {
+    const label = staff.name || staff.email || staff.id
+    if (!window.confirm(`Deactivate ${label}? Historical assignments and records will be preserved.`)) return
+    setSaving(true)
+    setLoadError(null)
+    try {
+      const res = await fetch(`/api/admin/staff-people/${staff.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.details || data.error || `Deactivate failed (${res.status})`)
+      setEditingStaffId(null)
+      setStaffDirectory((prev) => prev.map((row) => (row.id === staff.id ? { ...row, active: false } : row)))
+      await refreshStaffDirectory()
+    } catch (err) {
+      setLoadError(err.message || 'Could not deactivate staff member')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const toggleUserAccount = async (id, accountActive) => {
     setLoadError(null)
     try {
@@ -271,27 +322,33 @@ export default function SettingsPage() {
           email: editRecipient.email.trim(),
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Update failed')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.details || data.error || `Update failed (${res.status})`)
+      setRecipients((prev) => prev.map((row) => (row.id === id ? { ...row, ...data } : row)))
       setEditingRecipientId(null)
       await refreshRecipients()
     } catch (err) {
-      setLoadError(err.message)
+      setLoadError(err.message || 'Could not update issue recipient')
     } finally {
       setSaving(false)
     }
   }
 
   const deleteRecipient = async (id) => {
-    if (!confirm('Remove this issue recipient?')) return
+    if (!window.confirm('Deactivate this issue recipient? Historical actions and inspections will keep their links.')) return
+    setSaving(true)
     setLoadError(null)
     try {
       const res = await fetch(`/api/admin/issue-recipients/${id}`, { method: 'DELETE', credentials: 'include' })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Delete failed')
+      if (!res.ok) throw new Error(data.details || data.error || `Deactivate failed (${res.status})`)
+      setEditingRecipientId(null)
+      setRecipients((prev) => prev.filter((row) => row.id !== id))
       await refreshRecipients()
     } catch (err) {
-      setLoadError(err.message)
+      setLoadError(err.message || 'Could not deactivate issue recipient')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -559,15 +616,100 @@ export default function SettingsPage() {
                 <th style={th}>Email</th>
                 <th style={th}>Job title</th>
                 <th style={th}>Active</th>
+                <th style={th}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {staffDirectory.map((s) => (
                 <tr key={s.id}>
-                  <td style={td}>{s.name || '—'}</td>
-                  <td style={td}>{s.email || '—'}</td>
-                  <td style={td}>{s.job_title || '—'}</td>
-                  <td style={td}>{s.active === false ? 'No' : 'Yes'}</td>
+                  {editingStaffId === s.id ? (
+                    <>
+                      <td style={td}>
+                        <input
+                          value={editStaff.name}
+                          onChange={(e) => setEditStaff((prev) => ({ ...prev, name: e.target.value }))}
+                          style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
+                        />
+                      </td>
+                      <td style={td}>
+                        <input
+                          type="email"
+                          value={editStaff.email}
+                          onChange={(e) => setEditStaff((prev) => ({ ...prev, email: e.target.value }))}
+                          style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
+                        />
+                      </td>
+                      <td style={td}>
+                        <select
+                          value={editStaff.job_title || ''}
+                          onChange={(e) => setEditStaff((prev) => ({ ...prev, job_title: e.target.value }))}
+                          style={{ padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db', width: '100%' }}
+                        >
+                          <option value="">—</option>
+                          {STAFF_JOB_TITLES.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={td}>
+                        <select
+                          value={editStaff.active === false ? 'false' : 'true'}
+                          onChange={(e) => setEditStaff((prev) => ({ ...prev, active: e.target.value === 'true' }))}
+                          style={{ padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
+                        >
+                          <option value="true">Yes</option>
+                          <option value="false">No</option>
+                        </select>
+                      </td>
+                      <td style={td}>
+                        <button type="button" onClick={() => saveStaffEdit(s.id)} disabled={saving} style={{ marginRight: 8 }}>
+                          Save
+                        </button>
+                        <button type="button" onClick={() => setEditingStaffId(null)}>
+                          Cancel
+                        </button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={td}>{s.name || '—'}</td>
+                      <td style={td}>{s.email || '—'}</td>
+                      <td style={td}>{s.job_title || '—'}</td>
+                      <td style={td}>{s.active === false ? 'No' : 'Yes'}</td>
+                      <td style={td}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingStaffId(s.id)
+                            setEditStaff({
+                              name: s.name || '',
+                              email: s.email || '',
+                              job_title: s.job_title || '',
+                              active: s.active !== false,
+                            })
+                          }}
+                          style={{ marginRight: 8, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deactivateStaffMember(s)}
+                          disabled={saving || s.active === false}
+                          style={{
+                            color: s.active === false ? '#9ca3af' : '#b91c1c',
+                            background: 'none',
+                            border: 'none',
+                            cursor: saving || s.active === false ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          Deactivate
+                        </button>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -24,7 +24,7 @@ export async function GET() {
     const result = await sql`
       SELECT id, name, email, active, created_at
       FROM people
-      WHERE category = ${CATEGORY}
+      WHERE category = ${CATEGORY} AND COALESCE(active, true) = true
       ORDER BY name ASC, email ASC
     `
     return NextResponse.json(result.rows)

@@ -19,7 +19,7 @@ async function requireAdmin() {
 export async function PATCH(request, { params }) {
   const err = await requireAdmin()
   if (err) return err
-  const id = params?.id
+  const { id } = await params
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   try {
     await ensureDatabase()
@@ -66,15 +66,18 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   const err = await requireAdmin()
   if (err) return err
-  const id = params?.id
+  const { id } = await params
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   try {
     await ensureDatabase()
     const del = await sql`
-      DELETE FROM people WHERE id = ${id} AND category = ${CATEGORY} RETURNING id
+      UPDATE people
+      SET active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id} AND category = ${CATEGORY}
+      RETURNING id
     `
     if (del.rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json({ ok: true, id: del.rows[0].id })
+    return NextResponse.json({ ok: true, id: del.rows[0].id, active: false })
   } catch (e) {
     console.error('issue-recipients DELETE:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
