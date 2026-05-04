@@ -32,6 +32,7 @@ function photoUrlsFromBody(value) {
 }
 
 export async function POST(request) {
+  let debugPayload = null
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -39,6 +40,9 @@ export async function POST(request) {
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()
     const repairFieldsAvailable = await ensureRepairActionFields(sql)
+    if (!repairFieldsAvailable) {
+      throw new Error('Repair action columns could not be verified or created on actions table')
+    }
 
     const user = await currentUser().catch(() => null)
     const body = await request.json().catch(() => ({}))
@@ -54,6 +58,19 @@ export async function POST(request) {
     const repairNotes = clean(body.repair_notes)
     const photoUrls = photoUrlsFromBody(body.photo_urls || body.repair_photo_url)
     const primaryPhotoUrl = photoUrls[0] || null
+    debugPayload = {
+      estate_id: estateId || null,
+      block_id: blockId || null,
+      estate_block: estateBlock || null,
+      area: area || null,
+      location: location || null,
+      description_present: Boolean(description),
+      job_number: jobNumber || null,
+      expected_completion_date: expectedCompletionDate,
+      status,
+      repair_notes_present: Boolean(repairNotes),
+      photo_url_count: photoUrls.length,
+    }
 
     if (!estateBlock && !estateId && !blockId) {
       return NextResponse.json({ error: 'Estate/block is required' }, { status: 400 })
@@ -142,10 +159,6 @@ export async function POST(request) {
       `
     }
 
-    if (!repairFieldsAvailable) {
-      throw new Error('Repair action columns could not be verified or created on actions table')
-    }
-
     await sql`
       INSERT INTO actions (
         id, inspection_id, section_id, section_name, question_id,
@@ -173,7 +186,7 @@ export async function POST(request) {
     )
   } catch (error) {
     const message = error?.message || String(error)
-    console.error('[repairs-inspector/create] POST failed:', message)
+    console.error('[repairs-inspector/create] POST failed:', { error: message, payload: debugPayload })
     return NextResponse.json(
       { error: message, details: message },
       { status: 500 }

@@ -82,6 +82,8 @@ export async function GET(request, { params }) {
 
 // PUT - Update action
 export async function PUT(request, { params }) {
+  let id = null
+  let debugPayload = null
   try {
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -91,7 +93,8 @@ export async function PUT(request, { params }) {
         { status: 503 }
       )
     }
-    const { id } = await params
+    const routeParams = await params
+    id = routeParams.id
     const data = await request.json()
     const repairFieldsAvailable = await ensureRepairActionFields(sql)
     if (!repairFieldsAvailable) {
@@ -104,6 +107,15 @@ export async function PUT(request, { params }) {
       ...(data.expected_completion_date !== undefined
         ? { expected_completion_date: normalizeDateOnly(data.expected_completion_date) }
         : {}),
+    }
+    debugPayload = {
+      action_id: id,
+      fields: Object.keys(data || {}),
+      job_number_present: data.job_number !== undefined && data.job_number !== null && data.job_number !== '',
+      expected_completion_date: normalizedData.expected_completion_date ?? null,
+      status: normalizedData.status ?? null,
+      repair_notes_present: data.repair_notes !== undefined && data.repair_notes !== null && data.repair_notes !== '',
+      repair_photo_url_present: data.repair_photo_url !== undefined && data.repair_photo_url !== null && data.repair_photo_url !== '',
     }
 
     const buildUpdateQuery = () => {
@@ -164,7 +176,7 @@ export async function PUT(request, { params }) {
     return NextResponse.json(result.rows[0])
   } catch (error) {
     const message = error?.message || String(error)
-    console.error('Error updating action:', message)
+    console.error('Error updating action:', { error: message, action_id: id, payload: debugPayload })
     return NextResponse.json(
       { error: message, details: message },
       { status: 500 }
