@@ -219,6 +219,12 @@ function countResponseIssueSignals(templateVersion, answerRows) {
       if (inspectionAnswerTriggersIssue(question, section, answer)) {
         questionIds.add(String(question.id))
       }
+      if (String(question.question_type || answerRow.question_type || '').toLowerCase() === 'yes_no') {
+        const norm = normalizeYesNoAnswer(answer)
+        if (norm === 'no') {
+          questionIds.add(`${question.id}:response_no`)
+        }
+      }
 
       const { structured } = unpackNvWizardNotes(answerRow.notes)
       if (structured?.raise_issue === true) {
@@ -611,7 +617,10 @@ export async function GET(request) {
         const totalIssues = Math.max(actionTotal, responseTotal)
         return {
           ...row,
+          issue_count: totalIssues,
           issues_count: totalIssues,
+          action_count: actionTotal,
+          response_issue_count: responseTotal,
           open_issues_count: actionTotal > 0 ? Math.max(actionOpen, responseTotal) : responseTotal,
         }
       })

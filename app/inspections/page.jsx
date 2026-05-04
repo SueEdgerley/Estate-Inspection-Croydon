@@ -221,9 +221,10 @@ export default function InspectionsListPage() {
   }
 
   const issuesDisplay = (row) => {
-    const total = Number(row.issues_count) || 0
+    const total =
+      Number(row.issues_count ?? row.issue_count ?? row.issueCount ?? row.actions_count ?? row.action_count) || 0
     if (total <= 0) return '0'
-    const open = Number(row.open_issues_count) || 0
+    const open = Number(row.open_issues_count ?? row.open_issue_count ?? row.openIssueCount) || 0
     return `${total} ${total === 1 ? 'issue' : 'issues'} / ${open} open`
   }
 
@@ -1019,6 +1020,11 @@ export default function InspectionsListPage() {
                         </td>
                         <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#374151' }}>
                           {issuesDisplay(row)}
+                          {row.id === 'ee12c830-fe0a-4b91-abef-51ea1b52fc8d' ? (
+                            <div style={{ marginTop: 4, fontSize: '0.72rem', color: '#b45309' }}>
+                              debug issue_count: {Number(row.issue_count ?? row.issues_count) || 0}
+                            </div>
+                          ) : null}
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
