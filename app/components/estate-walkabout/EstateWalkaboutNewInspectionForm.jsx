@@ -3,12 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 import BestPracticeGuideButton from '@/app/components/BestPracticeGuideButton'
 import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
 } from '@/lib/estate-walkabout-template'
+import {
+  createOfflineDraftId,
+  hasInspectionDraftContent,
+  readOfflineInspectionDrafts,
+  removeOfflineInspectionDraft,
+  upsertOfflineInspectionDraft,
+} from '@/lib/offline-inspection-drafts'
 
 const EW = {
   pageBg: '#f1f5f9',
@@ -100,6 +108,25 @@ const GRADE_COLORS = {
   NA: { border: '#64748b', bg: '#f1f5f9', selectedBg: '#64748b', text: '#334155' },
 }
 
+const offlinePanelStyle = {
+  margin: '0 0 1rem',
+  padding: '0.9rem 1rem',
+  border: '1px solid #f59e0b',
+  borderRadius: '0.5rem',
+  background: '#fffbeb',
+  color: '#92400e',
+}
+
+const smallButtonStyle = {
+  padding: '0.45rem 0.7rem',
+  border: '1px solid #cbd5e1',
+  borderRadius: '0.375rem',
+  background: '#fff',
+  color: '#1d4ed8',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
 function emptyAnswers() {
   const keys = [
     ...HEADER_KEYS,
@@ -143,6 +170,7 @@ export default function EstateWalkaboutNewInspectionForm({
   templateLocked = false,
 }) {
   const router = useRouter()
+  const { user } = useUser()
   const [postgresBlockId, setPostgresBlockId] = useState('')
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
@@ -158,6 +186,10 @@ export default function EstateWalkaboutNewInspectionForm({
   const [validationErrors, setValidationErrors] = useState({})
   const [toastMessage, setToastMessage] = useState('')
   const toastTimerRef = useRef(null)
+  const [isOnline, setIsOnline] = useState(true)
+  const [offlineDraftId, setOfflineDraftId] = useState('')
+  const [offlineDrafts, setOfflineDrafts] = useState([])
+  const [offlineNotice, setOfflineNotice] = useState('')
 
   const locationBlocks = useMemo(
     () => blocks.filter((b) => b != null && b.active !== false),
@@ -255,6 +287,147 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const getPhotos = (id) => (Array.isArray(answerExtras[id]?.photo_urls) ? answerExtras[id].photo_urls : [])
 
+  const currentSubmitBody = useMemo(
+    () => {
+      const extras = {}
+      for (const id of PHOTO_EXTRA_IDS) {
+        const urls = Array.isArray(answerExtras[id]?.photo_urls)
+          ? answerExtras[id].photo_urls.filter((u) => typeof u === 'string' && u)
+          : []
+        if (urls.length > 0) extras[id] = { photo_urls: urls }
+      }
+
+      return {
+        template_id: ESTATE_WALKABOUT_TEMPLATE_ID,
+        estate_id: undefined,
+        block_id: postgresBlockId.trim() || undefined,
+        location: location.trim() || undefined,
+        description: description.trim() || undefined,
+        answers: {
+          ...answers,
+          [ESTATE_WALKABOUT_CHECKLIST_QID]: JSON.stringify(
+            checklist.map((it) => ({
+              id: it.id,
+              description: (it.description || '').trim(),
+              photo_urls: Array.isArray(it.photo_urls) ? it.photo_urls : [],
+              action_required: !!it.action_required,
+              action_summary: String(it.action_summary || '').trim(),
+              order_raised_number: String(it.order_raised_number || '').trim(),
+            }))
+          ),
+        },
+        answer_extras: extras,
+      }
+    },
+    [postgresBlockId, location, description, answers, answerExtras, checklist]
+  )
+
+  const currentDraftPayload = useMemo(
+    () => ({
+      formType: 'Estate Walkabout',
+      templateId: ESTATE_WALKABOUT_TEMPLATE_ID,
+      templateName: 'Estate Walkabout',
+      blockId: postgresBlockId.trim() || '',
+      location: location.trim(),
+      description: description.trim(),
+      userEmail: user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '',
+      submitBody: currentSubmitBody,
+    }),
+    [postgresBlockId, location, description, user, currentSubmitBody]
+  )
+
+  useEffect(() => {
+    const updateOnlineStatus = () => setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
+    updateOnlineStatus()
+    setOfflineDrafts(readOfflineInspectionDrafts())
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isOnline || !hasInspectionDraftContent(currentDraftPayload)) return
+    const id = offlineDraftId || createOfflineDraftId()
+    if (!offlineDraftId) setOfflineDraftId(id)
+    setOfflineDrafts(
+      upsertOfflineInspectionDraft({
+        id,
+        label: 'Estate Walkabout',
+        payload: currentDraftPayload,
+      })
+    )
+    setOfflineNotice('You are offline. Your progress is saved on this device and will submit when you are back online.')
+  }, [isOnline, offlineDraftId, currentDraftPayload])
+
+  const saveCurrentOfflineDraft = () => {
+    const id = offlineDraftId || createOfflineDraftId()
+    if (!offlineDraftId) setOfflineDraftId(id)
+    const next = upsertOfflineInspectionDraft({
+      id,
+      label: 'Estate Walkabout',
+      payload: currentDraftPayload,
+    })
+    setOfflineDrafts(next)
+    setOfflineNotice('You are offline. Your progress is saved on this device and will submit when you are back online.')
+  }
+
+  const restoreOfflineDraft = (draft) => {
+    const payload = draft?.payload || {}
+    const body = payload.submitBody || {}
+    setOfflineDraftId(draft.id)
+    setPostgresBlockId(body.block_id || payload.blockId || '')
+    setLocation(body.location || payload.location || '')
+    setDescription(body.description || payload.description || '')
+    const restoredAnswers = { ...(body.answers || {}) }
+    let restoredChecklist = []
+    try {
+      restoredChecklist = JSON.parse(restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID] || '[]')
+    } catch {
+      restoredChecklist = []
+    }
+    delete restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID]
+    setAnswers({ ...emptyAnswers(), ...restoredAnswers })
+    setAnswerExtras(body.answer_extras || {})
+    setChecklist(Array.isArray(restoredChecklist) ? restoredChecklist : [])
+    setSubmitError(null)
+    setOfflineNotice('Offline draft loaded. Review it, then submit when you are online.')
+  }
+
+  const submitOfflineDraft = async (draft) => {
+    if (!isOnline) {
+      setOfflineNotice('You are offline. Reconnect before submitting saved drafts.')
+      return
+    }
+    const body = draft?.payload?.submitBody
+    if (!body) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch('/api/inspections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) {
+        setSubmitError(data.error || data.details || `Request failed (${res.status})`)
+        return
+      }
+      setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
+      setOfflineDraftId('')
+      const inspectionId = data.inspectionId ?? data.id
+      if (inspectionId) router.push(`/inspections/${inspectionId}`)
+    } catch (err) {
+      setSubmitError(err.message || 'Something went wrong')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const updateItem = (itemId, patch) => {
     setChecklist((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...patch } : it)))
   }
@@ -328,41 +501,18 @@ export default function EstateWalkaboutNewInspectionForm({
     const errs = validate()
     if (Object.keys(errs).length > 0) return
 
-    const extras = {}
-    for (const id of PHOTO_EXTRA_IDS) {
-      const urls = getPhotos(id).filter((u) => typeof u === 'string' && u)
-      if (urls.length > 0) extras[id] = { photo_urls: urls }
-    }
-
     setIsSubmitting(true)
     try {
-      const payloadAnswers = {
-        ...answers,
-        [ESTATE_WALKABOUT_CHECKLIST_QID]: JSON.stringify(
-          checklist.map((it) => ({
-            id: it.id,
-            description: (it.description || '').trim(),
-            photo_urls: Array.isArray(it.photo_urls) ? it.photo_urls : [],
-            action_required: !!it.action_required,
-            action_summary: String(it.action_summary || '').trim(),
-            order_raised_number: String(it.order_raised_number || '').trim(),
-          }))
-        ),
+      if (!isOnline) {
+        saveCurrentOfflineDraft()
+        setIsSubmitting(false)
+        return
       }
-
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          template_id: ESTATE_WALKABOUT_TEMPLATE_ID,
-          estate_id: undefined,
-          block_id: postgresBlockId.trim() || undefined,
-          location: location.trim() || undefined,
-          description: description.trim() || undefined,
-          answers: payloadAnswers,
-          answer_extras: extras,
-        }),
+        body: JSON.stringify(currentSubmitBody),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -377,6 +527,10 @@ export default function EstateWalkaboutNewInspectionForm({
       if (inspectionId) router.push(`/inspections/${inspectionId}`)
       else setSubmitError('Save reported success but no inspection ID was returned.')
     } catch (err) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        saveCurrentOfflineDraft()
+        return
+      }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -609,6 +763,36 @@ export default function EstateWalkaboutNewInspectionForm({
               }}
             >
               {toastMessage}
+            </div>
+          )}
+          {(!isOnline || offlineDrafts.length > 0 || offlineNotice) && (
+            <div style={offlinePanelStyle}>
+              <strong>
+                {!isOnline
+                  ? 'You are offline. Your progress is saved on this device and will submit when you are back online.'
+                  : 'Offline drafts'}
+              </strong>
+              <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
+                Photos need a connection in this first offline stage. Saved drafts are only stored on this device.
+              </p>
+              {offlineNotice && isOnline ? (
+                <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>{offlineNotice}</p>
+              ) : null}
+              {offlineDrafts.length > 0 ? (
+                <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }}>
+                  {offlineDrafts.map((draft) => (
+                    <div key={draft.id} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ flex: '1 1 220px', fontSize: '0.875rem' }}>
+                        {draft.label || draft.payload?.templateName || 'Inspection draft'} · {new Date(draft.updatedAt || draft.createdAt).toLocaleString('en-GB')}
+                      </span>
+                      <button type="button" onClick={() => restoreOfflineDraft(draft)} style={smallButtonStyle}>Reopen draft</button>
+                      <button type="button" disabled={!isOnline || isSubmitting} onClick={() => submitOfflineDraft(draft)} style={smallButtonStyle}>
+                        Submit saved draft
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
           {submitError && (

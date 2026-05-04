@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
@@ -45,9 +46,36 @@ import WizardInspectionQuestion from '@/app/components/wizard/InspectionQuestion
 import IssuesReportSection from '@/app/components/wizard/IssuesReportSection'
 import SignOffSection from '@/app/components/wizard/SignOffSection'
 import { buildInspectionFormNvTokens } from '@/lib/inspection-form-ui'
+import {
+  createOfflineDraftId,
+  hasInspectionDraftContent,
+  readOfflineInspectionDrafts,
+  removeOfflineInspectionDraft,
+  upsertOfflineInspectionDraft,
+} from '@/lib/offline-inspection-drafts'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
 const NV_INLINE = buildInspectionFormNvTokens()
+
+const offlinePanelStyle = {
+  maxWidth: 800,
+  margin: '0 0 1rem',
+  padding: '0.9rem 1rem',
+  border: '1px solid #f59e0b',
+  borderRadius: '0.5rem',
+  background: '#fffbeb',
+  color: '#92400e',
+}
+
+const smallButtonStyle = {
+  padding: '0.45rem 0.7rem',
+  border: '1px solid #cbd5e1',
+  borderRadius: '0.375rem',
+  background: '#fff',
+  color: '#1d4ed8',
+  fontWeight: 600,
+  cursor: 'pointer',
+}
 
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
@@ -1109,6 +1137,7 @@ function InspectionQuestion({
 export default function NewInspectionForm({ initialBlocks = [] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useUser()
   const [isMobile, setIsMobile] = useState(false)
   const templateIdFromUrl = String(searchParams?.get('template_id') || '').trim()
   const walkaboutFromUrl = searchParams.get('walkabout') === '1'
@@ -1148,6 +1177,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
   const [peopleOptions, setPeopleOptions] = useState([])
   const [showEstateFormGuidance, setShowEstateFormGuidance] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
+  const [offlineDraftId, setOfflineDraftId] = useState('')
+  const [offlineDrafts, setOfflineDrafts] = useState([])
+  const [offlineNotice, setOfflineNotice] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -1363,6 +1396,116 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     })
   }, [selectedTemplate, inspectionRenderSections])
   const showBestPracticeGuide = !!selectedTemplate
+  const currentSubmitBody = useMemo(
+    () => ({
+      template_id: templateId,
+      estate_id: undefined,
+      block_id: postgresBlockId.trim() || undefined,
+      location: location.trim() || undefined,
+      description: description.trim() || undefined,
+      answers,
+      answer_extras: answerExtras,
+    }),
+    [templateId, postgresBlockId, location, description, answers, answerExtras]
+  )
+  const currentDraftPayload = useMemo(
+    () => ({
+      formType: selectedTemplate?.name || selectedTemplate?.template_key || templateId || 'Inspection',
+      templateId,
+      templateName: selectedTemplate?.name || selectedTemplate?.template_name || '',
+      blockId: postgresBlockId.trim() || '',
+      location: location.trim(),
+      description: description.trim(),
+      userEmail: user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '',
+      submitBody: currentSubmitBody,
+    }),
+    [selectedTemplate, templateId, postgresBlockId, location, description, user, currentSubmitBody]
+  )
+
+  useEffect(() => {
+    const updateOnlineStatus = () => setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
+    updateOnlineStatus()
+    setOfflineDrafts(readOfflineInspectionDrafts())
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isOnline || !hasInspectionDraftContent(currentDraftPayload)) return
+    const id = offlineDraftId || createOfflineDraftId()
+    if (!offlineDraftId) setOfflineDraftId(id)
+    setOfflineDrafts(
+      upsertOfflineInspectionDraft({
+        id,
+        label: currentDraftPayload.templateName || currentDraftPayload.formType,
+        payload: currentDraftPayload,
+      })
+    )
+    setOfflineNotice('You are offline. Your progress is saved on this device and will submit when you are back online.')
+  }, [isOnline, offlineDraftId, currentDraftPayload])
+
+  const saveCurrentOfflineDraft = () => {
+    const id = offlineDraftId || createOfflineDraftId()
+    if (!offlineDraftId) setOfflineDraftId(id)
+    const next = upsertOfflineInspectionDraft({
+      id,
+      label: currentDraftPayload.templateName || currentDraftPayload.formType,
+      payload: currentDraftPayload,
+    })
+    setOfflineDrafts(next)
+    setOfflineNotice('You are offline. Your progress is saved on this device and will submit when you are back online.')
+    return id
+  }
+
+  const restoreOfflineDraft = (draft) => {
+    const payload = draft?.payload || {}
+    const body = payload.submitBody || {}
+    setOfflineDraftId(draft.id)
+    setTemplateId(body.template_id || payload.templateId || '')
+    setPostgresBlockId(body.block_id || payload.blockId || '')
+    setLocation(body.location || payload.location || '')
+    setDescription(body.description || payload.description || '')
+    setAnswers(body.answers || {})
+    setAnswerExtras(body.answer_extras || {})
+    setSubmitError(null)
+    setOfflineNotice('Offline draft loaded. Review it, then submit when you are online.')
+  }
+
+  const submitOfflineDraft = async (draft) => {
+    if (!isOnline) {
+      setOfflineNotice('You are offline. Reconnect before submitting saved drafts.')
+      return
+    }
+    const body = draft?.payload?.submitBody
+    if (!body) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch('/api/inspections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) {
+        setSubmitError(data.error || data.details || `Request failed (${res.status})`)
+        return
+      }
+      setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
+      setOfflineDraftId('')
+      const inspectionId = data.inspectionId ?? data.id
+      if (inspectionId) router.push(`/inspections/${inspectionId}`)
+    } catch (err) {
+      setSubmitError(err.message || 'Something went wrong')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const debugPseudoInspection = useMemo(
     () =>
@@ -1580,19 +1723,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
     setIsSubmitting(true)
     try {
+      if (!isOnline) {
+        saveCurrentOfflineDraft()
+        setIsSubmitting(false)
+        return
+      }
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          template_id: templateId,
-          estate_id: undefined,
-          block_id: postgresBlockId.trim() || undefined,
-          location: location.trim() || undefined,
-          description: description.trim() || undefined,
-          answers,
-          answer_extras: answerExtras,
-        }),
+        body: JSON.stringify(currentSubmitBody),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -1622,6 +1762,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setSubmitError('Save may have succeeded. Open the inspections list to confirm, or try again.')
       }
     } catch (err) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        saveCurrentOfflineDraft()
+        return
+      }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -1693,6 +1837,37 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           heading="New inspection — live /api/templates shape (?debug=1). After draft/submit, see draft_post_response."
         />
       ) : null}
+
+      {(!isOnline || offlineDrafts.length > 0 || offlineNotice) && (
+        <div style={offlinePanelStyle}>
+          <strong>
+            {!isOnline
+              ? 'You are offline. Your progress is saved on this device and will submit when you are back online.'
+              : 'Offline drafts'}
+          </strong>
+          <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
+            Photos need a connection in this first offline stage. Saved drafts are only stored on this device.
+          </p>
+          {offlineNotice && isOnline ? (
+            <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>{offlineNotice}</p>
+          ) : null}
+          {offlineDrafts.length > 0 ? (
+            <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }}>
+              {offlineDrafts.map((draft) => (
+                <div key={draft.id} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ flex: '1 1 220px', fontSize: '0.875rem' }}>
+                    {draft.label || draft.payload?.templateName || 'Inspection draft'} · {new Date(draft.updatedAt || draft.createdAt).toLocaleString('en-GB')}
+                  </span>
+                  <button type="button" onClick={() => restoreOfflineDraft(draft)} style={smallButtonStyle}>Reopen draft</button>
+                  <button type="button" disabled={!isOnline || isSubmitting} onClick={() => submitOfflineDraft(draft)} style={smallButtonStyle}>
+                    Submit saved draft
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <form
         onSubmit={handleSubmit}
