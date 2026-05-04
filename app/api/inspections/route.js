@@ -456,28 +456,65 @@ export async function GET(request) {
              END AS status,
              i.status AS raw_status,
              i.is_scheduled, i.title, i.source, i.description, i.created_at, i.updated_at,
-             e.name AS estate_name, b.name AS block_name,
-             COALESCE(action_counts.issues_count, 0)::int AS issues_count,
-             COALESCE(action_counts.open_issues_count, 0)::int AS open_issues_count
+             e.name AS estate_name, b.name AS block_name
       FROM inspections i
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = i.block_id
-      LEFT JOIN (
-        SELECT
-          inspection_id,
-          COUNT(*)::int AS issues_count,
-          COUNT(*) FILTER (
-            WHERE lower(trim(COALESCE(status, ''))) IN ('open', 'in progress', 'in_progress')
-          )::int AS open_issues_count
-        FROM actions
-        GROUP BY inspection_id
-      ) action_counts ON action_counts.inspection_id::text = i.id::text
       WHERE ${whereText}
       ORDER BY i.submitted_at DESC NULLS LAST, i.created_at DESC
       LIMIT $${limitPlaceholder}`,
       [...whereParams, limit]
     )
-    return NextResponse.json(rows)
+    const inspectionIds = rows.map((row) => String(row.id || '').trim()).filter(Boolean)
+    let rowsWithActionCounts = rows.map((row) => ({
+      ...row,
+      issues_count: 0,
+      open_issues_count: 0,
+    }))
+
+    if (inspectionIds.length > 0) {
+      const actionCountPlaceholders = inspectionIds.map((_, idx) => `$${idx + 1}`).join(', ')
+      const actionCountsResult = await getNeonQuery()(
+        `SELECT
+           a.inspection_id::text AS inspection_id,
+           COUNT(*)::int AS issues_count,
+           COUNT(*) FILTER (
+             WHERE lower(trim(COALESCE(a.status, ''))) IN ('open', 'in progress', 'in_progress')
+           )::int AS open_issues_count,
+           ARRAY_REMOVE(ARRAY_AGG(a.id ORDER BY a.created_at DESC), NULL) AS action_ids,
+           ARRAY_REMOVE(ARRAY_AGG(a.inspection_id::text ORDER BY a.created_at DESC), NULL) AS action_inspection_refs
+         FROM actions a
+         WHERE a.inspection_id::text IN (${actionCountPlaceholders})
+         GROUP BY a.inspection_id::text`,
+        inspectionIds
+      )
+      const countsByInspectionId = new Map(
+        (actionCountsResult.rows || []).map((row) => [String(row.inspection_id), row])
+      )
+      rowsWithActionCounts = rows.map((row) => {
+        const counts = countsByInspectionId.get(String(row.id))
+        return {
+          ...row,
+          issues_count: counts?.issues_count ?? 0,
+          open_issues_count: counts?.open_issues_count ?? 0,
+        }
+      })
+
+      const sampleWithActions = (actionCountsResult.rows || [])[0]
+      const sampleInspection = sampleWithActions
+        ? rows.find((row) => String(row.id) === String(sampleWithActions.inspection_id))
+        : rows[0]
+      const sampleCounts = sampleInspection
+        ? countsByInspectionId.get(String(sampleInspection.id))
+        : null
+      console.log('[inspections list] action count trace', {
+        inspection_id: sampleInspection?.id || null,
+        matching_action_ids: sampleCounts?.action_ids || [],
+        action_inspection_refs: sampleCounts?.action_inspection_refs || [],
+      })
+    }
+
+    return NextResponse.json(rowsWithActionCounts)
   } catch (error) {
     console.error('Error listing inspections:', error)
     return NextResponse.json(
