@@ -55,7 +55,15 @@ export async function GET() {
             WHEN lower(trim(COALESCE(u.system_role, u.role, ''))) = 'admin' THEN 'admin'
             ELSE 'user'
           END AS system_role,
-          p.job_title
+          COALESCE(
+            p.job_title,
+            CASE
+              WHEN lower(trim(COALESCE(u.role, u.system_role, ''))) IN ('caretaker', 'caretakers') THEN 'Caretaker'
+              WHEN lower(trim(COALESCE(u.role, u.system_role, ''))) IN ('housing officer', 'housing_officer', 'housing officers', 'housing_officers') THEN 'Housing Officer'
+              WHEN lower(trim(COALESCE(u.role, u.system_role, ''))) IN ('estate services manager', 'estate_services_manager', 'estate service manager', 'estate_service_manager', 'esm') THEN 'ESM'
+              ELSE NULL
+            END
+          ) AS job_title
         FROM users u
         LEFT JOIN people p ON p.id = u.people_id OR lower(trim(p.email)) = lower(trim(COALESCE(u.email, '')))
         WHERE u.clerk_user_id = ${userId}

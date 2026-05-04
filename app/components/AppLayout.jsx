@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import {
   useAuth,
@@ -16,6 +16,7 @@ import { photobook } from '@/lib/photobook-theme'
 
 const ALL_NAV_ITEMS = [
   { href: '/', label: 'Home', navKey: 'home' },
+  { href: '/caretaker', label: 'Start Inspection', navKey: 'caretakerStart' },
   { href: '/inspections', label: 'Manage Inspections', navKey: 'inspections' },
   { href: '/inspections/ad-hoc', label: 'Create Inspections', navKey: 'inspectionsAdHoc' },
   { href: '/actions', label: 'Issues / Actions', navKey: 'actions' },
@@ -47,6 +48,7 @@ const logoBannerWrap = {
 
 export default function AppLayout({ children }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { isSignedIn, isLoaded: authLoaded } = useAuth()
   const [appRole, setAppRole] = useState(null)
   const [clerkIsAdmin, setClerkIsAdmin] = useState(false)
@@ -79,6 +81,20 @@ export default function AppLayout({ children }) {
       cancelled = true
     }
   }, [authLoaded, isSignedIn])
+
+  useEffect(() => {
+    if (!isSignedIn || roleUi?.normalizedRole !== 'caretaker' || !pathname) return
+    const inspectionDetailPath =
+      pathname.startsWith('/inspections/') &&
+      !pathname.startsWith('/inspections/new') &&
+      !pathname.startsWith('/inspections/ad-hoc')
+    const allowed =
+      pathname === '/caretaker' ||
+      pathname.startsWith('/guides') ||
+      pathname.startsWith('/inspections/new') ||
+      inspectionDetailPath
+    if (!allowed) router.replace('/caretaker')
+  }, [isSignedIn, pathname, roleUi, router])
 
   const navItems = useMemo(() => {
     if (!isSignedIn) {
