@@ -408,6 +408,7 @@ function mapSnapshotQuestion(q, qIndex) {
     esm_comment_label: q.esm_comment_label ?? null,
     esm_comment_helper: q.esm_comment_helper ?? null,
     esm_comment_on_photo: q.esm_comment_on_photo ?? false,
+    esm_confirmation_message: q.esm_confirmation_message ?? null,
     esm_dual_photo_upload: q.esm_dual_photo_upload ?? false,
     esm_recipient_on_yes: q.esm_recipient_on_yes ?? false,
     esm_recipient_options: q.esm_recipient_options ?? null,

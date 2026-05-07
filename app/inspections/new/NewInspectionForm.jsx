@@ -513,7 +513,10 @@ function InspectionQuestion({
     (esmRole === 'lifts_comment' || isEsmLiftQuestion(question)) &&
     hasQuestionPhotos(extras)
   const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true && !estatePhotoAllowed
-  const esmCommentOnPhoto = esmInspectionQuestion && question.esm_comment_on_photo === true && hasQuestionPhotos(extras)
+  const esmCommentOnPhoto =
+    esmInspectionQuestion &&
+    (question.esm_comment_on_photo === true || esmRole === 'garages') &&
+    hasQuestionPhotos(extras)
   const esmShowComment = esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment
   const esmRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.esm_recipient_options) && question.esm_recipient_options.length
@@ -869,6 +872,11 @@ function InspectionQuestion({
     <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.75rem' }}>
       {esmPhotoAllowed ? photoBlock : null}
       {esmShowComment ? esmCommentBlock : null}
+      {question.esm_confirmation_message ? (
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#166534', fontWeight: 600 }}>
+          {question.esm_confirmation_message}
+        </p>
+      ) : null}
     </div>
   ) : null
 
