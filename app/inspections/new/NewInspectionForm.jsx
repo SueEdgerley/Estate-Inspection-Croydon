@@ -272,6 +272,14 @@ function normalizeOptionObjects(rawOptions) {
     })
 }
 
+function getCaretakerFixedEmailDestination(question) {
+  const category = String(question?.action_category || question?.category || '').toLowerCase()
+  if (category === 'asb') return 'Tenancy.Service@croydon.gov.uk'
+  if (category === 'fire_safety') return 'simon.roice@croydon.gov.uk'
+  if (category === 'repairs') return 'internalhousingrepairs@croydon.gov.uk'
+  return ''
+}
+
 function CaretakerYesNoButtons({ id, value, onChange, mobileStacked = false }) {
   const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
   return (
@@ -475,6 +483,8 @@ function InspectionQuestion({
     ((isNo && createActionOnNo) ||
       showActionRecipient ||
       (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
+  const caretakerFixedEmailDestination =
+    caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const showCommentPhotoBlock = (showComment || showActionBlock || caretakerAlwaysPhoto || caretakerShowPhotoOnYes) || isExpanded
   const showPhotoInYesNoFollowUp =
@@ -796,9 +806,16 @@ function InspectionQuestion({
         {showCommentPhotoBlock && (
           <div ref={isNvTemplate ? expandedSectionRef : undefined} style={followUpStyle}>
             {showActionBlock && (
-              <p style={{ fontWeight: 600, marginBottom: '0.75rem', color: '#92400e' }}>
-                Action will be created automatically
-              </p>
+              <div style={{ marginBottom: '0.75rem' }}>
+                <p style={{ fontWeight: 600, margin: 0, color: '#92400e' }}>
+                  Action will be created automatically
+                </p>
+                {caretakerFixedEmailDestination ? (
+                  <p style={{ margin: '0.35rem 0 0', fontSize: '0.875rem', color: '#92400e' }}>
+                    Email notification will be sent on submission to {caretakerFixedEmailDestination}
+                  </p>
+                ) : null}
+              </div>
             )}
             {showComment && (
               <>
@@ -912,7 +929,11 @@ function InspectionQuestion({
           !caretakerAlwaysPhoto &&
           (estateInspectionForm
             ? estatePhotoAllowed && photoBlock
-            : !question.caretaker_recipient_on_yes && !photoWhen && typeIncludesPhoto && photoBlock)}
+            : !caretakerTemplate &&
+              !question.caretaker_recipient_on_yes &&
+              !photoWhen &&
+              typeIncludesPhoto &&
+              photoBlock)}
         {error && typeof error === 'string' && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
