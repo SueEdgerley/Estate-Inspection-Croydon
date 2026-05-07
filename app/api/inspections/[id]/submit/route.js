@@ -40,9 +40,163 @@ import {
 } from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
+import { sendAppEmail } from '@/lib/send-app-email'
+import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+const CARETAKER_SECTION_2_EMAIL = 'housingestateservices@croydon.gov.uk'
+const CARETAKER_SECTION_3_EMAIL = 'Tenancy.Service@croydon.gov.uk'
+const CARETAKER_SECTION_5_EMAIL = 'simon.roice@croydon.gov.uk'
+const CARETAKER_SECTION_6_EMAIL = 'internalhousingrepairs@croydon.gov.uk'
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function getCaretakerSectionNumber(section) {
+  const raw = String(section?.title || section?.name || '').trim()
+  const match = raw.match(/^(\d+)\s*[.)-]?/)
+  return match ? Number(match[1]) : null
+}
+
+function getCaretakerQuestionPart(question, index) {
+  const key = String(question?.question_key || '')
+  const match = key.match(/_q(\d+)$/i)
+  const oneBased = match ? Number(match[1]) : index + 1
+  return Number.isFinite(oneBased) && oneBased > 0 ? oneBased : index + 1
+}
+
+async function sendCaretakerPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectorEmail, inspectionTitle, locationLine }) {
+  if (!isCaretakerTemplate(templateVersion)) return { sent: 0, failed: [] }
+  const sent = []
+  const failed = []
+  const rowsByQuestionId = new Map((answerRows || []).map((row) => [String(row.question_id || ''), row]))
+  const dedupe = new Set()
+
+  for (const section of templateVersion.sections || []) {
+    const sectionNo = getCaretakerSectionNumber(section)
+    const questions = section.questions || []
+    for (let index = 0; index < questions.length; index += 1) {
+      const q = questions[index]
+      if (!q?.id) continue
+      const row = rowsByQuestionId.get(String(q.id))
+      const extras = parseCaretakerAnswerNotes(row?.notes)
+      const photosResult = await sql`
+        SELECT blob_url FROM inspection_photos
+        WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
+      `
+      const photoUrls = [...new Set([
+        ...(photosResult.rows || []).map((p) => p.blob_url).filter(Boolean),
+        ...extras.extraPhotoUrls,
+      ])]
+      const answer = answers[q.id]
+      const isYes = normalizeYesNoAnswer(answer) === 'yes'
+      const partNo = getCaretakerQuestionPart(q, index)
+      const targets = []
+
+      if (sectionNo === 2 && partNo >= 1 && partNo <= 5 && photoUrls.length > 0) {
+        targets.push({ to: CARETAKER_SECTION_2_EMAIL, routing: 'caretaker_section_2_photo' })
+      }
+      if (sectionNo === 2 && partNo === 6 && photoUrls.length > 0 && inspectorEmail) {
+        targets.push({
+          to: inspectorEmail,
+          routing: 'caretaker_section_2_love_clean_streets',
+          reminder: 'Please report this issue via the Love Clean Streets app.',
+        })
+      }
+      if (sectionNo === 3 && isYes) targets.push({ to: CARETAKER_SECTION_3_EMAIL, routing: 'caretaker_section_3_yes' })
+      if (sectionNo === 5 && isYes) targets.push({ to: CARETAKER_SECTION_5_EMAIL, routing: 'caretaker_section_5_yes' })
+      if (sectionNo === 6 && isYes) targets.push({ to: CARETAKER_SECTION_6_EMAIL, routing: 'caretaker_section_6_yes' })
+
+      for (const target of targets) {
+        const to = String(target.to || '').trim()
+        if (!to) continue
+        const key = `${to}|${target.routing}|${q.id}`
+        if (dedupe.has(key)) continue
+        dedupe.add(key)
+        const questionText = q.question_text || q.label || q.id
+        const photoList = photoUrls.length
+          ? `<ul>${photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
+          : '<p>No photo link recorded.</p>'
+        const html = `
+          <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+            <h1 style="font-size:18px;">Caretaker inspection notification</h1>
+            <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'Caretaker inspection')}</p>
+            ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
+            <p><strong>Section:</strong> ${escapeHtml(section.title || section.name || '')}</p>
+            <p><strong>Question:</strong> ${escapeHtml(questionText)}</p>
+            <p><strong>Answer:</strong> ${escapeHtml(answer == null ? '—' : String(answer))}</p>
+            ${extras.comment ? `<p><strong>Comment:</strong> ${escapeHtml(extras.comment)}</p>` : ''}
+            ${target.reminder ? `<p>${escapeHtml(target.reminder)}</p>` : ''}
+            <p><strong>Photos:</strong></p>
+            ${photoList}
+          </div>
+        `
+        const text = [
+          'Caretaker inspection notification',
+          locationLine ? `Location: ${locationLine}` : '',
+          section.title || section.name ? `Section: ${section.title || section.name}` : '',
+          `Question: ${questionText}`,
+          answer == null ? '' : `Answer: ${String(answer)}`,
+          extras.comment ? `Comment: ${extras.comment}` : '',
+          target.reminder || '',
+          ...photoUrls,
+        ].filter(Boolean).join('\n')
+        try {
+          const sendResult = await sendAppEmail({
+            to,
+            subject: `Caretaker inspection: ${section.title || locationLine || inspectionTitle || 'notification'}`,
+            html,
+            text,
+          })
+          if (sendResult.ok) {
+            sent.push({ email: to, type: target.routing })
+            await insertOutboundEmailLog(sql, {
+              inspectionId,
+              questionId: q.id,
+              emailTo: to,
+              emailRouting: target.routing,
+              status: 'sent',
+              sentAt: new Date(),
+            })
+          } else {
+            failed.push({ email: to, error: sendResult.error || 'send_failed' })
+            await insertOutboundEmailLog(sql, {
+              inspectionId,
+              questionId: q.id,
+              emailTo: to,
+              emailRouting: `${target.routing}:${sendResult.error || 'failed'}`,
+              status: 'failed',
+              sentAt: null,
+            })
+          }
+        } catch (error) {
+          failed.push({ email: to, error: error?.message || String(error) })
+          try {
+            await insertOutboundEmailLog(sql, {
+              inspectionId,
+              questionId: q.id,
+              emailTo: to,
+              emailRouting: `${target.routing}:${error?.message || 'error'}`,
+              status: 'failed',
+              sentAt: null,
+            })
+          } catch {
+            // best-effort audit only
+          }
+        }
+      }
+    }
+  }
+
+  return { sent, failed }
+}
 
 // POST - Submit inspection (generate PDF and send emails)
 export async function POST(request, { params }) {
@@ -529,6 +683,7 @@ export async function POST(request, { params }) {
     if (emailVersion && typeof emailVersion === 'object') {
       applyGroundsMaintenanceTemplateToSnapshot(emailVersion)
       applyNeighbourhoodVoiceTemplatePatch(emailVersion)
+      applyTemplateDisplayPatches(emailVersion)
     }
     const versionSections = (emailVersion && emailVersion.sections) || []
     const allQuestions = versionSections.flatMap((sec) => sec.questions || [])
@@ -582,6 +737,29 @@ export async function POST(request, { params }) {
     } catch (emailErr) {
       console.error('[inspections/submit] sendEmails threw:', emailErr)
       actionCreationWarnings.push(`Email sending error: ${emailErr?.message || String(emailErr)}`)
+    }
+
+    if (emailVersion && isCaretakerTemplate(emailVersion)) {
+      try {
+        const caretakerEmails = await sendCaretakerPhotoAndYesNotifications({
+          inspectionId: id,
+          templateVersion: emailVersion,
+          answers,
+          answerRows: answersResult.rows,
+          inspectorEmail,
+          inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'Caretaker inspection',
+          locationLine: estateBlockLine,
+        })
+        if (Array.isArray(caretakerEmails.sent)) {
+          emailResults.sent.push(...caretakerEmails.sent)
+        }
+        if (Array.isArray(caretakerEmails.failed)) {
+          emailResults.failed.push(...caretakerEmails.failed)
+        }
+      } catch (caretakerEmailErr) {
+        console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)
+        actionCreationWarnings.push(`Caretaker notification error: ${caretakerEmailErr?.message || String(caretakerEmailErr)}`)
+      }
     }
 
     // Save recipient records (best-effort — inspection is already submitted)

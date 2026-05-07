@@ -48,13 +48,19 @@ import { getActionTriggerOn } from '@/lib/template-rules'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
-import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const WALKABOUT_BULK_REFUSE_QID = 'ew_it_bulk_refuse_removal'
 const WALKABOUT_BULK_REFUSE_EMAIL = 'Nick.spenceley@croydon.gov.uk'
+
+const CARETAKER_SECTION_2_EMAIL = 'housingestateservices@croydon.gov.uk'
+const CARETAKER_SECTION_2_LOVE_CLEAN_STREETS_EMAIL = 'logged_in_user'
+const CARETAKER_SECTION_3_EMAIL = 'Tenancy.Service@croydon.gov.uk'
+const CARETAKER_SECTION_5_EMAIL = 'simon.roice@croydon.gov.uk'
+const CARETAKER_SECTION_6_EMAIL = 'internalhousingrepairs@croydon.gov.uk'
 
 function escapeHtml(s) {
   return String(s ?? '')
@@ -81,6 +87,163 @@ function collectPhotoUrlsFromExtras(extras) {
       : []
   const singleUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
   return [...(singleUrl ? [singleUrl] : []), ...urls].filter((url) => typeof url === 'string' && url.trim())
+}
+
+function getCaretakerSectionNumber(section) {
+  const raw = String(section?.title || section?.name || '').trim()
+  const match = raw.match(/^(\d+)\s*[.)-]?/)
+  return match ? Number(match[1]) : null
+}
+
+function getCaretakerQuestionPart(question, index) {
+  const key = String(question?.question_key || '')
+  const match = key.match(/_q(\d+)$/i)
+  const oneBased = match ? Number(match[1]) : index + 1
+  return Number.isFinite(oneBased) && oneBased > 0 ? oneBased : index + 1
+}
+
+function buildCaretakerNotificationHtml({ inspectionTitle, locationLine, sectionTitle, questionText, answer, comment, photoUrls, reminder = '' }) {
+  const photos = photoUrls.length
+    ? `<ul>${photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
+    : '<p>No photo link recorded.</p>'
+  return `
+    <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+      <h1 style="font-size:18px;">Caretaker inspection notification</h1>
+      <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'Caretaker inspection')}</p>
+      ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
+      <p><strong>Section:</strong> ${escapeHtml(sectionTitle || 'Caretaker form')}</p>
+      <p><strong>Question:</strong> ${escapeHtml(questionText || '')}</p>
+      <p><strong>Answer:</strong> ${escapeHtml(answer || '—')}</p>
+      ${comment ? `<p><strong>Comment:</strong> ${escapeHtml(comment)}</p>` : ''}
+      ${reminder ? `<p>${escapeHtml(reminder)}</p>` : ''}
+      <p><strong>Photos:</strong></p>
+      ${photos}
+    </div>
+  `
+}
+
+function collectCaretakerEmailNotifications({ template, answers, answerExtras, inspectorEmail }) {
+  if (!isCaretakerTemplate(template)) return []
+  const notifications = []
+  for (const section of template.sections || []) {
+    const sectionNo = getCaretakerSectionNumber(section)
+    const questions = section.questions || []
+    questions.forEach((q, index) => {
+      if (!q?.id) return
+      const extras = answerExtras[q.id] || {}
+      const photoUrls = collectPhotoUrlsFromExtras(extras)
+      const answer = answers[q.id]
+      const isYes = normalizeYesNoAnswer(answer) === 'yes'
+      const partNo = getCaretakerQuestionPart(q, index)
+      const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+      const questionText = q.question_text || q.label || q.id
+      const base = {
+        sectionTitle: section.title || section.name || '',
+        questionText,
+        answer: answer == null ? '' : String(answer),
+        comment,
+        photoUrls,
+      }
+
+      if (sectionNo === 2 && partNo >= 1 && partNo <= 5 && photoUrls.length > 0) {
+        notifications.push({ ...base, to: CARETAKER_SECTION_2_EMAIL, routing: 'caretaker_section_2_photo' })
+      }
+      if (sectionNo === 2 && partNo === 6 && photoUrls.length > 0 && inspectorEmail) {
+        notifications.push({
+          ...base,
+          to: inspectorEmail,
+          routing: CARETAKER_SECTION_2_LOVE_CLEAN_STREETS_EMAIL,
+          reminder: 'Please report this issue via the Love Clean Streets app.',
+        })
+      }
+      if (sectionNo === 3 && isYes) {
+        notifications.push({ ...base, to: CARETAKER_SECTION_3_EMAIL, routing: 'caretaker_section_3_yes' })
+      }
+      if (sectionNo === 5 && isYes) {
+        notifications.push({ ...base, to: CARETAKER_SECTION_5_EMAIL, routing: 'caretaker_section_5_yes' })
+      }
+      if (sectionNo === 6 && isYes) {
+        notifications.push({ ...base, to: CARETAKER_SECTION_6_EMAIL, routing: 'caretaker_section_6_yes' })
+      }
+    })
+  }
+  return notifications
+}
+
+async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspectionTitle, locationLine, notifications }) {
+  const result = { sent: 0, failed: [] }
+  const dedupe = new Set()
+  for (const notification of notifications || []) {
+    const to = String(notification.to || '').trim()
+    if (!to) continue
+    const dedupeKey = `${to}|${notification.routing}|${notification.questionText}`
+    if (dedupe.has(dedupeKey)) continue
+    dedupe.add(dedupeKey)
+    const html = buildCaretakerNotificationHtml({
+      inspectionTitle,
+      locationLine,
+      sectionTitle: notification.sectionTitle,
+      questionText: notification.questionText,
+      answer: notification.answer,
+      comment: notification.comment,
+      photoUrls: notification.photoUrls || [],
+      reminder: notification.reminder || '',
+    })
+    const text = [
+      'Caretaker inspection notification',
+      locationLine ? `Location: ${locationLine}` : '',
+      notification.sectionTitle ? `Section: ${notification.sectionTitle}` : '',
+      notification.questionText ? `Question: ${notification.questionText}` : '',
+      notification.answer ? `Answer: ${notification.answer}` : '',
+      notification.comment ? `Comment: ${notification.comment}` : '',
+      notification.reminder || '',
+      ...(notification.photoUrls || []),
+    ].filter(Boolean).join('\n')
+    try {
+      const sendResult = await sendAppEmail({
+        to,
+        subject: `Caretaker inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
+        html,
+        text,
+      })
+      if (sendResult.ok) {
+        result.sent += 1
+        await insertOutboundEmailLog(sqlFn, {
+          inspectionId,
+          questionId: null,
+          emailTo: to,
+          emailRouting: notification.routing || 'caretaker_notification',
+          status: 'sent',
+          sentAt: new Date(),
+        })
+      } else {
+        result.failed.push({ email: to, error: sendResult.error || 'send_failed' })
+        await insertOutboundEmailLog(sqlFn, {
+          inspectionId,
+          questionId: null,
+          emailTo: to,
+          emailRouting: `${notification.routing || 'caretaker_notification'}:${sendResult.error || 'failed'}`,
+          status: 'failed',
+          sentAt: null,
+        })
+      }
+    } catch (error) {
+      result.failed.push({ email: to, error: error?.message || String(error) })
+      try {
+        await insertOutboundEmailLog(sqlFn, {
+          inspectionId,
+          questionId: null,
+          emailTo: to,
+          emailRouting: `${notification.routing || 'caretaker_notification'}:${error?.message || 'error'}`,
+          status: 'failed',
+          sentAt: null,
+        })
+      } catch {
+        // best-effort audit only
+      }
+    }
+  }
+  return result
 }
 
 function collectBulkRefusePhotoUrls({ answerExtras = {}, answers = {} }) {
@@ -1029,6 +1192,9 @@ export async function POST(request) {
           if (!question) continue
           const extras = answer_extras[questionId] || {}
           const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+          const packedNotes = typeof extras.notes === 'string' && extras.notes.trim()
+            ? extras.notes.trim()
+            : packNvWizardExtras(extras)
 
           const questionType = question.question_type || 'text'
           const rawValue = typeof answer === 'string' ? answer : String(answer)
@@ -1060,7 +1226,7 @@ export async function POST(request) {
               ${rawValue},
               ${answerNumber},
               ${answerBoolean},
-              ${comment || null}
+              ${packedNotes || comment || null}
             )
             ON CONFLICT (inspection_id, question_id) DO UPDATE SET
               answer_value = EXCLUDED.answer_value,
@@ -1102,6 +1268,7 @@ export async function POST(request) {
 
     const actionsForPoster = []
     const walkaboutEmailResults = { sent: 0, failed: [] }
+    const caretakerEmailResults = { sent: 0, failed: [] }
     let walkaboutEstateName = ''
 
     // Estate Walkabout: photos embedded in checklist JSON (per item)
@@ -1452,6 +1619,28 @@ export async function POST(request) {
       }
     }
 
+    if (isCaretakerTemplate(template)) {
+      try {
+        const notifications = collectCaretakerEmailNotifications({
+          template,
+          answers,
+          answerExtras: answer_extras,
+          inspectorEmail,
+        })
+        const sent = await sendCaretakerEmailNotifications(sql, {
+          inspectionId,
+          inspectionTitle: template.name || 'Caretaker inspection',
+          locationLine: displayTitle || String(location || '').trim(),
+          notifications,
+        })
+        caretakerEmailResults.sent += sent.sent || 0
+        if (Array.isArray(sent.failed)) caretakerEmailResults.failed.push(...sent.failed)
+      } catch (caretakerEmailErr) {
+        console.warn('[Inspections] Caretaker notification email failed:', caretakerEmailErr?.message || caretakerEmailErr)
+        caretakerEmailResults.failed.push({ error: caretakerEmailErr?.message || String(caretakerEmailErr) })
+      }
+    }
+
     return NextResponse.json({
       inspectionId,
       id: inspectionId,
@@ -1472,8 +1661,11 @@ export async function POST(request) {
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,
-      emails_sent: walkaboutEmailResults.sent || undefined,
-      email_failures: walkaboutEmailResults.failed.length ? walkaboutEmailResults.failed : undefined,
+      emails_sent: (walkaboutEmailResults.sent || 0) + (caretakerEmailResults.sent || 0) || undefined,
+      email_failures:
+        walkaboutEmailResults.failed.length || caretakerEmailResults.failed.length
+          ? [...walkaboutEmailResults.failed, ...caretakerEmailResults.failed]
+          : undefined,
       ...(pdfErrorMessage ? { pdfError: pdfErrorMessage } : {}),
     }, { status: 201 })
   } catch (error) {

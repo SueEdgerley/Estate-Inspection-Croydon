@@ -53,6 +53,7 @@ import {
   removeOfflineInspectionDraft,
   upsertOfflineInspectionDraft,
 } from '@/lib/offline-inspection-drafts'
+import { packNvWizardExtras } from '@/lib/nv-notes-pack'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
 const NV_INLINE = buildInspectionFormNvTokens()
@@ -243,6 +244,10 @@ const ESM_Q4_COST_CODES = [
   'C20400.641620.0000 (North)',
   'C203410.641620.0000 (East)',
 ]
+
+function hasQuestionPhotos(extras) {
+  return Array.isArray(extras?.photo_urls) && extras.photo_urls.some((u) => typeof u === 'string' && u.trim())
+}
 
 function CaretakerYesNoButtons({ id, value, onChange, mobileStacked = false }) {
   const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
@@ -456,8 +461,17 @@ function InspectionQuestion({
   const commentWhen = question.comment_required_when
   const photoWhen = question.photo_required_when
   const typeIncludesPhoto = !!question.type_includes_photo
+  const caretakerAlwaysPhoto = caretakerTemplate && qType !== 'photo' && !question.caretaker_routing_bundle
+  const caretakerPhotosAdded = caretakerAlwaysPhoto && hasQuestionPhotos(extras)
+  const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
+  const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
+  const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
   const showComment =
-    (commentWhen === 'on_no' && isNo) || (commentWhen === 'on_yes' && isYes) || commentWhen === 'always'
+    (commentWhen === 'on_no' && isNo) ||
+    (commentWhen === 'on_yes' && isYes) ||
+    commentWhen === 'always' ||
+    caretakerShowCommentFromPhoto ||
+    caretakerShowCommentOnYes
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
@@ -465,7 +479,10 @@ function InspectionQuestion({
   const showActionRecipient =
     (actionRecipientWhen === 'on_yes' && isYes) ||
     (actionRecipientWhen === 'on_no' && isNo) ||
-    actionRecipientWhen === 'always'
+    actionRecipientWhen === 'always' ||
+    (question.caretaker_recipient_always && Array.isArray(question.caretaker_recipient_options))
+  const showCaretakerRecipientDropdown =
+    ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && Array.isArray(caretakerRecipientOptions)
   const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
   const caretakerRecipientOptions = Array.isArray(question.caretaker_recipient_options)
     ? question.caretaker_recipient_options
@@ -480,12 +497,14 @@ function InspectionQuestion({
       showActionRecipient ||
       (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
-  const showCommentPhotoBlock = (showComment || showActionBlock) || isExpanded
+  const showCommentPhotoBlock = (showComment || showActionBlock || caretakerAlwaysPhoto || caretakerShowPhotoOnYes) || isExpanded
   const showPhotoInYesNoFollowUp =
     !isNvTemplate ||
     photoRequired ||
     (question.caretaker_recipient_on_yes && isYes) ||
-    !!extras.raise_issue
+    !!extras.raise_issue ||
+    caretakerAlwaysPhoto ||
+    caretakerShowPhotoOnYes
   const expandedSectionRef = useRef(null)
   const didScrollRef = useRef(false)
 
@@ -729,6 +748,8 @@ function InspectionQuestion({
                 <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                   {caretakerYesTriggersFollowUp
                     ? 'Comment'
+                    : caretakerShowCommentFromPhoto || caretakerShowCommentOnYes
+                    ? 'Comment (optional)'
                     : isStdIssueRow
                     ? 'Comment'
                     : `Resident-friendly message (for poster PDF)${commentWhen === 'always' || (commentWhen === 'on_no' && isNo) ? ' ' : ''}`}
@@ -758,7 +779,7 @@ function InspectionQuestion({
                   }}
                 />
                 {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
-                {((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && Array.isArray(caretakerRecipientOptions) && (
+                {showCaretakerRecipientDropdown && (
                   <>
                     <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                       Who does this need to go to <span style={{ color: '#ef4444' }}>*</span>
@@ -796,10 +817,42 @@ function InspectionQuestion({
                 Action category: {question.action_category}
               </p>
             )}
+            {!showComment && showCaretakerRecipientDropdown && (
+              <>
+                <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Who does this need to go to <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  id={`recipient-${question.id}`}
+                  value={extras.recipient_person_id || ''}
+                  onChange={(e) => setExtras({ recipient_person_id: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: errorRecipient ? '1px solid #ef4444' : '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '1rem',
+                    backgroundColor: 'white',
+                    marginBottom: '0.75rem',
+                    minHeight: mobileStackedForm ? 48 : undefined,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="">Select recipient…</option>
+                  {caretakerRecipientOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {errorRecipient && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorRecipient}</p>}
+              </>
+            )}
             {showPhotoInYesNoFollowUp ? photoBlock : null}
           </div>
         )}
         {!isNvTemplate &&
+          !caretakerAlwaysPhoto &&
           (estateInspectionForm
             ? estatePhotoAllowed && photoBlock
             : !question.caretaker_recipient_on_yes && !photoWhen && typeIncludesPhoto && photoBlock)}
@@ -891,6 +944,7 @@ function InspectionQuestion({
           </div>
         )}
         {!isNvTemplate &&
+          !caretakerAlwaysPhoto &&
           (estateInspectionForm
             ? estatePhotoAllowed && photoBlock
             : !isStdConditionRow && !eq.caretaker_graded_always_extras && photoBlock)}
@@ -937,7 +991,7 @@ function InspectionQuestion({
             </option>
           ))}
         </select>
-        {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
+        {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -975,7 +1029,7 @@ function InspectionQuestion({
             </button>
           ))}
         </div>
-        {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
+        {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1032,7 +1086,7 @@ function InspectionQuestion({
             boxSizing: 'border-box',
           }}
         />
-        {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
+        {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1195,7 +1249,7 @@ function InspectionQuestion({
           fontSize: '1rem',
         }}
       />
-      {(!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed ? photoBlock : null}
+      {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
       {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
     </div>
   )
@@ -1476,18 +1530,29 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     })
   }, [selectedTemplate, inspectionRenderSections])
   const showBestPracticeGuide = !!selectedTemplate
-  const currentSubmitBody = useMemo(
-    () => ({
+  const currentSubmitBody = useMemo(() => {
+    const packedAnswerExtras =
+      isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate)
+        ? Object.fromEntries(
+            Object.entries(answerExtras || {}).map(([questionId, extras]) => [
+              questionId,
+              {
+                ...extras,
+                notes: packNvWizardExtras(extras),
+              },
+            ])
+          )
+        : answerExtras
+    return {
       template_id: templateId,
       estate_id: undefined,
       block_id: postgresBlockId.trim() || undefined,
       location: location.trim() || undefined,
       description: description.trim() || undefined,
       answers,
-      answer_extras: answerExtras,
-    }),
-    [templateId, postgresBlockId, location, description, answers, answerExtras]
-  )
+      answer_extras: packedAnswerExtras,
+    }
+  }, [templateId, postgresBlockId, location, description, answers, answerExtras, selectedTemplate])
   const currentDraftPayload = useMemo(
     () => ({
       formType: selectedTemplate?.name || selectedTemplate?.template_key || templateId || 'Inspection',
