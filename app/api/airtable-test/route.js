@@ -9,7 +9,10 @@ export async function GET() {
   try {
     console.log('[Airtable Test Route] Testing Airtable connection...')
 
-    if (!process.env.AIRTABLE_API_TOKEN && !process.env.AIRTABLE_API_KEY) {
+    const apiKey = (process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY || '').trim()
+    const baseId = (process.env.AIRTABLE_BASE_ID || '').trim()
+
+    if (!apiKey) {
       return NextResponse.json(
         {
           success: false,
@@ -19,7 +22,7 @@ export async function GET() {
       )
     }
 
-    if (!process.env.AIRTABLE_BASE_ID) {
+    if (!baseId) {
       return NextResponse.json(
         {
           success: false,
@@ -30,8 +33,8 @@ export async function GET() {
     }
 
     const base = new Airtable({
-      apiKey: process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY,
-    }).base(process.env.AIRTABLE_BASE_ID)
+      apiKey,
+    }).base(baseId)
 
     console.log('[Airtable Test Route] Fetching records from Templates table...')
 

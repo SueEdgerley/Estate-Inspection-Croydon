@@ -38,6 +38,11 @@ export async function GET() {
       AIRTABLE_API_TOKEN: tokenSet ? 'set' : 'missing',
       AIRTABLE_API_KEY: keySet ? 'set' : 'missing',
     },
+    tables: {
+      Templates: process.env.AIRTABLE_TEMPLATES_TABLE || 'Templates',
+      TemplateSections: process.env.AIRTABLE_SECTIONS_TABLE || 'Template Sections',
+      TemplateQuestions: process.env.AIRTABLE_QUESTIONS_TABLE || 'Template Questions',
+    },
     allAirtableEnvKeys: airtableEnvKeys,
     hint,
     envVarsUrl: noVarsAtAll ? envVarsUrl : undefined,

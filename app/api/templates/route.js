@@ -8,6 +8,7 @@ import {
 import { filterTemplatesForViewer } from '@/lib/template-visibility'
 import { patchCaretakerTemplatesList } from '@/lib/caretaker-fire-template-patch'
 import { filterArchivedTemplates } from '@/lib/archived-templates'
+import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
 
@@ -65,20 +66,79 @@ function applyTemplateVisibility(templates, viewer) {
   return filterTemplatesForViewer(templates, viewer)
 }
 
+function isEsmOrEstateInspectionCandidate(template) {
+  if (isEsmInspectionFormTemplate(template)) return true
+  const key = String(template?.template_key ?? '').toLowerCase().trim()
+  const name = String(template?.name ?? '').toLowerCase().trim()
+  if (key.includes('estate_inspection') || key.includes('esm_inspection')) return true
+  if (!name.includes('estate') || !name.includes('inspection')) return false
+  return !name.includes('walkabout') && !name.includes('neighbourhood')
+}
+
 function logEsmTemplateSections(source, templates) {
-  for (const template of Array.isArray(templates) ? templates : []) {
-    const name = String(template?.name ?? template?.template_key ?? '').toLowerCase()
-    const key = String(template?.template_key ?? '').toLowerCase()
-    if (key !== 'esm_inspection_form' && key !== 'esm_inspection' && !name.includes('esm inspection')) continue
-    const sections = Array.isArray(template.sections) ? template.sections : []
+  for (const diagnostic of getEsmTemplateDiagnostics(source, templates)) {
     console.log('[ESM template sections]', {
-      source,
-      template_id: template.id,
-      template_name: template.name,
-      section_count: sections.length,
-      section_titles: sections.map((section) => section.title || section.name || ''),
-      question_counts: sections.map((section) => Array.isArray(section.questions) ? section.questions.length : 0),
+      source: diagnostic.source,
+      template_id: diagnostic.template_id,
+      template_name: diagnostic.template_name,
+      section_count: diagnostic.section_count,
+      includes_storage_areas: diagnostic.includes_storage_areas,
+      section_titles: diagnostic.section_titles,
+      question_counts: diagnostic.question_counts,
     })
+  }
+}
+
+function getEsmTemplateDiagnostics(source, templates) {
+  return (Array.isArray(templates) ? templates : [])
+    .filter((template) => isEsmOrEstateInspectionCandidate(template))
+    .map((template) => {
+      const sections = Array.isArray(template.sections) ? template.sections : []
+      const sectionTitles = sections.map((section) => section.title || section.name || '')
+      return {
+        source,
+        template_id: template.id,
+        template_name: template.name,
+        template_key: template.template_key ?? '',
+        section_count: sections.length,
+        includes_storage_areas: sectionTitles.some((title) =>
+          String(title || '').toLowerCase().includes('storage areas')
+        ),
+        section_titles: sectionTitles,
+        question_counts: sections.map((section) =>
+          Array.isArray(section.questions) ? section.questions.length : 0
+        ),
+      }
+    })
+}
+
+function buildTemplateSourceDiagnostics(source, templates, extra = {}) {
+  return {
+    source,
+    all_templates: (Array.isArray(templates) ? templates : []).map((template) => {
+      const sections = Array.isArray(template?.sections) ? template.sections : []
+      const sectionTitles = sections.map((section) => section?.title || section?.name || '')
+      return {
+        id: template?.id ?? null,
+        name: template?.name ?? null,
+        template_key: template?.template_key ?? '',
+        template_type: template?.template_type ?? template?.type ?? '',
+        section_count: sections.length,
+        question_count: sections.reduce(
+          (sum, section) => sum + (Array.isArray(section?.questions) ? section.questions.length : 0),
+          0
+        ),
+        contains_storage_areas: sectionTitles.some((title) =>
+          String(title || '').toLowerCase().includes('storage areas')
+        ),
+        section_titles: sectionTitles,
+        question_counts_by_section: sections.map((section) =>
+          Array.isArray(section?.questions) ? section.questions.length : 0
+        ),
+      }
+    }),
+    esm: getEsmTemplateDiagnostics(source, templates),
+    ...extra,
   }
 }
 
@@ -114,7 +174,13 @@ export async function GET() {
     })
     console.log('[Airtable diag] GET /api/templates OK', diagnostics)
     return NextResponse.json(
-      { templates, diagnostics },
+      {
+        templates,
+        diagnostics,
+        templateSource: buildTemplateSourceDiagnostics('airtable_getTemplatesNested', templates, {
+          airtable_nested_fetch: getLastTemplatesNestedFetchMeta(),
+        }),
+      },
       {
         headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
       }
@@ -148,6 +214,7 @@ export async function GET() {
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)
+            .filter((t) => !isEsmOrEstateInspectionCandidate(t))
           const templates = patchCaretakerTemplatesList(
             applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
           )
@@ -162,7 +229,11 @@ export async function GET() {
               {
                 templates,
                 diagnostics,
-                warning: 'Airtable returned 401; templates loaded from latest Postgres snapshots.',
+                templateSource: buildTemplateSourceDiagnostics('template_versions_fallback', templates, {
+                  esm_fallback_disabled: true,
+                  airtable_nested_fetch: getLastTemplatesNestedFetchMeta(),
+                }),
+                warning: 'Airtable returned 401; non-ESM templates loaded from latest Postgres snapshots. ESM templates require live Airtable.',
                 source: 'template_versions_fallback',
               },
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
