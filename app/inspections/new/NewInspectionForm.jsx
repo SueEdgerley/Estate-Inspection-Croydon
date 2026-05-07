@@ -443,7 +443,9 @@ function InspectionQuestion({
   const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
   const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
-  const showCaretakerPhotoCommentUnderUpload = caretakerShowCommentFromPhoto && !caretakerShowCommentOnYes
+  const showCaretakerPhotoCommentUnderUpload =
+    (caretakerShowCommentFromPhoto && !caretakerShowCommentOnYes) ||
+    (caretakerShowCommentOnYes && caretakerShowPhotoOnYes)
   const caretakerRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
       ? question.caretaker_recipient_options
@@ -454,7 +456,7 @@ function InspectionQuestion({
     (commentWhen === 'on_yes' && isYes) ||
     commentWhen === 'always' ||
     (caretakerShowCommentFromPhoto && !showCaretakerPhotoCommentUnderUpload) ||
-    caretakerShowCommentOnYes
+    (caretakerShowCommentOnYes && !showCaretakerPhotoCommentUnderUpload)
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
@@ -614,7 +616,8 @@ function InspectionQuestion({
       {showCaretakerPhotoCommentUnderUpload && (
         <div style={{ marginTop: '0.75rem' }}>
           <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-            Comment (optional)
+            {caretakerShowCommentOnYes ? 'Comment' : 'Comment (optional)'}
+            {caretakerShowCommentOnYes && <span style={{ color: '#ef4444' }}>*</span>}
           </label>
           <textarea
             className={commentTextareaClassName}
@@ -622,7 +625,7 @@ function InspectionQuestion({
             name={`comment-${question.id}`}
             value={extras.comment || ''}
             onChange={(e) => setExtras({ comment: e.target.value })}
-            placeholder="Add a comment for this photo"
+            placeholder={caretakerShowCommentOnYes ? 'Add details for the action' : 'Add a comment for this photo'}
             rows={2}
             style={{
               ...textareaSurface,
