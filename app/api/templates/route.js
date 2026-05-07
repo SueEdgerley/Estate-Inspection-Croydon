@@ -65,6 +65,23 @@ function applyTemplateVisibility(templates, viewer) {
   return filterTemplatesForViewer(templates, viewer)
 }
 
+function logEsmTemplateSections(source, templates) {
+  for (const template of Array.isArray(templates) ? templates : []) {
+    const name = String(template?.name ?? template?.template_key ?? '').toLowerCase()
+    const key = String(template?.template_key ?? '').toLowerCase()
+    if (key !== 'esm_inspection_form' && key !== 'esm_inspection' && !name.includes('esm inspection')) continue
+    const sections = Array.isArray(template.sections) ? template.sections : []
+    console.log('[ESM template sections]', {
+      source,
+      template_id: template.id,
+      template_name: template.name,
+      section_count: sections.length,
+      section_titles: sections.map((section) => section.title || section.name || ''),
+      question_counts: sections.map((section) => Array.isArray(section.questions) ? section.questions.length : 0),
+    })
+  }
+}
+
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
@@ -89,6 +106,7 @@ export async function GET() {
     const templates = patchCaretakerTemplatesList(
       applyTemplateVisibility(await getTemplatesNested(), viewer)
     )
+    logEsmTemplateSections('airtable_getTemplatesNested', templates)
     const diagnostics = getAirtableProductionDiagnostics({
       failing_table: null,
       airtable_status_code: null,
@@ -133,6 +151,7 @@ export async function GET() {
           const templates = patchCaretakerTemplatesList(
             applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
           )
+          logEsmTemplateSections('template_versions_fallback', templates)
           if (templates.length > 0) {
             const diagnostics = getAirtableProductionDiagnostics({
               failing_table: error.airtableTableName ?? null,
