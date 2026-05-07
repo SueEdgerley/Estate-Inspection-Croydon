@@ -518,6 +518,7 @@ function InspectionQuestion({
     (question.esm_comment_on_photo === true || esmRole === 'garages') &&
     hasQuestionPhotos(extras)
   const esmShowComment = esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment
+  const esmPhotosAdded = hasQuestionPhotos(extras)
   const esmRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.esm_recipient_options) && question.esm_recipient_options.length
       ? question.esm_recipient_options
@@ -528,7 +529,10 @@ function InspectionQuestion({
           : []
   )
   const esmShowRecipientDropdown =
-    esmInspectionQuestion && question.esm_recipient_on_yes === true && isYes && esmRecipientOptions.length > 0
+    esmInspectionQuestion &&
+    esmRecipientOptions.length > 0 &&
+    ((question.esm_recipient_on_yes === true && isYes) ||
+      (question.esm_recipient_on_photo === true && esmPhotosAdded))
   const esmMissingEmailWarning = esmInspectionQuestion && isYes ? String(question.esm_missing_email_warning || '') : ''
   const caretakerShowCommentWithPhotoUpload =
     caretakerAlwaysPhoto && !caretakerSimplePhotoCapture && question.caretaker_comment_on_photo === true
@@ -877,6 +881,41 @@ function InspectionQuestion({
           {question.esm_confirmation_message}
         </p>
       ) : null}
+      {esmShowRecipientDropdown ? (
+        <div>
+          <label htmlFor={`esm-photo-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+            {question.esm_recipient_label || 'Email recipient'} <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          {question.esm_recipient_helper ? (
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
+              {question.esm_recipient_helper}
+            </p>
+          ) : null}
+          <select
+            id={`esm-photo-recipient-${question.id}`}
+            value={extras.recipient_person_id || ''}
+            onChange={(e) => setExtras({ recipient_person_id: e.target.value })}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: errorRecipient ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: '1rem',
+              backgroundColor: 'white',
+              minHeight: mobileStackedForm ? 48 : undefined,
+              boxSizing: 'border-box',
+            }}
+          >
+            <option value="">Select recipient…</option>
+            {esmRecipientOptions.map((opt) => (
+              <option key={`esm-photo-recipient-${question.id}-${opt.value}`} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          {errorRecipient && <p style={{ margin: '0.35rem 0 0', fontSize: '0.875rem', color: '#ef4444' }}>{errorRecipient}</p>}
+        </div>
+      ) : null}
     </div>
   ) : null
 
@@ -1037,7 +1076,7 @@ function InspectionQuestion({
               </p>
             ) : null}
             {esmPhotoCommentBlock}
-            {esmShowRecipientDropdown && (
+            {esmShowRecipientDropdown && !question.esm_recipient_on_photo && (
               <div>
                 <label htmlFor={`esm-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                   {question.esm_recipient_label || 'Email recipient'} <span style={{ color: '#ef4444' }}>*</span>
@@ -1167,7 +1206,7 @@ function InspectionQuestion({
                 Action category: {question.action_category}
               </p>
             )}
-            {esmShowRecipientDropdown && (
+            {esmShowRecipientDropdown && !question.esm_recipient_on_photo && (
               <>
                 <label htmlFor={`esm-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                   {question.esm_recipient_label || 'Email recipient'} <span style={{ color: '#ef4444' }}>*</span>
@@ -2220,11 +2259,14 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             if (needComment && !(extras.comment || '').trim()) {
               errs[`${q.id}_comment`] = 'Comment is required'
             }
+            const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
             if (needPhoto) {
-              const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
               if (photoUrls.length === 0) {
                 errs[`${q.id}_photos`] = 'A photo is required'
               }
+            }
+            if (q.esm_recipient_on_photo === true && photoUrls.length > 0 && !(extras.recipient_person_id || '').trim()) {
+              errs[`${q.id}_recipient`] = 'Please select a recipient'
             }
           }
           return

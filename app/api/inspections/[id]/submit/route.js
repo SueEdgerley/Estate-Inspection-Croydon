@@ -106,6 +106,9 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
       if (q.esm_recipient_on_yes === true && isYes && selectedRecipient) {
         targets.push({ to: selectedRecipient, routing: 'esm_graffiti_selected_recipient' })
       }
+      if (q.esm_email_on_photo_to_selected_recipient === true && photoUrls.length > 0 && selectedRecipient) {
+        targets.push({ to: selectedRecipient, routing: `esm_${q.esm_behavior || 'photo'}_selected_recipient_photo` })
+      }
       if (q.esm_email_on_yes && isYes) {
         targets.push({ to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` })
       }

@@ -202,6 +202,9 @@ function collectEsmEmailNotifications({ template, answers, answerExtras }) {
       if (q.esm_recipient_on_yes === true && isYes && selectedRecipient) {
         notifications.push({ ...base, to: selectedRecipient, routing: 'esm_graffiti_selected_recipient' })
       }
+      if (q.esm_email_on_photo_to_selected_recipient === true && photoUrls.length > 0 && selectedRecipient) {
+        notifications.push({ ...base, to: selectedRecipient, routing: `esm_${q.esm_behavior || 'photo'}_selected_recipient_photo` })
+      }
       if (q.esm_email_on_yes && isYes) {
         notifications.push({ ...base, to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` })
       }
@@ -411,8 +414,11 @@ function mapSnapshotQuestion(q, qIndex) {
     esm_confirmation_message: q.esm_confirmation_message ?? null,
     esm_dual_photo_upload: q.esm_dual_photo_upload ?? false,
     esm_recipient_on_yes: q.esm_recipient_on_yes ?? false,
+    esm_recipient_on_photo: q.esm_recipient_on_photo ?? false,
     esm_recipient_label: q.esm_recipient_label ?? null,
+    esm_recipient_helper: q.esm_recipient_helper ?? null,
     esm_recipient_options: q.esm_recipient_options ?? null,
+    esm_email_on_photo_to_selected_recipient: q.esm_email_on_photo_to_selected_recipient ?? false,
     esm_email_on_yes: q.esm_email_on_yes ?? null,
     esm_email_on_photo: q.esm_email_on_photo ?? null,
     esm_email_on_comment_or_issue: q.esm_email_on_comment_or_issue ?? null,
