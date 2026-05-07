@@ -300,8 +300,12 @@ function mapSnapshotQuestion(q, qIndex) {
     require_comment_on_no: q.require_comment_on_no ?? true,
     require_photo_on_yes: q.require_photo_on_yes ?? false,
     require_photo_on_no: q.require_photo_on_no ?? true,
+    caretaker_comment_on_photo: q.caretaker_comment_on_photo ?? false,
+    caretaker_comment_on_yes: q.caretaker_comment_on_yes ?? false,
+    caretaker_photo_on_yes: q.caretaker_photo_on_yes ?? false,
     caretaker_recipient_on_yes: q.caretaker_recipient_on_yes ?? false,
     caretaker_recipient_options: q.caretaker_recipient_options ?? null,
+    caretaker_recipient_always: q.caretaker_recipient_always ?? false,
     action_recipient_required_when: q.action_recipient_required_when ?? null,
     triggers_issue_answer:
       q.triggers_issue_answer ?? q.triggers_issue_answers ?? q.issue_trigger_answers ?? null,

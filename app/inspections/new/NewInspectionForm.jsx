@@ -439,6 +439,7 @@ function InspectionQuestion({
   const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
   const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
+  const showCaretakerPhotoCommentUnderUpload = caretakerShowCommentFromPhoto && !caretakerShowCommentOnYes
   const caretakerRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
       ? question.caretaker_recipient_options
@@ -448,7 +449,7 @@ function InspectionQuestion({
     (commentWhen === 'on_no' && isNo) ||
     (commentWhen === 'on_yes' && isYes) ||
     commentWhen === 'always' ||
-    caretakerShowCommentFromPhoto ||
+    (caretakerShowCommentFromPhoto && !showCaretakerPhotoCommentUnderUpload) ||
     caretakerShowCommentOnYes
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
@@ -606,6 +607,34 @@ function InspectionQuestion({
         label="Add photo"
         mobileStacked={mobileStackedForm}
       />
+      {showCaretakerPhotoCommentUnderUpload && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+            Comment (optional)
+          </label>
+          <textarea
+            className={commentTextareaClassName}
+            id={`comment-${question.id}`}
+            name={`comment-${question.id}`}
+            value={extras.comment || ''}
+            onChange={(e) => setExtras({ comment: e.target.value })}
+            placeholder="Add a comment for this photo"
+            rows={2}
+            style={{
+              ...textareaSurface,
+              width: '100%',
+              padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+              border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+              fontFamily: 'inherit',
+              minHeight: mobileStackedForm ? 96 : undefined,
+              boxSizing: 'border-box',
+            }}
+          />
+          {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+        </div>
+      )}
     </div>
   )
 
