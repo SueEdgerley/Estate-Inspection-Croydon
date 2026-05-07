@@ -508,7 +508,10 @@ function InspectionQuestion({
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
   const esmInspectionQuestion = estateInspectionForm || esmInspectionForm
   const esmRole = esmInspectionQuestion ? getEsmQuestionRole(question) : ''
-  const esmLiftPhotoComment = esmInspectionQuestion && isEsmLiftQuestion(question) && hasQuestionPhotos(extras)
+  const esmLiftPhotoComment =
+    esmInspectionQuestion &&
+    (esmRole === 'lifts_comment' || isEsmLiftQuestion(question)) &&
+    hasQuestionPhotos(extras)
   const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true && !estatePhotoAllowed
   const esmCommentOnPhoto = esmInspectionQuestion && question.esm_comment_on_photo === true && hasQuestionPhotos(extras)
   const esmShowComment = esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment
