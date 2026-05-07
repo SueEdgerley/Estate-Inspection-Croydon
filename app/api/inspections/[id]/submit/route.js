@@ -110,9 +110,9 @@ async function sendCaretakerPhotoAndYesNotifications({ inspectionId, templateVer
           reminder: 'Please report this issue via the Love Clean Streets app.',
         })
       }
-      if (sectionNo === 3 && isYes) targets.push({ to: CARETAKER_SECTION_3_EMAIL, routing: 'caretaker_section_3_yes' })
-      if (sectionNo === 5 && isYes) targets.push({ to: CARETAKER_SECTION_5_EMAIL, routing: 'caretaker_section_5_yes' })
-      if (sectionNo === 6 && isYes) targets.push({ to: CARETAKER_SECTION_6_EMAIL, routing: 'caretaker_section_6_yes' })
+      if (sectionNo === 4 && isYes) targets.push({ to: CARETAKER_SECTION_3_EMAIL, routing: 'caretaker_section_3_yes' })
+      if (sectionNo === 6 && isYes) targets.push({ to: CARETAKER_SECTION_5_EMAIL, routing: 'caretaker_section_5_yes' })
+      if (sectionNo === 7 && isYes) targets.push({ to: CARETAKER_SECTION_6_EMAIL, routing: 'caretaker_section_6_yes' })
 
       for (const target of targets) {
         const to = String(target.to || '').trim()

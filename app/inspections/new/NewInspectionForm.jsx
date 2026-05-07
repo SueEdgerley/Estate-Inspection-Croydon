@@ -434,7 +434,11 @@ function InspectionQuestion({
   const commentWhen = question.comment_required_when
   const photoWhen = question.photo_required_when
   const typeIncludesPhoto = !!question.type_includes_photo
-  const caretakerAlwaysPhoto = caretakerTemplate && qType !== 'photo' && !question.caretaker_routing_bundle
+  const caretakerAlwaysPhoto =
+    caretakerTemplate &&
+    qType !== 'photo' &&
+    !question.caretaker_routing_bundle &&
+    question.caretaker_photo_always !== false
   const caretakerPhotosAdded = caretakerAlwaysPhoto && hasQuestionPhotos(extras)
   const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
   const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes

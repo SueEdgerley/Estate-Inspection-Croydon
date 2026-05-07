@@ -5,6 +5,7 @@ import { createHash } from 'crypto'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
+import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
@@ -156,13 +157,13 @@ function collectCaretakerEmailNotifications({ template, answers, answerExtras, i
           reminder: 'Please report this issue via the Love Clean Streets app.',
         })
       }
-      if (sectionNo === 3 && isYes) {
+      if (sectionNo === 4 && isYes) {
         notifications.push({ ...base, to: CARETAKER_SECTION_3_EMAIL, routing: 'caretaker_section_3_yes' })
       }
-      if (sectionNo === 5 && isYes) {
+      if (sectionNo === 6 && isYes) {
         notifications.push({ ...base, to: CARETAKER_SECTION_5_EMAIL, routing: 'caretaker_section_5_yes' })
       }
-      if (sectionNo === 6 && isYes) {
+      if (sectionNo === 7 && isYes) {
         notifications.push({ ...base, to: CARETAKER_SECTION_6_EMAIL, routing: 'caretaker_section_6_yes' })
       }
     })
@@ -303,6 +304,7 @@ function mapSnapshotQuestion(q, qIndex) {
     caretaker_comment_on_photo: q.caretaker_comment_on_photo ?? false,
     caretaker_comment_on_yes: q.caretaker_comment_on_yes ?? false,
     caretaker_photo_on_yes: q.caretaker_photo_on_yes ?? false,
+    caretaker_photo_always: q.caretaker_photo_always ?? true,
     caretaker_recipient_on_yes: q.caretaker_recipient_on_yes ?? false,
     caretaker_recipient_options: q.caretaker_recipient_options ?? null,
     caretaker_recipient_always: q.caretaker_recipient_always ?? false,
@@ -1007,6 +1009,7 @@ export async function POST(request) {
     if (isEstateWalkaboutTemplate(template)) {
       template = getCanonicalEstateWalkaboutTemplateForInsert(template)
     }
+    applyTemplateDisplayPatches(template)
 
     if (isEstateInspectionFormTemplate(template)) {
       logInspectionQuestionPipeline('inspection_create_live_template_from_getTemplatesNested', {
