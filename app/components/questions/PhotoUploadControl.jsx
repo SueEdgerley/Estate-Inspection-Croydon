@@ -178,9 +178,9 @@ export default function PhotoUploadControl({
             marginTop: '0.25rem',
           }}
         >
-          {photoUrls.map((url) => (
+          {photoUrls.map((url, index) => (
             <div
-              key={url}
+              key={`${url}-${index}`}
               style={{
                 display: 'flex',
                 alignItems: 'flex-start',

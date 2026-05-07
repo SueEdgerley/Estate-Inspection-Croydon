@@ -17,7 +17,17 @@ export default function CaretakerRoutingBundle({
   mobileStacked = false,
 }) {
   const ex = answerExtras || {}
-  const set = (updates) => onAnswerExtras?.(question.id, { ...ex, ...updates })
+  const questionId = question?.id || 'caretaker-routing'
+  const set = (updates) => onAnswerExtras?.(questionId, { ...ex, ...updates })
+  const safePeopleOptions = []
+  const seenPeopleOptionValues = new Set()
+  for (const opt of Array.isArray(peopleOptions) ? peopleOptions : []) {
+    const value = String(opt?.value ?? opt?.id ?? opt?.email ?? '').trim()
+    const label = String(opt?.label ?? opt?.name ?? opt?.email ?? opt?.value ?? '').trim()
+    if (!value || !label || seenPeopleOptionValues.has(value)) continue
+    seenPeopleOptionValues.add(value)
+    safePeopleOptions.push({ value, label })
+  }
 
   return (
     <div
@@ -32,12 +42,12 @@ export default function CaretakerRoutingBundle({
       }}
     >
       <p style={{ fontWeight: 600, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#374151' }}>Comment, photo, and recipient</p>
-      <label htmlFor={`route-comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+      <label htmlFor={`route-comment-${questionId}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
         Comment
       </label>
       <textarea
         className={textareaClassName}
-        id={`route-comment-${question.id}`}
+        id={`route-comment-${questionId}`}
         value={ex.comment || ''}
         onChange={(e) => set({ comment: e.target.value })}
         rows={3}
@@ -57,19 +67,19 @@ export default function CaretakerRoutingBundle({
       {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
       <p style={{ fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>Photo</p>
       <PhotoUploadControl
-        id={`route-photo-${question.id}`}
-        value={ex.photo_urls || []}
+        id={`route-photo-${questionId}`}
+        value={Array.isArray(ex.photo_urls) ? ex.photo_urls : []}
         onChange={(urls) => set({ photo_urls: urls })}
         label="Add photo"
         error={errorPhotos}
         multiple
         mobileStacked={mobileStacked}
       />
-      <label htmlFor={`route-recipient-${question.id}`} style={{ display: 'block', marginTop: '0.75rem', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+      <label htmlFor={`route-recipient-${questionId}`} style={{ display: 'block', marginTop: '0.75rem', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
         Recipient
       </label>
       <select
-        id={`route-recipient-${question.id}`}
+        id={`route-recipient-${questionId}`}
         value={ex.recipient_person_id || ''}
         onChange={(e) => set({ recipient_person_id: e.target.value })}
         style={{
@@ -84,8 +94,8 @@ export default function CaretakerRoutingBundle({
         }}
       >
         <option value="">Select recipient…</option>
-        {peopleOptions.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+        {safePeopleOptions.map((opt) => (
+          <option key={`route-recipient-${questionId}-${opt.value}`} value={opt.value}>
             {opt.label}
           </option>
         ))}

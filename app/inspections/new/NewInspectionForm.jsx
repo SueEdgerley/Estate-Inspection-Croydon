@@ -249,6 +249,29 @@ function hasQuestionPhotos(extras) {
   return Array.isArray(extras?.photo_urls) && extras.photo_urls.some((u) => typeof u === 'string' && u.trim())
 }
 
+function normalizeOptionObjects(rawOptions) {
+  const source = Array.isArray(rawOptions)
+    ? rawOptions
+    : rawOptions == null || rawOptions === ''
+      ? []
+      : String(rawOptions).split(/\r?\n|,/)
+  const seen = new Set()
+  return source
+    .map((opt) => {
+      const value = typeof opt === 'string' ? opt : opt?.value ?? opt?.id ?? opt?.email ?? opt?.label ?? ''
+      const label = typeof opt === 'string' ? opt : opt?.label ?? opt?.name ?? opt?.email ?? opt?.value ?? opt?.id ?? ''
+      return {
+        value: String(value || '').trim(),
+        label: String(label || '').trim(),
+      }
+    })
+    .filter((opt) => {
+      if (!opt.value || !opt.label || seen.has(opt.value)) return false
+      seen.add(opt.value)
+      return true
+    })
+}
+
 function CaretakerYesNoButtons({ id, value, onChange, mobileStacked = false }) {
   const selected = value === 'Yes' || value === 'No' || value === 'NA' ? value : ''
   return (
@@ -311,6 +334,8 @@ function InspectionQuestion({
   lightCommentTextarea = false,
 }) {
   const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
+  const expandedSectionRef = useRef(null)
+  const didScrollRef = useRef(false)
   const rawCostBlob = `${question.question_text || ''} ${question.label || ''}`.toLowerCase()
   const estateCostCodeSelectNeedsApi =
     estateInspectionForm &&
@@ -361,6 +386,107 @@ function InspectionQuestion({
     /instruction|section_header|divider|^info$|^static$|^label$/i.test(rawLayoutType)
   const skipInstructionalBlockForEstateChecklistRow =
     estateInspectionForm && estateChecklistIndex != null && !isExplicitAirtableLayoutRow
+
+  const eq = estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex)
+  const qType = getQuestionType(eq)
+  const estatePhotoAllowed = estateInspectionForm && estateShowsPhotoFromAirtable(question, eq)
+
+  const labelText = caretakerPartLabel || question.question_text
+  const displayPrimaryLabel =
+    estateInspectionForm && estateDisplayNumber != null ? (
+      <>
+        <span
+          style={{
+            fontWeight: 700,
+            color: '#111827',
+            marginRight: '0.35rem',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {estateDisplayNumber}.
+        </span>
+        {labelText}
+      </>
+    ) : (
+      labelText
+    )
+  const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
+  const nvHeading =
+    nvLabel != null ? (
+      <p
+        style={{
+          fontSize: '0.8125rem',
+          fontWeight: 600,
+          color: '#1E3A8A',
+          marginBottom: '0.5rem',
+          letterSpacing: '0.02em',
+        }}
+      >
+        {nvLabel}
+      </p>
+    ) : null
+  const opts = Array.isArray(question.options) ? question.options : normalizeOptionObjects(question.options)
+  const isRequired = question.is_required
+  const yesNoNaValue = normalizeYesNoNaValue(value)
+  const isNo = yesNoNaValue === 'No'
+  const isYes = yesNoNaValue === 'Yes'
+  const extras = answerExtras && typeof answerExtras === 'object' ? answerExtras : { comment: '', photo_urls: [] }
+  const commentWhen = question.comment_required_when
+  const photoWhen = question.photo_required_when
+  const typeIncludesPhoto = !!question.type_includes_photo
+  const caretakerAlwaysPhoto = caretakerTemplate && qType !== 'photo' && !question.caretaker_routing_bundle
+  const caretakerPhotosAdded = caretakerAlwaysPhoto && hasQuestionPhotos(extras)
+  const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
+  const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
+  const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
+  const caretakerRecipientOptions = normalizeOptionObjects(
+    Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
+      ? question.caretaker_recipient_options
+      : peopleOptions
+  )
+  const showComment =
+    (commentWhen === 'on_no' && isNo) ||
+    (commentWhen === 'on_yes' && isYes) ||
+    commentWhen === 'always' ||
+    caretakerShowCommentFromPhoto ||
+    caretakerShowCommentOnYes
+  const photoRequired =
+    (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
+  const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
+  const actionRecipientWhen = question.action_recipient_required_when
+  const showActionRecipient =
+    (actionRecipientWhen === 'on_yes' && isYes) ||
+    (actionRecipientWhen === 'on_no' && isNo) ||
+    actionRecipientWhen === 'always' ||
+    (question.caretaker_recipient_always && Array.isArray(question.caretaker_recipient_options))
+  const showCaretakerRecipientDropdown =
+    ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
+  const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
+  const showActionBlock =
+    qType === 'yes_no' &&
+    !esmQ4AbandonedVehicle &&
+    ((isNo && createActionOnNo) ||
+      showActionRecipient ||
+      (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
+  const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
+  const showCommentPhotoBlock = (showComment || showActionBlock || caretakerAlwaysPhoto || caretakerShowPhotoOnYes) || isExpanded
+  const showPhotoInYesNoFollowUp =
+    !isNvTemplate ||
+    photoRequired ||
+    (question.caretaker_recipient_on_yes && isYes) ||
+    !!extras.raise_issue ||
+    caretakerAlwaysPhoto ||
+    caretakerShowPhotoOnYes
+  useEffect(() => {
+    if (!isNvTemplate || !showCommentPhotoBlock) {
+      didScrollRef.current = false
+      return
+    }
+    if (expandedSectionRef.current && !didScrollRef.current) {
+      didScrollRef.current = true
+      expandedSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [isNvTemplate, showCommentPhotoBlock])
 
   if (isEstateInspectionInstructionalQuestion(question) && !skipInstructionalBlockForEstateChecklistRow) {
     const rawParts = [
@@ -413,111 +539,6 @@ function InspectionQuestion({
       </div>
     )
   }
-
-  const eq = estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex)
-  const qType = getQuestionType(eq)
-  const estatePhotoAllowed = estateInspectionForm && estateShowsPhotoFromAirtable(question, eq)
-
-  const labelText = caretakerPartLabel || question.question_text
-  const displayPrimaryLabel =
-    estateInspectionForm && estateDisplayNumber != null ? (
-      <>
-        <span
-          style={{
-            fontWeight: 700,
-            color: '#111827',
-            marginRight: '0.35rem',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {estateDisplayNumber}.
-        </span>
-        {labelText}
-      </>
-    ) : (
-      labelText
-    )
-  const nvLabel = isNvTemplate ? getNvQuestionStepLabel(question) : null
-  const nvHeading =
-    nvLabel != null ? (
-      <p
-        style={{
-          fontSize: '0.8125rem',
-          fontWeight: 600,
-          color: '#1E3A8A',
-          marginBottom: '0.5rem',
-          letterSpacing: '0.02em',
-        }}
-      >
-        {nvLabel}
-      </p>
-    ) : null
-  const opts = question.options || []
-  const isRequired = question.is_required
-  const yesNoNaValue = normalizeYesNoNaValue(value)
-  const isNo = yesNoNaValue === 'No'
-  const isYes = yesNoNaValue === 'Yes'
-  const extras = answerExtras || { comment: '', photo_urls: [] }
-  const commentWhen = question.comment_required_when
-  const photoWhen = question.photo_required_when
-  const typeIncludesPhoto = !!question.type_includes_photo
-  const caretakerAlwaysPhoto = caretakerTemplate && qType !== 'photo' && !question.caretaker_routing_bundle
-  const caretakerPhotosAdded = caretakerAlwaysPhoto && hasQuestionPhotos(extras)
-  const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
-  const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
-  const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
-  const showComment =
-    (commentWhen === 'on_no' && isNo) ||
-    (commentWhen === 'on_yes' && isYes) ||
-    commentWhen === 'always' ||
-    caretakerShowCommentFromPhoto ||
-    caretakerShowCommentOnYes
-  const photoRequired =
-    (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
-  const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
-  const actionRecipientWhen = question.action_recipient_required_when
-  const showActionRecipient =
-    (actionRecipientWhen === 'on_yes' && isYes) ||
-    (actionRecipientWhen === 'on_no' && isNo) ||
-    actionRecipientWhen === 'always' ||
-    (question.caretaker_recipient_always && Array.isArray(question.caretaker_recipient_options))
-  const showCaretakerRecipientDropdown =
-    ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && Array.isArray(caretakerRecipientOptions)
-  const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
-  const caretakerRecipientOptions = Array.isArray(question.caretaker_recipient_options)
-    ? question.caretaker_recipient_options
-        .map((name) => String(name || '').trim())
-        .filter(Boolean)
-        .map((name) => ({ value: name, label: name }))
-    : peopleOptions
-  const showActionBlock =
-    qType === 'yes_no' &&
-    !esmQ4AbandonedVehicle &&
-    ((isNo && createActionOnNo) ||
-      showActionRecipient ||
-      (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
-  const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
-  const showCommentPhotoBlock = (showComment || showActionBlock || caretakerAlwaysPhoto || caretakerShowPhotoOnYes) || isExpanded
-  const showPhotoInYesNoFollowUp =
-    !isNvTemplate ||
-    photoRequired ||
-    (question.caretaker_recipient_on_yes && isYes) ||
-    !!extras.raise_issue ||
-    caretakerAlwaysPhoto ||
-    caretakerShowPhotoOnYes
-  const expandedSectionRef = useRef(null)
-  const didScrollRef = useRef(false)
-
-  useEffect(() => {
-    if (!isNvTemplate || !showCommentPhotoBlock) {
-      didScrollRef.current = false
-      return
-    }
-    if (expandedSectionRef.current && !didScrollRef.current) {
-      didScrollRef.current = true
-      expandedSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
-  }, [isNvTemplate, showCommentPhotoBlock])
 
   const stdInspection = standardInspectionForm && !isNvTemplate
   const isStdConditionRow = stdInspection && questionIsStandardInspectionConditionRow(eq)
@@ -578,7 +599,7 @@ function InspectionQuestion({
       </label>
       <PhotoUploadControl
         id={photoId}
-        value={extras.photo_urls || []}
+        value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
         required={photoRequired}
         error={errorPhotos}
@@ -596,7 +617,7 @@ function InspectionQuestion({
         const isSelected = value === val || value === label
         return (
           <button
-            key={val}
+            key={`${val || label}-${idx}`}
             type="button"
             id={idx === 0 && firstButtonId ? firstButtonId : undefined}
             onClick={() => handleChange(val)}
@@ -802,7 +823,7 @@ function InspectionQuestion({
                     >
                       <option value="">Select recipient…</option>
                       {caretakerRecipientOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
+                        <option key={`recipient-${question.id}-${opt.value}`} value={opt.value}>
                           {opt.label}
                         </option>
                       ))}
@@ -840,7 +861,7 @@ function InspectionQuestion({
                 >
                   <option value="">Select recipient…</option>
                   {caretakerRecipientOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
+                    <option key={`recipient-${question.id}-${opt.value}`} value={opt.value}>
                       {opt.label}
                     </option>
                   ))}
@@ -954,12 +975,11 @@ function InspectionQuestion({
   }
 
   if (qType === 'select' || qType === 'single_select') {
-    const fromAirtable = opts.map((o) => (typeof o === 'string' ? o : (o.value ?? o.label ?? o))).filter(Boolean)
     const selectPairs =
-      fromAirtable.length > 0
-        ? fromAirtable.map((o) => ({ value: o, label: o }))
+      opts.length > 0
+        ? normalizeOptionObjects(opts)
         : estateApiCostCodes.length > 0
-          ? estateApiCostCodes.map(({ value: v, label: lab }) => ({ value: v, label: lab || v }))
+          ? normalizeOptionObjects(estateApiCostCodes.map(({ value: v, label: lab }) => ({ value: v, label: lab || v })))
           : []
     return (
       <div style={questionWrapStyle}>
@@ -986,7 +1006,7 @@ function InspectionQuestion({
         >
           <option value="">Select...</option>
           {selectPairs.map((o) => (
-            <option key={String(o.value)} value={o.value}>
+            <option key={`select-${question.id}-${o.value}`} value={o.value}>
               {o.label}
             </option>
           ))}

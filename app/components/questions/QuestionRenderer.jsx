@@ -31,6 +31,25 @@ const caretakerS12CardStyle = {
   boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
 }
 
+function normalizeSelectOptions(rawOptions) {
+  const seen = new Set()
+  return (Array.isArray(rawOptions) ? rawOptions : [])
+    .map((option) => {
+      if (option && typeof option === 'object') {
+        const value = String(option.value ?? option.id ?? option.email ?? option.label ?? '').trim()
+        const label = String(option.label ?? option.name ?? option.email ?? option.value ?? option.id ?? '').trim()
+        return { value, label }
+      }
+      const value = String(option ?? '').trim()
+      return { value, label: value }
+    })
+    .filter((option) => {
+      if (!option.value || !option.label || seen.has(option.value)) return false
+      seen.add(option.value)
+      return true
+    })
+}
+
 export default function QuestionRenderer({
   question,
   sectionName,
@@ -87,48 +106,6 @@ export default function QuestionRenderer({
       ? [question.instructions, question.helper_text].filter((x) => x && String(x).trim()).join('\n\n')
       : ''
 
-  if (estateInspectionForm && isEstateInspectionInstructionalQuestion(question)) {
-    const rawParts = [
-      question.label || question.question_text,
-      question.resident_wording,
-      question.instructions,
-      question.helper_text,
-    ].filter((p) => p != null && String(p).trim())
-    const seen = new Set()
-    const unique = []
-    for (const p of rawParts) {
-      const t = String(p).trim()
-      if (seen.has(t)) continue
-      seen.add(t)
-      unique.push(t)
-    }
-    return (
-      <div
-        style={{
-          marginBottom: '1.5rem',
-          padding: '0.75rem 1rem',
-          backgroundColor: '#f9fafb',
-          borderRadius: '0.375rem',
-          border: '1px solid #e5e7eb',
-        }}
-      >
-        {unique.map((text, i) => (
-          <p
-            key={i}
-            style={{
-              margin: i ? '0.75rem 0 0' : 0,
-              fontSize: '0.9375rem',
-              color: '#374151',
-              whiteSpace: 'pre-wrap',
-              lineHeight: 1.55,
-            }}
-          >
-            {text}
-          </p>
-        ))}
-      </div>
-    )
-  }
   const questionText = String(question.label || question.question_text || '').toLowerCase()
   const isSelectKind = kind === 'single_select' || kind === 'select'
   const isRecipientField = isRecipientSelectorQuestion(question)
@@ -212,6 +189,49 @@ export default function QuestionRenderer({
       cancelled = true
     }
   }, [isCostCodeQuestion])
+
+  if (estateInspectionForm && isEstateInspectionInstructionalQuestion(question)) {
+    const rawParts = [
+      question.label || question.question_text,
+      question.resident_wording,
+      question.instructions,
+      question.helper_text,
+    ].filter((p) => p != null && String(p).trim())
+    const seen = new Set()
+    const unique = []
+    for (const p of rawParts) {
+      const t = String(p).trim()
+      if (seen.has(t)) continue
+      seen.add(t)
+      unique.push(t)
+    }
+    return (
+      <div
+        style={{
+          marginBottom: '1.5rem',
+          padding: '0.75rem 1rem',
+          backgroundColor: '#f9fafb',
+          borderRadius: '0.375rem',
+          border: '1px solid #e5e7eb',
+        }}
+      >
+        {unique.map((text, i) => (
+          <p
+            key={i}
+            style={{
+              margin: i ? '0.75rem 0 0' : 0,
+              fontSize: '0.9375rem',
+              color: '#374151',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.55,
+            }}
+          >
+            {text}
+          </p>
+        ))}
+      </div>
+    )
+  }
 
   const renderQuestion = () => {
     switch (kind) {
@@ -337,11 +357,11 @@ export default function QuestionRenderer({
               .filter(Boolean)
         // Recipient fields: options loaded from the server; ignore static template options.
         const options = isRecipientField
-          ? recipientOptions
+          ? normalizeSelectOptions(recipientOptions)
           : optionsFromQuestion.length > 0
-            ? optionsFromQuestion.map((o) => ({ value: o, label: o }))
+            ? normalizeSelectOptions(optionsFromQuestion)
             : isCostCodeQuestion
-              ? costCodeOptions
+              ? normalizeSelectOptions(costCodeOptions)
               : []
         return (
           <>
@@ -371,8 +391,8 @@ export default function QuestionRenderer({
             }}
           >
             <option value="">Select an option...</option>
-            {(options.length ? options : [{ value: '', label: '—' }]).map((option, idx) => (
-              <option key={idx} value={option.value}>
+            {(options.length ? options : [{ value: '', label: '—' }]).map((option) => (
+              <option key={`select-${question.id}-${option.value || 'empty'}`} value={option.value}>
                 {option.label}
               </option>
             ))}
