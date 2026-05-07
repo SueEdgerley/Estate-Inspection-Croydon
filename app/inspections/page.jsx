@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
-import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+import { getInspectionFullReportPdfUrl, withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+import { inspectionTypeLabel } from '@/lib/inspection-work-types'
 
 function normalizeInspectionListRows(data) {
   if (!Array.isArray(data)) return []
@@ -54,6 +55,7 @@ export default function InspectionsListPage() {
     completionScope: 'active',
   })
   const [inspectorOptions, setInspectorOptions] = useState([])
+  const [selectedInspectionIds, setSelectedInspectionIds] = useState([])
   const [inspectorPickerLoading, setInspectorPickerLoading] = useState(false)
   const [inspectorPickerMeta, setInspectorPickerMeta] = useState({
     canFilterByInspector: false,
@@ -201,11 +203,11 @@ export default function InspectionsListPage() {
     [row.estate_name, row.block_name].filter(Boolean).join(' · ') ||
     '–'
 
-  const templateDisplay = (row) =>
-    row.template_name?.trim() ||
-    row.work_type?.trim() ||
-    row.type?.trim() ||
-    '–'
+  const templateDisplay = (row) => {
+    const templateName = row.template_name?.trim()
+    if (templateName) return inspectionTypeLabel(templateName, templateName)
+    return inspectionTypeLabel(row.work_type || row.type, 'Inspection')
+  }
 
   const statusDisplay = (row) => {
     const raw = String(row.status || '').trim()
@@ -243,6 +245,94 @@ export default function InspectionsListPage() {
   const filteredInspections = useMemo(() => inspections, [inspections])
 
   const summaryRows = filteredInspections
+  const visibleInspectionIds = filteredInspections.map((row) => row.id).filter(Boolean)
+  const selectedRows = filteredInspections.filter((row) => selectedInspectionIds.includes(row.id))
+  const allVisibleSelected =
+    visibleInspectionIds.length > 0 &&
+    visibleInspectionIds.every((id) => selectedInspectionIds.includes(id))
+
+  const toggleInspectionSelection = (inspectionId) => {
+    setSelectedInspectionIds((prev) =>
+      prev.includes(inspectionId)
+        ? prev.filter((id) => id !== inspectionId)
+        : [...prev, inspectionId]
+    )
+  }
+
+  const toggleSelectAllVisible = () => {
+    setSelectedInspectionIds((prev) => {
+      if (allVisibleSelected) return prev.filter((id) => !visibleInspectionIds.includes(id))
+      return Array.from(new Set([...prev, ...visibleInspectionIds]))
+    })
+  }
+
+  const handleDownloadPdf = async () => {
+    if (selectedRows.length === 0) {
+      window.alert('Please select at least one inspection to download')
+      return
+    }
+
+    for (let index = 0; index < selectedRows.length; index += 1) {
+      const inspection = selectedRows[index]
+      let pdfUrl = getInspectionFullReportPdfUrl(inspection) || ''
+      if (!pdfUrl) {
+        const res = await fetch(`/api/inspections/${inspection.id}/report-pdf`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          window.alert(data.details || data.error || `Could not generate PDF for ${inspection.id} (${res.status})`)
+          continue
+        }
+        pdfUrl = String(data.url || '').trim()
+      }
+      if (!pdfUrl) continue
+      const a = document.createElement('a')
+      a.href = pdfUrl
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.download = `inspection-${inspection.id}.pdf`
+      document.body.appendChild(a)
+      await new Promise((resolve) => setTimeout(resolve, index * 120))
+      a.click()
+      document.body.removeChild(a)
+    }
+
+    await reloadInspections()
+  }
+
+  const handleExportCsv = () => {
+    if (selectedRows.length === 0) {
+      window.alert('Please select at least one inspection to export')
+      return
+    }
+
+    const headers = ['Inspection ID', 'Form Type', 'Estate', 'Block', 'Location', 'Inspector', 'Completed', 'Status', 'Issues', 'PDF URL']
+    const escapeCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`
+    const rows = selectedRows.map((inspection) => [
+      inspection.id || '',
+      templateDisplay(inspection),
+      inspection.estate_name || '',
+      inspection.block_name || '',
+      locationDisplay(inspection),
+      inspection.inspector_name || '',
+      inspection.submitted_at || '',
+      statusDisplay(inspection),
+      issuesDisplay(inspection),
+      getInspectionFullReportPdfUrl(inspection) || '',
+    ])
+    const csv = [headers.map(escapeCell).join(','), ...rows.map((row) => row.map(escapeCell).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `selected-inspections-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
 
   return (
     <div>
@@ -315,6 +405,35 @@ export default function InspectionsListPage() {
           Operational list for day-to-day work — open <strong style={{ color: '#374151', fontWeight: 600 }}>Show Filters</strong> to
           choose what appears (active, completed, or all), then use the tabs to narrow by scope, type, location, or dates.
         </p>
+      )}
+
+      {activeTab === 'inspections' && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            marginBottom: '1rem',
+            padding: '0.85rem 1rem',
+            backgroundColor: '#fff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.5rem',
+          }}
+        >
+          <div style={{ color: '#374151', fontSize: '0.875rem' }}>
+            {selectedRows.length} selected from {filteredInspections.length} inspections
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button type="button" onClick={handleDownloadPdf} style={primaryButtonStyle}>
+              Download selected PDFs
+            </button>
+            <button type="button" onClick={handleExportCsv} style={secondaryButtonStyle}>
+              Export selected CSV
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Summary: quick scope + filters. Manage Inspections: filters only (scope lives in Users tab). */}
@@ -570,7 +689,7 @@ export default function InspectionsListPage() {
                   }}
                 >
                   <option value="all">All types</option>
-                  <option value="inspection">Template (inspection)</option>
+                  <option value="inspection">Inspection form</option>
                   <option value="street">Street</option>
                   <option value="block">Block</option>
                   <option value="estate">Estate</option>
@@ -781,7 +900,7 @@ export default function InspectionsListPage() {
                 }}
               >
                 <option value="all">All types</option>
-                <option value="inspection">Template (inspection)</option>
+                <option value="inspection">Inspection form</option>
                 <option value="street">Street</option>
                 <option value="block">Block</option>
                 <option value="estate">Estate</option>
@@ -879,7 +998,7 @@ export default function InspectionsListPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Form Type</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Location</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>User</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Template</th>
@@ -903,7 +1022,7 @@ export default function InspectionsListPage() {
                 ) : (
                   summaryRows.map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '0.75rem 1rem', color: '#111827' }}>{row.type || '–'}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#111827' }}>{templateDisplay(row)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{locationDisplay(row)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.template_name ?? '–'}</td>
@@ -960,6 +1079,18 @@ export default function InspectionsListPage() {
                       <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Status</th>
                       <th style={{ textAlign: 'center', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Issues</th>
                       <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Actions</th>
+                      <th style={{ textAlign: 'center', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={toggleSelectAllVisible}
+                            aria-label="Select all visible inspections"
+                            style={{ width: 18, height: 18, accentColor: '#0f766e', cursor: 'pointer' }}
+                          />
+                          <span>Select</span>
+                        </label>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1019,6 +1150,15 @@ export default function InspectionsListPage() {
                             </Link>
                           </div>
                         </td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedInspectionIds.includes(row.id)}
+                            onChange={() => toggleInspectionSelection(row.id)}
+                            aria-label={`Select inspection ${row.id}`}
+                            style={{ width: 18, height: 18, accentColor: '#0f766e', cursor: 'pointer' }}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1030,4 +1170,26 @@ export default function InspectionsListPage() {
       )}
     </div>
   )
+}
+
+const primaryButtonStyle = {
+  padding: '0.65rem 1rem',
+  backgroundColor: '#0f766e',
+  color: '#fff',
+  border: 'none',
+  borderRadius: '0.5rem',
+  fontSize: '0.875rem',
+  fontWeight: 700,
+  cursor: 'pointer',
+}
+
+const secondaryButtonStyle = {
+  padding: '0.65rem 1rem',
+  backgroundColor: '#fff',
+  color: '#0f766e',
+  border: '1px solid #0f766e',
+  borderRadius: '0.5rem',
+  fontSize: '0.875rem',
+  fontWeight: 700,
+  cursor: 'pointer',
 }
