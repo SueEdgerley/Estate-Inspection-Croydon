@@ -451,7 +451,10 @@ function InspectionQuestion({
   const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
   const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
+  const caretakerShowCommentWithPhotoUpload =
+    caretakerAlwaysPhoto && question.caretaker_comment_on_photo === true
   const showCaretakerPhotoCommentUnderUpload =
+    caretakerShowCommentWithPhotoUpload ||
     (caretakerShowCommentFromPhoto && !caretakerShowCommentOnYes) ||
     (caretakerShowCommentOnYes && caretakerShowPhotoOnYes)
   const caretakerRecipientOptions = normalizeOptionObjects(
@@ -477,12 +480,18 @@ function InspectionQuestion({
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
   const esmQ4AbandonedVehicle = question.esm_q4_abandoned_vehicle === true
+  const caretakerYesCreatesAction =
+    caretakerTemplate &&
+    isYes &&
+    (question.action_trigger_on === 'yes' || question.issue_triggers_on === 'yes') &&
+    question.create_action_on_yes !== false
   const showActionBlock =
     qType === 'yes_no' &&
     !esmQ4AbandonedVehicle &&
     ((isNo && createActionOnNo) ||
       showActionRecipient ||
-      (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false))
+      (caretakerYesTriggersFollowUp && isYes && question.create_action_on_yes !== false) ||
+      caretakerYesCreatesAction)
   const caretakerFixedEmailDestination =
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
