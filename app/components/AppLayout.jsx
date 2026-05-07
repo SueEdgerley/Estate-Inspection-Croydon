@@ -16,9 +16,7 @@ import { photobook } from '@/lib/photobook-theme'
 
 const ALL_NAV_ITEMS = [
   { href: '/', label: 'Home', navKey: 'home' },
-  { href: '/caretaker', label: 'Start Inspection', navKey: 'caretakerStart' },
   { href: '/inspections', label: 'Manage Inspections', navKey: 'inspections' },
-  { href: '/inspections/ad-hoc', label: 'Create Inspections', navKey: 'inspectionsAdHoc' },
   { href: '/actions', label: 'Issues / Actions', navKey: 'actions' },
   { href: '/repairs-inspector', label: 'Repairs Updates', navKey: 'repairsInspector' },
   { href: '/repairs-inspector/new', label: 'Repairs Form', navKey: 'repairsInspectorForm' },
@@ -86,14 +84,13 @@ export default function AppLayout({ children }) {
     if (!isSignedIn || roleUi?.normalizedRole !== 'caretaker' || !pathname) return
     const inspectionDetailPath =
       pathname.startsWith('/inspections/') &&
-      !pathname.startsWith('/inspections/new') &&
-      !pathname.startsWith('/inspections/ad-hoc')
+      !pathname.startsWith('/inspections/new')
     const allowed =
-      pathname === '/caretaker' ||
+      pathname === '/templates' ||
       pathname.startsWith('/guides') ||
       pathname.startsWith('/inspections/new') ||
       inspectionDetailPath
-    if (!allowed) router.replace('/caretaker')
+    if (!allowed) router.replace('/templates')
   }, [isSignedIn, pathname, roleUi, router])
 
   const navItems = useMemo(() => {
@@ -110,10 +107,9 @@ export default function AppLayout({ children }) {
 
   const isActive = (href) => {
     if (href === '/') return pathname === '/' || pathname === '/dashboard'
-    // /inspections/new is the create form; keep "Manage Inspections" active only for list + inspection sub-routes
+    // /inspections/new is launched from Forms; keep "Manage Inspections" active only for list + inspection sub-routes
     if (href === '/inspections') {
       if (!pathname) return false
-      if (pathname.startsWith('/inspections/ad-hoc')) return false
       if (pathname === '/inspections' || pathname === '/inspections/') return true
       if (pathname.startsWith('/inspections/new')) return false
       return pathname.startsWith('/inspections/')

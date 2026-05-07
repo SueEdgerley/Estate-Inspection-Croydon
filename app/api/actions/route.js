@@ -61,7 +61,13 @@ export async function GET(request) {
             i.title AS inspection_title,
             i.template_name AS inspection_template_name,
             i.type AS inspection_type,
+            i.source AS inspection_source,
+            i.location_label AS inspection_location_label,
             i.due_date AS inspection_due_date,
+            i.submitted_at AS inspection_submitted_at,
+            i.created_at AS inspection_created_at,
+            e.name AS estate_name,
+            b.name AS block_name,
             COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
@@ -89,7 +95,13 @@ export async function GET(request) {
             i.title AS inspection_title,
             i.template_name AS inspection_template_name,
             i.type AS inspection_type,
+            i.source AS inspection_source,
+            i.location_label AS inspection_location_label,
             i.due_date AS inspection_due_date,
+            i.submitted_at AS inspection_submitted_at,
+            i.created_at AS inspection_created_at,
+            e.name AS estate_name,
+            b.name AS block_name,
             COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
@@ -117,7 +129,13 @@ export async function GET(request) {
             i.title AS inspection_title,
             i.template_name AS inspection_template_name,
             i.type AS inspection_type,
+            i.source AS inspection_source,
+            i.location_label AS inspection_location_label,
             i.due_date AS inspection_due_date,
+            i.submitted_at AS inspection_submitted_at,
+            i.created_at AS inspection_created_at,
+            e.name AS estate_name,
+            b.name AS block_name,
             COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
@@ -153,7 +171,19 @@ export async function GET(request) {
               NULL::timestamptz AS repair_updated_at,
               a.created_at, a.updated_at,
               'Inspector' AS created_by,
-              'Assigned' AS assigned_to
+              'Assigned' AS assigned_to,
+              NULL::text AS assigned_to_email,
+              NULL::text AS inspection_title,
+              NULL::text AS inspection_template_name,
+              NULL::text AS inspection_type,
+              NULL::text AS inspection_source,
+              NULL::text AS inspection_location_label,
+              NULL::timestamptz AS inspection_due_date,
+              NULL::timestamptz AS inspection_submitted_at,
+              NULL::timestamptz AS inspection_created_at,
+              NULL::text AS estate_name,
+              NULL::text AS block_name,
+              NULL::text AS estate_block_name
             FROM actions a
             WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
             ORDER BY a.created_at DESC
@@ -174,7 +204,19 @@ export async function GET(request) {
               NULL::timestamptz AS repair_updated_at,
               a.created_at, a.updated_at,
               'Inspector' AS created_by,
-              'Assigned' AS assigned_to
+              'Assigned' AS assigned_to,
+              NULL::text AS assigned_to_email,
+              NULL::text AS inspection_title,
+              NULL::text AS inspection_template_name,
+              NULL::text AS inspection_type,
+              NULL::text AS inspection_source,
+              NULL::text AS inspection_location_label,
+              NULL::timestamptz AS inspection_due_date,
+              NULL::timestamptz AS inspection_submitted_at,
+              NULL::timestamptz AS inspection_created_at,
+              NULL::text AS estate_name,
+              NULL::text AS block_name,
+              NULL::text AS estate_block_name
             FROM actions a
             WHERE a.inspection_id = ${inspectionId}
             ORDER BY a.created_at DESC
@@ -195,7 +237,19 @@ export async function GET(request) {
               NULL::timestamptz AS repair_updated_at,
               a.created_at, a.updated_at,
               'Inspector' AS created_by,
-              'Assigned' AS assigned_to
+              'Assigned' AS assigned_to,
+              NULL::text AS assigned_to_email,
+              NULL::text AS inspection_title,
+              NULL::text AS inspection_template_name,
+              NULL::text AS inspection_type,
+              NULL::text AS inspection_source,
+              NULL::text AS inspection_location_label,
+              NULL::timestamptz AS inspection_due_date,
+              NULL::timestamptz AS inspection_submitted_at,
+              NULL::timestamptz AS inspection_created_at,
+              NULL::text AS estate_name,
+              NULL::text AS block_name,
+              NULL::text AS estate_block_name
             FROM actions a
             ORDER BY a.created_at DESC
             LIMIT 1000

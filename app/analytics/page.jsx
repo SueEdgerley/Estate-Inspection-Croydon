@@ -147,10 +147,6 @@ export default function AnalyticsPage() {
     if (overview) {
       lines.push(['Overview', 'completed_inspections', overview.completedInspections].map(escapeCsvCell).join(','))
       lines.push(['Overview', 'overall_score', overview.overallScore ?? ''].map(escapeCsvCell).join(','))
-      lines.push(['Scheduled timing', 'total_scheduled', overview.scheduledTiming?.totalScheduled ?? 0].map(escapeCsvCell).join(','))
-      lines.push(['Scheduled timing', 'completed_on_time', overview.scheduledTiming?.completedOnTime ?? 0].map(escapeCsvCell).join(','))
-      lines.push(['Scheduled timing', 'completed_late', overview.scheduledTiming?.completedLate ?? 0].map(escapeCsvCell).join(','))
-      lines.push(['Scheduled timing', 'missed', overview.scheduledTiming?.missed ?? 0].map(escapeCsvCell).join(','))
     }
     ;(performance?.caretakerCompleted || []).forEach((r) => {
       lines.push(['Caretaker completed', r.caretakerLabel, r.completedCount].map(escapeCsvCell).join(','))
@@ -501,7 +497,6 @@ export default function AnalyticsPage() {
               {[
                 { label: 'Completed inspections', value: overview.completedInspections },
                 { label: 'Overall score (A–D avg)', value: overview.overallScore != null ? overview.overallScore.toFixed(2) : '—' },
-                { label: 'Scheduled completion %', value: overview.completionRatePct != null ? `${overview.completionRatePct}%` : '—' },
                 {
                   label: 'C/D answers (period)',
                   value: gradeRisk && !gradeRisk.error ? gradeRisk.cdAnswerCount : '—',

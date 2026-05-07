@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 
 const STATUS_OPTIONS = [
@@ -42,6 +42,38 @@ function displayStatus(value) {
   return status.replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
+function actionSource(action) {
+  return action.inspection_template_name || action.inspection_source || action.inspection_type || action.category
+}
+
+function actionInspectionDate(action) {
+  return action.inspection_submitted_at || action.inspection_created_at || action.created_at || action.inspection_due_date
+}
+
+function actionSearchText(action) {
+  return [
+    action.estate_block_name,
+    action.estate_name,
+    action.block_name,
+    action.inspection_location_label,
+    action.location,
+    action.title,
+    action.description,
+    action.comment,
+    action.repair_notes,
+    action.status,
+    displayStatus(action.status),
+    action.assigned_to,
+    action.assigned_to_email,
+    action.job_number,
+    action.inspection_title,
+    actionSource(action),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
 export default function ActionsPage() {
   const [actions, setActions] = useState([])
   const [people, setPeople] = useState([])
@@ -51,13 +83,28 @@ export default function ActionsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [inspectionId, setInspectionId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const selectedAction = actions.find((action) => action.id === selectedId) || null
+  const filteredActions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return actions
+    return actions.filter((action) => actionSearchText(action).includes(query))
+  }, [actions, searchQuery])
+  const selectedActionVisible = selectedAction && filteredActions.some((action) => action.id === selectedAction.id)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setInspectionId(params.get('inspection_id') || '')
+  }, [])
+
+  useEffect(() => {
+    if (inspectionId === null) return
     const loadActions = async () => {
       try {
-        const res = await fetch('/api/actions', { cache: 'no-store', credentials: 'include' })
+        const url = inspectionId ? `/api/actions?inspection_id=${encodeURIComponent(inspectionId)}` : '/api/actions'
+        const res = await fetch(url, { cache: 'no-store', credentials: 'include' })
         const data = await res.json().catch(() => [])
         setActions(Array.isArray(data) ? data : [])
         if (Array.isArray(data) && data.length > 0 && window.innerWidth >= 900) {
@@ -71,7 +118,7 @@ export default function ActionsPage() {
     }
 
     loadActions()
-  }, [])
+  }, [inspectionId])
 
   useEffect(() => {
     let cancelled = false
@@ -121,12 +168,24 @@ export default function ActionsPage() {
     })
   }
 
+  const formatShortDate = (dateString) => {
+    if (!dateString) return 'Not recorded'
+    const date = new Date(dateString)
+    if (Number.isNaN(date.getTime())) return 'Not recorded'
+    return date.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  }
+
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
   const reloadActions = async (nextSelectedId = selectedId) => {
-    const res = await fetch('/api/actions', { cache: 'no-store', credentials: 'include' })
+    const url = inspectionId ? `/api/actions?inspection_id=${encodeURIComponent(inspectionId)}` : '/api/actions'
+    const res = await fetch(url, { cache: 'no-store', credentials: 'include' })
     const data = await res.json().catch(() => [])
     const rows = Array.isArray(data) ? data : []
     setActions(rows)
@@ -167,6 +226,14 @@ export default function ActionsPage() {
   }
 
   const closeDetail = () => setSelectedId('')
+  const inspectionFilterAction = actions[0]
+  const inspectionFilterLabel = inspectionFilterAction
+    ? [
+        inspectionFilterAction.estate_block_name,
+        inspectionFilterAction.inspection_location_label || inspectionFilterAction.location,
+        formatShortDate(actionInspectionDate(inspectionFilterAction)),
+      ].filter(Boolean).join(' - ')
+    : inspectionId
 
   return (
     <div>
@@ -176,6 +243,34 @@ export default function ActionsPage() {
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
           Issues and actions raised from inspection forms
+        </p>
+      </div>
+
+      {inspectionId ? (
+        <div style={filterBannerStyle}>
+          <div>
+            <strong>Showing issues for inspection:</strong> {inspectionFilterLabel || inspectionId}
+          </div>
+          <Link href="/actions" style={clearFilterLinkStyle}>
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
+
+      <div style={searchWrapStyle}>
+        <label htmlFor="action-search" style={{ display: 'block', fontWeight: 700, color: '#111827', marginBottom: '0.35rem' }}>
+          Search issues
+        </label>
+        <input
+          id="action-search"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by block, location, issue, status, assignee, job number..."
+          style={inputStyle}
+        />
+        <p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>
+          Showing {filteredActions.length} of {actions.length} issues
         </p>
       </div>
 
@@ -198,7 +293,12 @@ export default function ActionsPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '1rem', alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {actions.map((a) => (
+            {filteredActions.length === 0 ? (
+              <div style={emptySearchStyle}>
+                No issues match your search.
+              </div>
+            ) : null}
+            {filteredActions.map((a) => (
               <button
                 key={a.id}
                 type="button"
@@ -214,16 +314,22 @@ export default function ActionsPage() {
                   <span style={statusBadgeStyle}>{displayStatus(a.status)}</span>
                 </div>
                 <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.875rem' }}>
-                  {[a.category || 'other', a.estate_block_name || a.location, formatDate(a.created_at)].filter(Boolean).join(' · ')}
+                  {notRecorded(a.estate_block_name)}
+                </div>
+                <div style={cardMetaGridStyle}>
+                  <span><strong>Location:</strong> {notRecorded(a.inspection_location_label || a.location)}</span>
+                  <span><strong>Inspection date:</strong> {formatShortDate(actionInspectionDate(a))}</span>
+                  <span><strong>Form/source:</strong> {notRecorded(actionSource(a))}</span>
                 </div>
                 <div style={{ marginTop: '0.35rem', color: '#334155', fontSize: '0.875rem' }}>
                   Assigned: {notRecorded(a.assigned_to)} | Priority: {notRecorded(a.priority)}
+                  {a.job_number ? ` | Job: ${a.job_number}` : ''}
                 </div>
               </button>
             ))}
           </div>
 
-          {selectedAction ? (
+          {selectedAction && selectedActionVisible ? (
             <ActionDetail
               action={selectedAction}
               form={form}
@@ -245,7 +351,7 @@ export default function ActionsPage() {
 
 function ActionDetail({ action, form, people, formatDate, setField, saveAction, saving, error, message, onClose }) {
   const photos = [...parsePhotoUrls(action.repair_photo_url), ...parsePhotoUrls(action.photo_urls)]
-  const source = action.inspection_template_name || action.inspection_type || action.category
+  const source = actionSource(action)
 
   return (
     <aside style={detailStyle}>
@@ -265,7 +371,7 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
         <h3 style={sectionHeadingStyle}>Issue</h3>
         <DetailRow label="Category/form source" value={source} />
         <DetailRow label="Estate/block" value={action.estate_block_name} />
-        <DetailRow label="Location" value={action.location} />
+        <DetailRow label="Location" value={action.inspection_location_label || action.location} />
         <DetailRow label="Issue/question title" value={action.title || action.question_id} />
         <DetailRow label="Full issue description/comment" value={[action.description, action.comment].filter(Boolean).join('\n\n')} multiline />
         {photos.length ? (
@@ -290,7 +396,7 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
         <DetailRow label="Created by" value={action.created_by} />
         <DetailRow label="Raised date" value={formatDate(action.created_at)} />
         <DetailRow label="Assigned to" value={action.assigned_to} />
-        <DetailRow label="Due date" value={action.expected_completion_date || action.inspection_due_date ? formatDate(action.expected_completion_date || action.inspection_due_date) : ''} />
+        <DetailRow label="Target completion date" value={action.expected_completion_date || action.inspection_due_date ? formatDate(action.expected_completion_date || action.inspection_due_date) : ''} />
         <DetailRow label="Inspection ID" value={action.inspection_id} />
         {action.inspection_id ? (
           <Link href={`/inspections/${encodeURIComponent(action.inspection_id)}`} style={{ color: '#1d4ed8', fontWeight: 600 }}>
@@ -326,7 +432,7 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
               ))}
             </select>
           </Field>
-          <Field label="Due date">
+          <Field label="Target completion date">
             <input type="date" value={form.due_date || ''} onChange={(e) => setField('due_date', e.target.value)} style={inputStyle} />
           </Field>
           <Field label="Job number">
@@ -376,6 +482,58 @@ const cardButtonStyle = {
   borderRadius: '0.75rem',
   padding: '1rem',
   cursor: 'pointer',
+}
+
+const cardMetaGridStyle = {
+  display: 'grid',
+  gap: '0.25rem',
+  marginTop: '0.45rem',
+  color: '#334155',
+  fontSize: '0.875rem',
+}
+
+const filterBannerStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: '1rem',
+  flexWrap: 'wrap',
+  marginBottom: '1rem',
+  padding: '0.85rem 1rem',
+  background: '#ecfdf5',
+  border: '1px solid #99f6e4',
+  borderRadius: '0.75rem',
+  color: '#134e4a',
+}
+
+const clearFilterLinkStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  border: '1px solid #0f766e',
+  borderRadius: '0.5rem',
+  padding: '0.45rem 0.7rem',
+  color: '#0f766e',
+  background: '#fff',
+  textDecoration: 'none',
+  fontWeight: 700,
+  fontSize: '0.875rem',
+}
+
+const searchWrapStyle = {
+  marginBottom: '1rem',
+  background: '#fff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '0.75rem',
+  padding: '1rem',
+  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.08)',
+}
+
+const emptySearchStyle = {
+  background: '#fff',
+  border: '1px dashed #cbd5e1',
+  borderRadius: '0.75rem',
+  padding: '1rem',
+  color: '#64748b',
 }
 
 const statusBadgeStyle = {

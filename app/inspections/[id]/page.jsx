@@ -293,12 +293,6 @@ export default function InspectionDetail() {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Due Date</div>
-            <div style={{ fontSize: '1rem', fontWeight: '500', color: '#111827' }}>
-              {formatDate(inspection.due_date)}
-            </div>
-          </div>
-          <div>
             <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Completed</div>
             <div style={{ fontSize: '1rem', fontWeight: '500', color: '#111827' }}>
               {formatDate(inspection.submitted_at)}

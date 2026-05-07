@@ -880,7 +880,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
           <section style={cardStyle}>
             <h2 style={h2Style}>Visit details</h2>
-            <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>Lead officer and planned visit.</p>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>Lead officer and inspection details.</p>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <div>
                 <label style={labelStyle}>Responsible person *</label>
@@ -931,7 +931,7 @@ export default function EstateWalkaboutNewInspectionForm({
                 {validationErrors.ew_q_area && <p style={errStyle}>{validationErrors.ew_q_area}</p>}
               </div>
               <div>
-                <label style={labelStyle}>Planned date *</label>
+                <label style={labelStyle}>Inspection date *</label>
                 <input
                   type="date"
                   value={answers.ew_q_planned_date}

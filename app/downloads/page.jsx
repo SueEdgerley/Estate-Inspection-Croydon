@@ -127,8 +127,6 @@ export default function DownloadsPage() {
                 Inspections
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {filterButton('Scheduled', { scheduled: 'scheduled' }, 'scheduled')}
-                {filterButton('Missed', { scheduled: 'scheduled', missed: '1' }, 'missed')}
                 {filterButton('Completed', { status: 'submitted' }, 'completed')}
               </div>
             </div>

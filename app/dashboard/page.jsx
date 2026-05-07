@@ -1,26 +1,28 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '../../lib/photobook-theme'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl, withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 
+function countBy(rows, getLabel) {
+  const counts = new Map()
+  rows.forEach((row) => {
+    const label = String(getLabel(row) || 'Not recorded').trim() || 'Not recorded'
+    counts.set(label, (counts.get(label) || 0) + 1)
+  })
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+}
+
 export default function DashboardHome() {
   const { isSignedIn } = useAuth()
   const [selectedInspectionIds, setSelectedInspectionIds] = useState([])
   const [stats, setStats] = useState({
     totalCompleted: 0,
-    scheduledCompleted: 0,
-    adHocCompleted: 0,
-    caretakerScheduled: 0,
-    caretakerCompleted: 0,
-    caretakerMissed: 0,
-    caretakerCompletionRate: null,
-    esmAdhocCompleted: 0,
-    esmEstatesChecked: 0,
-    housingWalkaboutsCompleted: 0,
   })
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
@@ -36,7 +38,6 @@ export default function DashboardHome() {
     workType: 'all',
     role: 'all',
     inspector: 'all',
-    scheduled: 'all',
     grading: 'all'
   })
 
@@ -60,7 +61,6 @@ export default function DashboardHome() {
       if (filters.workType && filters.workType !== 'all') params.set('workType', filters.workType)
       if (filters.role && filters.role !== 'all') params.set('role', filters.role)
       if (filters.inspector && filters.inspector !== 'all') params.set('inspector', filters.inspector)
-      if (filters.scheduled && filters.scheduled !== 'all') params.set('scheduled', filters.scheduled)
       if (filters.grading && filters.grading !== 'all') params.set('grading', filters.grading)
 
       const res = await fetch(`/api/dashboard?${params.toString()}`, {
@@ -72,14 +72,14 @@ export default function DashboardHome() {
 
       if (res.status === 401) {
         setAuthCode('UNAUTHORIZED')
-        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
+        setStats({ totalCompleted: 0 })
         setInspections([])
         return
       }
 
       if (res.status === 403 && data?.code) {
         setAuthCode(data.code)
-        setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
+        setStats({ totalCompleted: 0 })
         setInspections([])
         return
       }
@@ -90,7 +90,7 @@ export default function DashboardHome() {
             console.warn('[dashboard] DB_NOT_MIGRATED', data?.message || data?.error)
           }
           setError('This service is temporarily unavailable. Please try again later or contact support.')
-          setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
+          setStats({ totalCompleted: 0 })
           setInspections([])
           setLoading(false)
           return
@@ -104,15 +104,6 @@ export default function DashboardHome() {
 
       setStats({
         totalCompleted: data?.stats?.totalCompleted ?? 0,
-        scheduledCompleted: data?.stats?.scheduledCompleted ?? 0,
-        adHocCompleted: data?.stats?.adHocCompleted ?? 0,
-        caretakerScheduled: data?.stats?.caretakerScheduled ?? 0,
-        caretakerCompleted: data?.stats?.caretakerCompleted ?? 0,
-        caretakerMissed: data?.stats?.caretakerMissed ?? 0,
-        caretakerCompletionRate: data?.stats?.caretakerCompletionRate ?? null,
-        esmAdhocCompleted: data?.stats?.esmAdhocCompleted ?? 0,
-        esmEstatesChecked: data?.stats?.esmEstatesChecked ?? 0,
-        housingWalkaboutsCompleted: data?.stats?.housingWalkaboutsCompleted ?? 0,
       })
 
       const nextInspections = Array.isArray(data?.inspections) ? data.inspections : []
@@ -121,7 +112,7 @@ export default function DashboardHome() {
       setSelectedInspectionIds((prev) => prev.filter((id) => nextIds.has(id)))
     } catch (e) {
       setError(e?.message || 'Failed to load dashboard data')
-      setStats({ totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0, caretakerScheduled: 0, caretakerCompleted: 0, caretakerMissed: 0, caretakerCompletionRate: null, esmAdhocCompleted: 0, esmEstatesChecked: 0, housingWalkaboutsCompleted: 0 })
+      setStats({ totalCompleted: 0 })
       setInspections([])
     } finally {
       setLoading(false)
@@ -181,7 +172,7 @@ export default function DashboardHome() {
       }
 
       const selectedRows = inspections.filter((i) => selectedInspectionIds.includes(i.id))
-      const headers = ['Inspection ID', 'Type', 'Location', 'User', 'Template', 'Due Date', 'Completed', 'Grading', 'PDF URL']
+      const headers = ['Inspection ID', 'Type', 'Location', 'User', 'Template', 'Completed', 'Grading', 'PDF URL']
       const escapeCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`
       const rows = selectedRows.map((i) => [
         i.id || '',
@@ -189,7 +180,6 @@ export default function DashboardHome() {
         i.location_label || '',
         i.inspector_name || '',
         i.template_name || '',
-        i.due_date || '',
         i.submitted_at || '',
         i.grading || '',
         getInspectionFullReportPdfUrl(i) || '',
@@ -242,6 +232,26 @@ export default function DashboardHome() {
       year: 'numeric',
     })
   }
+
+  const completedInspections = useMemo(
+    () => inspections.filter((inspection) => inspection.submitted_at || String(inspection.status || '').toLowerCase() === 'submitted'),
+    [inspections]
+  )
+
+  const completedByUser = useMemo(
+    () => countBy(completedInspections, (inspection) => inspection.inspector_name || inspection.inspector_id),
+    [completedInspections]
+  )
+  const completedByFormType = useMemo(
+    () => countBy(completedInspections, (inspection) => inspection.template_name || inspection.work_type || inspection.type),
+    [completedInspections]
+  )
+  const completedByEstateBlock = useMemo(
+    () => countBy(completedInspections, (inspection) =>
+      [inspection.estate_name, inspection.block_name].filter(Boolean).join(' / ') || inspection.location_label
+    ),
+    [completedInspections]
+  )
 
   return (
     <>
@@ -297,7 +307,7 @@ export default function DashboardHome() {
         borderLeft: `4px solid ${photobook.primary}`,
         paddingLeft: '1rem',
       }}>
-        Real-time data from estate inspections across Croydon Council
+        Completed estate inspections across Croydon Council. Start new inspections from Forms, complete the form, then submit.
       </p>
 
       {loading && (
@@ -378,13 +388,13 @@ export default function DashboardHome() {
           borderTop: `3px solid ${photobook.primary}`,
         }}>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            Caretaker Scheduled Work
+            Total Inspections Completed
           </div>
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.caretakerScheduled}
+            {loading ? '...' : completedInspections.length || stats.totalCompleted}
           </div>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted }}>
-            Completed {stats.caretakerCompleted} / missed {stats.caretakerMissed}
+            Submitted inspections matching the current filters
           </div>
         </div>
 
@@ -397,29 +407,13 @@ export default function DashboardHome() {
           borderTop: `3px solid ${photobook.primary}`,
         }}>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            Caretaker Completion Rate
+            Inspections by User
           </div>
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.caretakerCompletionRate == null ? '-' : `${stats.caretakerCompletionRate}%`}
-          </div>
-        </div>
-
-        <div style={{
-          backgroundColor: 'white',
-          padding: '1.5rem',
-          borderRadius: '0.5rem',
-          boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
-          border: `1px solid ${photobook.softBorder}`,
-          borderTop: `3px solid ${photobook.primary}`,
-        }}>
-          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            ESM Ad-Hoc Checks
-          </div>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.esmAdhocCompleted}
+            {loading ? '...' : completedByUser.length}
           </div>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted }}>
-            Estates checked {stats.esmEstatesChecked}
+            {completedByUser[0] ? `${completedByUser[0].label}: ${completedByUser[0].count}` : 'No completed inspections'}
           </div>
         </div>
 
@@ -432,10 +426,32 @@ export default function DashboardHome() {
           borderTop: `3px solid ${photobook.primary}`,
         }}>
           <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
-            Housing Walkabouts
+            Inspections by Form Type
           </div>
           <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
-            {loading ? '...' : stats.housingWalkaboutsCompleted}
+            {loading ? '...' : completedByFormType.length}
+          </div>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted }}>
+            {completedByFormType[0] ? `${completedByFormType[0].label}: ${completedByFormType[0].count}` : 'No completed inspections'}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: 'white',
+          padding: '1.5rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
+          border: `1px solid ${photobook.softBorder}`,
+          borderTop: `3px solid ${photobook.primary}`,
+        }}>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted, marginBottom: '0.5rem', fontWeight: 600 }}>
+            Inspections by Estate/Block
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: photobook.heading }}>
+            {loading ? '...' : completedByEstateBlock.length}
+          </div>
+          <div style={{ fontSize: '0.875rem', color: photobook.primaryMuted }}>
+            {completedByEstateBlock[0] ? `${completedByEstateBlock[0].label}: ${completedByEstateBlock[0].count}` : 'No completed inspections'}
           </div>
         </div>
       </div>
@@ -558,8 +574,8 @@ export default function DashboardHome() {
                 }}
               >
                 <option value="all">All work types</option>
-                <option value="caretaker_scheduled">Caretaker scheduled</option>
-                <option value="esm_adhoc">ESM ad-hoc</option>
+                <option value="caretaker_scheduled">Caretaker</option>
+                <option value="esm_adhoc">ESM</option>
                 <option value="housing_walkabout">Housing walkabout</option>
               </select>
             </div>
@@ -599,29 +615,9 @@ export default function DashboardHome() {
               >
                 <option value="all">All Types</option>
                 <option value="inspection">Template (inspection)</option>
-                <option value="ad_hoc">Ad hoc</option>
                 <option value="street">Street</option>
                 <option value="block">Block</option>
                 <option value="estate">Estate</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
-                Scheduled
-              </label>
-              <select
-                value={filters.scheduled}
-                onChange={(e) => setFilters({ ...filters, scheduled: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem'
-                }}
-              >
-                <option value="all">All</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="ad_hoc">Ad Hoc</option>
               </select>
             </div>
           </div>
@@ -635,7 +631,6 @@ export default function DashboardHome() {
                 workType: 'all',
                 role: 'all',
                 inspector: 'all',
-                scheduled: 'all',
                 grading: 'all'
               })
             }}
@@ -668,7 +663,6 @@ export default function DashboardHome() {
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Location</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>User</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Template</th>
-              <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Due Date</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Completed</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>Grading</th>
               <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: photobook.heading }}>View</th>
@@ -689,13 +683,13 @@ export default function DashboardHome() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
                   Loading inspections...
                 </td>
               </tr>
             ) : inspections.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
                   No inspections found
                 </td>
               </tr>
@@ -721,9 +715,6 @@ export default function DashboardHome() {
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
                     {inspection.template_name || '-'}
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
-                    {formatDate(inspection.due_date)}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#111827' }}>
                     {formatDate(inspection.submitted_at)}

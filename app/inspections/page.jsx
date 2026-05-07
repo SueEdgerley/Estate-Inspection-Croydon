@@ -13,7 +13,6 @@ function normalizeInspectionListRows(data) {
 
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },
-  { id: 'schedules', label: 'Manage Schedules', icon: '🗂️' },
   { id: 'inspections', label: 'Manage Inspections', icon: '📄' },
 ]
 
@@ -202,12 +201,6 @@ export default function InspectionsListPage() {
     [row.estate_name, row.block_name].filter(Boolean).join(' · ') ||
     '–'
 
-  const freqDisplay = (row) => {
-    if (row.is_scheduled === true) return 'Scheduled'
-    if (row.is_scheduled === false) return 'Ad hoc'
-    return '–'
-  }
-
   const templateDisplay = (row) =>
     row.template_name?.trim() ||
     row.work_type?.trim() ||
@@ -263,11 +256,11 @@ export default function InspectionsListPage() {
         lineHeight: 1.5,
         maxWidth: '48rem',
       }}>
-        Work across inspections in one place: summaries, schedules, and the operational list for active and
-        scheduled work. Reporting totals stay on Home; use filters here to focus drafts, in-progress, and due work.
+        Work across inspections in one place: summaries and the operational list for active and completed inspections.
+        Start new inspections from Forms.
       </p>
 
-      {/* Section tabs (Summary / Schedules / Manage Inspections) */}
+      {/* Section tabs (Summary / Manage Inspections) */}
       <div
         role="tablist"
         aria-label="Manage inspections sections"
@@ -324,7 +317,7 @@ export default function InspectionsListPage() {
         </p>
       )}
 
-      {/* Summary / Schedules: quick scope + filters. Manage Inspections: filters only (scope lives in Users tab). */}
+      {/* Summary: quick scope + filters. Manage Inspections: filters only (scope lives in Users tab). */}
       <div
         style={{
           display: 'flex',
@@ -578,7 +571,6 @@ export default function InspectionsListPage() {
                 >
                   <option value="all">All types</option>
                   <option value="inspection">Template (inspection)</option>
-                  <option value="ad_hoc">Ad hoc</option>
                   <option value="street">Street</option>
                   <option value="block">Block</option>
                   <option value="estate">Estate</option>
@@ -790,7 +782,6 @@ export default function InspectionsListPage() {
               >
                 <option value="all">All types</option>
                 <option value="inspection">Template (inspection)</option>
-                <option value="ad_hoc">Ad hoc</option>
                 <option value="street">Street</option>
                 <option value="block">Block</option>
                 <option value="estate">Estate</option>
@@ -892,22 +883,20 @@ export default function InspectionsListPage() {
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Location</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>User</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Template</th>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Freq</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Start</th>
                   <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>End</th>
-                  <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontWeight: 600, color: '#374151' }}>Due</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                    <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
                       Loading…
                     </td>
                   </tr>
                 ) : summaryRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                    <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
                       No inspections match the current filters.
                     </td>
                   </tr>
@@ -918,33 +907,14 @@ export default function InspectionsListPage() {
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{locationDisplay(row)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.template_name ?? '–'}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{freqDisplay(row)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.created_at)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.submitted_at)}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.due_date)}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {activeTab === 'schedules' && (
-        <div
-          role="tabpanel"
-          style={{
-            backgroundColor: '#fff',
-            borderRadius: '0.5rem',
-            border: '1px solid #e5e7eb',
-            padding: '2.5rem',
-            textAlign: 'center',
-            color: '#6b7280',
-            fontSize: '0.9375rem',
-          }}
-        >
-          <p style={{ margin: 0 }}>Schedule management will appear here.</p>
         </div>
       )}
 

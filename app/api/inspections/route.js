@@ -357,7 +357,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
   }
 
   const dateInspected = answers?.ew_sig_inspection_date || submittedAt || new Date().toISOString()
-  const plannedVisitDate = answers?.ew_q_planned_date || ''
+  const inspectionVisitDate = answers?.ew_q_planned_date || ''
   const responsiblePerson = await getActivePersonName(sqlFn, answers?.ew_q_responsible)
   const role = String(answers?.ew_q_role || '').trim()
   const estateArea = String(answers?.ew_q_area || '').trim()
@@ -383,7 +383,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
         <li>Block / Location: ${escapeHtml(locationLine || '—')}</li>
         <li>Ward: —</li>
         <li>Date inspected: ${escapeHtml(formatDateGb(dateInspected) || '—')}</li>
-        <li>Planned visit date: ${escapeHtml(formatDateGb(plannedVisitDate) || plannedVisitDate || '—')}</li>
+        <li>Inspection visit date: ${escapeHtml(formatDateGb(inspectionVisitDate) || inspectionVisitDate || '—')}</li>
         <li>Responsible person: ${escapeHtml(responsiblePerson || '—')}</li>
         <li>Role: ${escapeHtml(role || '—')}</li>
       </ul>
@@ -415,7 +415,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
     `- Block / Location: ${locationLine || '—'}`,
     '- Ward: —',
     `- Date inspected: ${formatDateGb(dateInspected) || '—'}`,
-    `- Planned visit date: ${formatDateGb(plannedVisitDate) || plannedVisitDate || '—'}`,
+    `- Inspection visit date: ${formatDateGb(inspectionVisitDate) || inspectionVisitDate || '—'}`,
     `- Responsible person: ${responsiblePerson || '—'}`,
     `- Role: ${role || '—'}`,
     '',

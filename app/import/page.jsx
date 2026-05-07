@@ -76,8 +76,6 @@ export default function DataImportAdminPage() {
           Type:&nbsp;
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="completed">Completed</option>
-            <option value="missed">Missed</option>
-            <option value="scheduled">Scheduled</option>
           </select>
         </label>
       </div>
