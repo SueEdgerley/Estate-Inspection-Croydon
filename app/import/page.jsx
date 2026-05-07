@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function DataImportAdminPage() {
+  const router = useRouter()
   const [file, setFile] = useState(null)
   const [status, setStatus] = useState('completed')
   const [result, setResult] = useState('')
@@ -13,15 +14,19 @@ export default function DataImportAdminPage() {
     let cancelled = false
     fetch('/api/admin/access', { credentials: 'include' })
       .then((r) => {
-        if (!cancelled) setAllowed(r.ok)
+        if (cancelled) return
+        setAllowed(r.ok)
+        if (!r.ok) router.replace('/dashboard')
       })
       .catch(() => {
-        if (!cancelled) setAllowed(false)
+        if (cancelled) return
+        setAllowed(false)
+        router.replace('/dashboard')
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [router])
 
   async function upload() {
     if (!file) return
@@ -55,11 +60,7 @@ export default function DataImportAdminPage() {
   if (!allowed) {
     return (
       <div style={{ padding: 24, maxWidth: 480 }}>
-        <h1 style={{ fontSize: '1.5rem' }}>Data Import (Admin)</h1>
-        <p style={{ color: '#6b7280', marginTop: '0.75rem' }}>You do not have permission to use this page.</p>
-        <Link href="/dashboard" style={{ color: '#1d4ed8', marginTop: '1rem', display: 'inline-block' }}>
-          Back to dashboard
-        </Link>
+        <p style={{ color: '#6b7280', marginTop: '0.75rem' }}>Redirecting...</p>
       </div>
     )
   }

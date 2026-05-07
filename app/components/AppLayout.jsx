@@ -22,7 +22,6 @@ const ALL_NAV_ITEMS = [
   { href: '/repairs-inspector/new', label: 'Repairs Form', navKey: 'repairsInspectorForm' },
   { href: '/templates', label: 'Forms', navKey: 'templates' },
   { href: '/reports/inspections', label: 'Inspection reports', navKey: 'inspectionReports' },
-  { href: '/import', label: 'Import', navKey: 'import' },
   { href: '/guides', label: 'Guides', navKey: 'guides' },
   { href: '/settings', label: 'Settings', navKey: 'settings' },
   { href: '/downloads', label: 'Data Download', navKey: 'downloads' },
