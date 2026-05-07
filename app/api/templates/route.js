@@ -214,7 +214,6 @@ export async function GET() {
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)
-            .filter((t) => !isEsmOrEstateInspectionCandidate(t))
           const templates = patchCaretakerTemplatesList(
             applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
           )
@@ -230,10 +229,11 @@ export async function GET() {
                 templates,
                 diagnostics,
                 templateSource: buildTemplateSourceDiagnostics('template_versions_fallback', templates, {
-                  esm_fallback_disabled: true,
+                  fallback_reason: 'Airtable returned 401 Unauthorized while fetching templates.',
+                  fallback_includes_esm: true,
                   airtable_nested_fetch: getLastTemplatesNestedFetchMeta(),
                 }),
-                warning: 'Airtable returned 401; non-ESM templates loaded from latest Postgres snapshots. ESM templates require live Airtable.',
+                warning: 'Airtable returned 401; templates are temporarily loaded from latest Postgres snapshots. ESM may be stale until Airtable auth is fixed.',
                 source: 'template_versions_fallback',
               },
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
