@@ -158,7 +158,7 @@ function estateAirtableQuestionDisplayNumber(question, oneBasedSequentialInSecti
 }
 
 function estateAirtableSectionDisplayNumber(section, oneBasedIndexInTemplate) {
-  const n = Number(section?.sort_order ?? section?.section_order ?? section?.order ?? 0)
+  const n = Number(section?.esm_display_number ?? section?.esm_display_order ?? section?.sort_order ?? section?.section_order ?? section?.order ?? 0)
   if (Number.isFinite(n) && n > 0) return n
   return oneBasedIndexInTemplate
 }

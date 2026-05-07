@@ -561,6 +561,10 @@ function buildTemplateVersionSnapshot(template) {
     return {
       id: sec.id,
       order: sec.order ?? secIndex + 1,
+      sort_order: sec.sort_order ?? sec.section_order ?? sec.order ?? secIndex + 1,
+      section_order: sec.section_order ?? sec.sort_order ?? sec.order ?? secIndex + 1,
+      esm_display_order: sec.esm_display_order ?? null,
+      esm_display_number: sec.esm_display_number ?? null,
       title: sec.title ?? sec.name,
       name: sec.name ?? sec.title ?? null,
       help_text: sec.help_text ?? null,
