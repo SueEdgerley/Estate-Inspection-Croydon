@@ -524,6 +524,8 @@ function InspectionQuestion({
       ? question.esm_recipient_options
       : Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
         ? question.caretaker_recipient_options
+        : question.esm_use_people_recipients === true
+          ? peopleOptions
         : esmRole === 'graffiti_removal'
           ? ESM_GRAFFITI_RECIPIENT_OPTIONS
           : []
