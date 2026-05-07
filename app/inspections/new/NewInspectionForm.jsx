@@ -447,12 +447,13 @@ function InspectionQuestion({
     qType !== 'photo' &&
     !question.caretaker_routing_bundle &&
     question.caretaker_photo_always !== false
+  const caretakerSimplePhotoCapture = caretakerTemplate && question.caretaker_simple_photo_capture === true
   const caretakerPhotosAdded = caretakerAlwaysPhoto && hasQuestionPhotos(extras)
   const caretakerShowCommentFromPhoto = caretakerPhotosAdded && question.caretaker_comment_on_photo !== false
   const caretakerShowCommentOnYes = caretakerTemplate && question.caretaker_comment_on_yes && isYes
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
   const caretakerShowCommentWithPhotoUpload =
-    caretakerAlwaysPhoto && question.caretaker_comment_on_photo === true
+    caretakerAlwaysPhoto && !caretakerSimplePhotoCapture && question.caretaker_comment_on_photo === true
   const showCaretakerPhotoCommentUnderUpload =
     caretakerShowCommentWithPhotoUpload ||
     (caretakerShowCommentFromPhoto && !caretakerShowCommentOnYes) ||
@@ -495,7 +496,9 @@ function InspectionQuestion({
   const caretakerFixedEmailDestination =
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
-  const showCommentPhotoBlock = (showComment || showActionBlock || caretakerAlwaysPhoto || caretakerShowPhotoOnYes) || isExpanded
+  const showCommentPhotoBlock =
+    (showComment || showActionBlock || (caretakerAlwaysPhoto && !caretakerSimplePhotoCapture) || caretakerShowPhotoOnYes) ||
+    isExpanded
   const showPhotoInYesNoFollowUp =
     !isNvTemplate ||
     photoRequired ||
@@ -645,6 +648,46 @@ function InspectionQuestion({
             value={extras.comment || ''}
             onChange={(e) => setExtras({ comment: e.target.value })}
             placeholder={caretakerShowCommentOnYes ? 'Add details for the action' : 'Add a comment for this photo'}
+            rows={2}
+            style={{
+              ...textareaSurface,
+              width: '100%',
+              padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+              border: errorComment ? '1px solid #ef4444' : '1px solid #d1d5db',
+              borderRadius: '0.375rem',
+              fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+              fontFamily: 'inherit',
+              minHeight: mobileStackedForm ? 96 : undefined,
+              boxSizing: 'border-box',
+            }}
+          />
+          {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+        </div>
+      )}
+    </div>
+  )
+  const simplePhotoBlock = (
+    <div style={{ marginTop: '0.75rem' }}>
+      <PhotoUploadControl
+        id={photoId}
+        value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
+        onChange={(urls) => setExtras({ photo_urls: urls })}
+        error={errorPhotos}
+        label="Add photo"
+        mobileStacked={mobileStackedForm}
+      />
+      {caretakerShowCommentFromPhoto && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+            Comment (optional)
+          </label>
+          <textarea
+            className={commentTextareaClassName}
+            id={`comment-${question.id}`}
+            name={`comment-${question.id}`}
+            value={extras.comment || ''}
+            onChange={(e) => setExtras({ comment: e.target.value })}
+            placeholder="Add a comment for this photo"
             rows={2}
             style={{
               ...textareaSurface,
@@ -934,6 +977,7 @@ function InspectionQuestion({
             {showPhotoInYesNoFollowUp ? photoBlock : null}
           </div>
         )}
+        {caretakerSimplePhotoCapture ? simplePhotoBlock : null}
         {!isNvTemplate &&
           !caretakerAlwaysPhoto &&
           (estateInspectionForm

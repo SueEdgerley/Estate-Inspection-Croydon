@@ -305,6 +305,7 @@ function mapSnapshotQuestion(q, qIndex) {
     caretaker_comment_on_yes: q.caretaker_comment_on_yes ?? false,
     caretaker_photo_on_yes: q.caretaker_photo_on_yes ?? false,
     caretaker_photo_always: q.caretaker_photo_always ?? true,
+    caretaker_simple_photo_capture: q.caretaker_simple_photo_capture ?? false,
     caretaker_recipient_on_yes: q.caretaker_recipient_on_yes ?? false,
     caretaker_recipient_options: q.caretaker_recipient_options ?? null,
     caretaker_recipient_always: q.caretaker_recipient_always ?? false,
