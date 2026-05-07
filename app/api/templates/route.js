@@ -218,6 +218,9 @@ export async function GET() {
             applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
           )
           logEsmTemplateSections('template_versions_fallback', templates)
+          if (getEsmTemplateDiagnostics('template_versions_fallback', templates).length > 0) {
+            console.warn('Airtable failed; serving ESM fallback template.')
+          }
           if (templates.length > 0) {
             const diagnostics = getAirtableProductionDiagnostics({
               failing_table: error.airtableTableName ?? null,
