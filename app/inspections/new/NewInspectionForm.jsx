@@ -166,7 +166,7 @@ function estateAirtableSectionDisplayNumber(section, oneBasedIndexInTemplate) {
 /** Strip a leading "1. " / "2) " so we do not duplicate the computed section number. */
 function stripLeadingOrderedNumber(s) {
   return String(s || '')
-    .replace(/^\s*\d+[\.)]\s*/, '')
+    .replace(/^\s*\d+[\.)]?\s*/, '')
     .trim()
 }
 
@@ -490,12 +490,12 @@ function InspectionQuestion({
       : peopleOptions
   )
   const showComment =
-    (commentWhen === 'on_no' && isNo) ||
-    (commentWhen === 'on_yes' && isYes) ||
-    commentWhen === 'always' ||
-    esmShowComment ||
-    (caretakerShowCommentFromPhoto && !showCaretakerPhotoCommentUnderUpload) ||
-    (caretakerShowCommentOnYes && !showCaretakerPhotoCommentUnderUpload)
+    !esmInspectionQuestion &&
+    ((commentWhen === 'on_no' && isNo) ||
+      (commentWhen === 'on_yes' && isYes) ||
+      commentWhen === 'always' ||
+      (caretakerShowCommentFromPhoto && !showCaretakerPhotoCommentUnderUpload) ||
+      (caretakerShowCommentOnYes && !showCaretakerPhotoCommentUnderUpload))
   const photoRequired =
     (photoWhen === 'on_no' && isNo) || (photoWhen === 'on_yes' && isYes) || photoWhen === 'always'
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
@@ -509,6 +509,14 @@ function InspectionQuestion({
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
+  const esmShowPhotoComment = esmInspectionQuestion && qType !== 'photo' && !esmQ4AbandonedVehicle
+  const esmPhotoAllowed = esmShowPhotoComment && (estatePhotoAllowed || question.include_photo || question.type_includes_photo)
+  const esmUseDedicatedFollowUp =
+    esmInspectionQuestion &&
+    qType === 'yes_no' &&
+    isYes &&
+    !esmQ4AbandonedVehicle &&
+    (esmPhotoAllowed || esmShowRecipientDropdown || Boolean(esmMissingEmailWarning) || esmRole)
   const caretakerYesCreatesAction =
     caretakerTemplate &&
     isYes &&
@@ -525,10 +533,14 @@ function InspectionQuestion({
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const showCommentPhotoBlock =
-    (showComment || showActionBlock || (caretakerAlwaysPhoto && !caretakerSimplePhotoCapture) || caretakerShowPhotoOnYes) ||
-    esmShowRecipientDropdown ||
-    Boolean(esmMissingEmailWarning) ||
-    isExpanded
+    !esmUseDedicatedFollowUp &&
+    (showComment ||
+      showActionBlock ||
+      (caretakerAlwaysPhoto && !caretakerSimplePhotoCapture) ||
+      caretakerShowPhotoOnYes ||
+      esmShowRecipientDropdown ||
+      Boolean(esmMissingEmailWarning) ||
+      isExpanded)
   const showPhotoInYesNoFollowUp =
     !isNvTemplate ||
     photoRequired ||
@@ -655,17 +667,13 @@ function InspectionQuestion({
   const photoId = `photo-${question.id}`
   const photoBlock = (
     <div style={{ marginTop: '0.75rem' }}>
-      <label htmlFor={photoId} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-        Add photo
-        {photoRequired && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
-      </label>
       <PhotoUploadControl
         id={photoId}
         value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
         required={photoRequired}
         error={errorPhotos}
-        label="Add photo"
+        label={photoRequired ? 'Add photo *' : 'Add photo'}
         mobileStacked={mobileStackedForm}
       />
       {showCaretakerPhotoCommentUnderUpload && (
@@ -806,6 +814,12 @@ function InspectionQuestion({
         }}
       />
       {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
+    </div>
+  ) : null
+  const esmPhotoCommentBlock = esmShowPhotoComment ? (
+    <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.75rem' }}>
+      {esmPhotoAllowed ? photoBlock : null}
+      {esmShowComment ? esmCommentBlock : null}
     </div>
   ) : null
 
@@ -956,6 +970,51 @@ function InspectionQuestion({
               ))}
             </select>
             {errorCostCode && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorCostCode}</p>}
+          </div>
+        )}
+        {esmUseDedicatedFollowUp && (
+          <div style={{ ...followUpStyle, background: '#f9fafb', borderColor: '#e5e7eb', display: 'grid', gap: '0.75rem' }}>
+            {(question.esm_email_on_yes || question.triggers_email || question.esm_recipient_on_yes) ? (
+              <p style={{ fontWeight: 600, margin: 0, color: '#374151' }}>
+                Action will be created automatically
+              </p>
+            ) : null}
+            {esmPhotoCommentBlock}
+            {esmShowRecipientDropdown && (
+              <div>
+                <label htmlFor={`esm-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Email recipient <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  id={`esm-recipient-${question.id}`}
+                  value={extras.recipient_person_id || ''}
+                  onChange={(e) => setExtras({ recipient_person_id: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: errorRecipient ? '1px solid #ef4444' : '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: '1rem',
+                    backgroundColor: 'white',
+                    minHeight: mobileStackedForm ? 48 : undefined,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="">Select recipient…</option>
+                  {esmRecipientOptions.map((opt) => (
+                    <option key={`esm-dedicated-recipient-${question.id}-${opt.value}`} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {errorRecipient && <p style={{ margin: '0.35rem 0 0', fontSize: '0.875rem', color: '#ef4444' }}>{errorRecipient}</p>}
+              </div>
+            )}
+            {esmMissingEmailWarning ? (
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#b45309' }}>
+                {esmMissingEmailWarning}
+              </p>
+            ) : null}
           </div>
         )}
         {showCommentPhotoBlock && (
@@ -1125,7 +1184,7 @@ function InspectionQuestion({
         {!isNvTemplate &&
           !caretakerAlwaysPhoto &&
           (estateInspectionForm
-            ? estatePhotoAllowed && photoBlock
+            ? !esmInspectionQuestion && estatePhotoAllowed && photoBlock
             : !caretakerTemplate &&
               !question.caretaker_recipient_on_yes &&
               !photoWhen &&
@@ -1221,9 +1280,10 @@ function InspectionQuestion({
         {!isNvTemplate &&
           !caretakerAlwaysPhoto &&
           (estateInspectionForm
-            ? estatePhotoAllowed && photoBlock
+            ? esmInspectionQuestion
+              ? esmPhotoCommentBlock
+              : estatePhotoAllowed && photoBlock
             : !isStdConditionRow && !eq.caretaker_graded_always_extras && photoBlock)}
-        {esmInspectionQuestion ? esmCommentBlock : null}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1266,7 +1326,10 @@ function InspectionQuestion({
             </option>
           ))}
         </select>
-        {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
+        {!caretakerAlwaysPhoto &&
+          (esmInspectionQuestion
+            ? esmPhotoCommentBlock
+            : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1304,8 +1367,10 @@ function InspectionQuestion({
             </button>
           ))}
         </div>
-        {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
-        {esmInspectionQuestion ? esmCommentBlock : null}
+        {!caretakerAlwaysPhoto &&
+          (esmInspectionQuestion
+            ? esmPhotoCommentBlock
+            : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1362,7 +1427,10 @@ function InspectionQuestion({
             boxSizing: 'border-box',
           }}
         />
-        {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
+        {!caretakerAlwaysPhoto &&
+          (esmInspectionQuestion
+            ? esmPhotoCommentBlock
+            : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
     )
@@ -1525,7 +1593,10 @@ function InspectionQuestion({
           fontSize: '1rem',
         }}
       />
-      {!caretakerAlwaysPhoto && (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null)}
+      {!caretakerAlwaysPhoto &&
+        (esmInspectionQuestion
+          ? esmPhotoCommentBlock
+          : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
       {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
     </div>
   )
