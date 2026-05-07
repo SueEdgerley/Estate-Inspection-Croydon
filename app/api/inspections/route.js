@@ -211,6 +211,9 @@ function collectEsmEmailNotifications({ template, answers, answerExtras }) {
       if (q.esm_email_on_comment_or_issue && (comment || isYes)) {
         notifications.push({ ...base, to: String(q.esm_email_on_comment_or_issue), routing: `esm_${q.esm_behavior || 'comment'}_comment` })
       }
+      if (q.esm_email_on_photo_and_comment && photoUrls.length > 0 && comment) {
+        notifications.push({ ...base, to: String(q.esm_email_on_photo_and_comment), routing: `esm_${q.esm_behavior || 'photo_comment'}_photo_comment` })
+      }
       if (q.esm_email_on_photo && photoUrls.length > 0) {
         notifications.push({ ...base, to: String(q.esm_email_on_photo), routing: `esm_${q.esm_behavior || 'photo'}_photo` })
       }
@@ -422,6 +425,7 @@ function mapSnapshotQuestion(q, qIndex) {
     esm_email_on_photo_to_selected_recipient: q.esm_email_on_photo_to_selected_recipient ?? false,
     esm_email_on_yes: q.esm_email_on_yes ?? null,
     esm_email_on_photo: q.esm_email_on_photo ?? null,
+    esm_email_on_photo_and_comment: q.esm_email_on_photo_and_comment ?? null,
     esm_email_on_comment_or_issue: q.esm_email_on_comment_or_issue ?? null,
     esm_missing_email_warning: q.esm_missing_email_warning ?? null,
     require_comment_on_yes: q.require_comment_on_yes ?? false,

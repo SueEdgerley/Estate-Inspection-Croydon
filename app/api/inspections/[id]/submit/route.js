@@ -115,6 +115,9 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
       if (q.esm_email_on_comment_or_issue && (extras.comment || isYes)) {
         targets.push({ to: String(q.esm_email_on_comment_or_issue), routing: `esm_${q.esm_behavior || 'comment'}_comment` })
       }
+      if (q.esm_email_on_photo_and_comment && photoUrls.length > 0 && extras.comment) {
+        targets.push({ to: String(q.esm_email_on_photo_and_comment), routing: `esm_${q.esm_behavior || 'photo_comment'}_photo_comment` })
+      }
       if (q.esm_email_on_photo && photoUrls.length > 0) {
         targets.push({ to: String(q.esm_email_on_photo), routing: `esm_${q.esm_behavior || 'photo'}_photo` })
       }
