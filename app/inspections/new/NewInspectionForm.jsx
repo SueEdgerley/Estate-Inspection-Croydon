@@ -197,11 +197,52 @@ function getQuestionType(question) {
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
 }
 
-/** Estate checklist body row: force graded control path when Airtable type still resolves as text/long_text/etc. */
-function estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex) {
-  if (!estateInspectionForm || estateChecklistIndex == null) return question
+function normalizeQuestionTextForMatch(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isEsmLightFittingsCleanlinessQuestion(question) {
+  const text = normalizeQuestionTextForMatch(question?.question_text || question?.label)
+  return text === 'please confirm the overall rating for cleanliness of light fittings and working condition'
+}
+
+function isEsmLightsWorkingConditionQuestion(question) {
+  const text = normalizeQuestionTextForMatch(question?.question_text || question?.label)
+  return text === 'please confirm the working condition of the lights'
+}
+
+function isEsmLiftQuestion(question) {
+  const text = normalizeQuestionTextForMatch([
+    question?.question_text,
+    question?.label,
+    question?.resident_wording,
+    question?.instructions,
+    question?.helper_text,
+  ].filter(Boolean).join(' '))
+  return /\blifts?\b/.test(text)
+}
+
+/** Estate/ESM body row: force graded control path for known display-only overrides. */
+function estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex, esmInspectionForm = false) {
+  if (!estateInspectionForm && !esmInspectionForm) return question
   const t = getQuestionType(question)
-  if (t === 'graded' || t === 'nv_standard') return question
+  if (isEsmLightsWorkingConditionQuestion(question)) {
+    return {
+      ...question,
+      question_type: 'graded',
+      answer_mode: 'graded',
+      grading_options: ['Good', 'Fair', 'Poor'],
+      grading_scheme_name: null,
+    }
+  }
+  if (estateChecklistIndex == null) return question
+  if (t === 'graded' || t === 'nv_standard') {
+    return question
+  }
   return {
     ...question,
     question_type: 'graded',
@@ -404,11 +445,15 @@ function InspectionQuestion({
   const skipInstructionalBlockForEstateChecklistRow =
     estateInspectionForm && estateChecklistIndex != null && !isExplicitAirtableLayoutRow
 
-  const eq = estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex)
+  const eq = estateEffectiveQuestionForRendering(question, estateInspectionForm, estateChecklistIndex, esmInspectionForm)
   const qType = getQuestionType(eq)
   const estatePhotoAllowed = estateInspectionForm && estateShowsPhotoFromAirtable(question, eq)
 
-  const labelText = caretakerPartLabel || question.question_text
+  const esmDisplayQuestionText =
+    (estateInspectionForm || esmInspectionForm) && isEsmLightFittingsCleanlinessQuestion(question)
+      ? 'Please confirm the overall rating for cleanliness of light fittings'
+      : question.question_text
+  const labelText = caretakerPartLabel || esmDisplayQuestionText
   const displayPrimaryLabel =
     estateInspectionForm && estateDisplayNumber != null ? (
       <>
@@ -463,9 +508,10 @@ function InspectionQuestion({
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
   const esmInspectionQuestion = estateInspectionForm || esmInspectionForm
   const esmRole = esmInspectionQuestion ? getEsmQuestionRole(question) : ''
-  const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true
+  const esmLiftPhotoComment = esmInspectionQuestion && isEsmLiftQuestion(question) && hasQuestionPhotos(extras)
+  const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true && !estatePhotoAllowed
   const esmCommentOnPhoto = esmInspectionQuestion && question.esm_comment_on_photo === true && hasQuestionPhotos(extras)
-  const esmShowComment = esmCommentAlways || esmCommentOnPhoto
+  const esmShowComment = esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment
   const esmRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.esm_recipient_options) && question.esm_recipient_options.length
       ? question.esm_recipient_options
