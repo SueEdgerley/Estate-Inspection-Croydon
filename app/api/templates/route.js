@@ -215,21 +215,30 @@ export async function GET() {
             ORDER BY template_id, created_at DESC
           `
           const rawFallback = fallbackResult.rows
-            .map((row) => row.snapshot)
+            .map((row) => {
+              const snapshot = row.snapshot
+              if (!snapshot || typeof snapshot !== 'object') return null
+              return {
+                row_template_id: row.template_id,
+                row_template_name: row.template_name,
+                ...snapshot,
+              }
+            })
             .filter((s) => s && typeof s === 'object')
             .map((s) => ({
-              id: s.id,
+              id: s.id ?? s.row_template_id,
               template_key: s.template_key ?? '',
-              name: s.name ?? s.template_name ?? 'Template',
+              name: s.name ?? s.template_name ?? s.row_template_name ?? 'Template',
               template_type: s.template_type ?? s.type ?? 'standard',
               type: s.type ?? s.template_type ?? 'standard',
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)
-          const visibleFallback = applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
-          const fallbackEsmTemplates = filterArchivedTemplates(rawFallback).filter(isEsmOrEstateInspectionCandidate)
+          const archivedFilteredFallback = filterArchivedTemplates(rawFallback)
+          const visibleFallback = applyTemplateVisibility(archivedFilteredFallback, viewer)
+          const fallbackEsmTemplates = archivedFilteredFallback.filter(isEsmOrEstateInspectionCandidate)
           const templates = patchCaretakerTemplatesList(
-            mergeTemplatesById(visibleFallback, fallbackEsmTemplates)
+            mergeTemplatesById(visibleFallback, fallbackEsmTemplates.length ? fallbackEsmTemplates : archivedFilteredFallback)
           )
           logEsmTemplateSections('template_versions_fallback', templates)
           if (getEsmTemplateDiagnostics('template_versions_fallback', templates).length > 0) {
