@@ -411,6 +411,7 @@ function mapSnapshotQuestion(q, qIndex) {
     esm_confirmation_message: q.esm_confirmation_message ?? null,
     esm_dual_photo_upload: q.esm_dual_photo_upload ?? false,
     esm_recipient_on_yes: q.esm_recipient_on_yes ?? false,
+    esm_recipient_label: q.esm_recipient_label ?? null,
     esm_recipient_options: q.esm_recipient_options ?? null,
     esm_email_on_yes: q.esm_email_on_yes ?? null,
     esm_email_on_photo: q.esm_email_on_photo ?? null,

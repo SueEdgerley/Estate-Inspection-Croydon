@@ -1040,7 +1040,7 @@ function InspectionQuestion({
             {esmShowRecipientDropdown && (
               <div>
                 <label htmlFor={`esm-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                  Email recipient <span style={{ color: '#ef4444' }}>*</span>
+                  {question.esm_recipient_label || 'Email recipient'} <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <select
                   id={`esm-recipient-${question.id}`}
@@ -1170,7 +1170,7 @@ function InspectionQuestion({
             {esmShowRecipientDropdown && (
               <>
                 <label htmlFor={`esm-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                  Email recipient <span style={{ color: '#ef4444' }}>*</span>
+                  {question.esm_recipient_label || 'Email recipient'} <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <select
                   id={`esm-recipient-${question.id}`}
