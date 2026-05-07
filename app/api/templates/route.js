@@ -142,6 +142,18 @@ function buildTemplateSourceDiagnostics(source, templates, extra = {}) {
   }
 }
 
+function mergeTemplatesById(primary, additions) {
+  const merged = []
+  const seen = new Set()
+  for (const template of [...(primary || []), ...(additions || [])]) {
+    const id = String(template?.id || '')
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    merged.push(template)
+  }
+  return merged
+}
+
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
@@ -214,8 +226,10 @@ export async function GET() {
               sections: Array.isArray(s.sections) ? s.sections : [],
             }))
             .filter((t) => t.id)
+          const visibleFallback = applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
+          const fallbackEsmTemplates = filterArchivedTemplates(rawFallback).filter(isEsmOrEstateInspectionCandidate)
           const templates = patchCaretakerTemplatesList(
-            applyTemplateVisibility(filterArchivedTemplates(rawFallback), viewer)
+            mergeTemplatesById(visibleFallback, fallbackEsmTemplates)
           )
           logEsmTemplateSections('template_versions_fallback', templates)
           if (getEsmTemplateDiagnostics('template_versions_fallback', templates).length > 0) {
