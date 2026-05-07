@@ -772,7 +772,7 @@ function InspectionQuestion({
       </div>
       <div>
         <label htmlFor={`id-card-photo-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-          ID card photo <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
+          ID badge photo <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
         </label>
         <PhotoUploadControl
           id={`id-card-photo-${question.id}`}
@@ -780,12 +780,12 @@ function InspectionQuestion({
           onChange={(urls) => setExtras({ id_card_photo_urls: urls })}
           required
           error={errorPhotos && !hasEsmIdCardPhotos(extras) ? errorPhotos : undefined}
-          label="Add ID card photo"
+          label="Add ID badge photo"
           multiple={false}
           mobileStacked={mobileStackedForm}
         />
         <p style={{ margin: '0.35rem 0 0', fontSize: '0.8125rem', color: '#6b7280' }}>
-          ID card photo
+          ID badge photo
         </p>
       </div>
     </div>
