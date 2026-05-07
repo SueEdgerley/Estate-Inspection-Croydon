@@ -1328,10 +1328,10 @@ function InspectionQuestion({
         )}
         {!isNvTemplate &&
           !caretakerAlwaysPhoto &&
-          (estateInspectionForm
-            ? esmInspectionQuestion
-              ? esmPhotoCommentBlock
-              : estatePhotoAllowed && photoBlock
+          (esmInspectionQuestion
+            ? esmPhotoCommentBlock
+            : estateInspectionForm
+            ? estatePhotoAllowed && photoBlock
             : !isStdConditionRow && !eq.caretaker_graded_always_extras && photoBlock)}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -2092,7 +2092,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
     inspectionRenderSections.forEach((sec) => {
       (sec.questions || []).forEach((q) => {
-        if (q.nv_hidden) return
+        if (q.nv_hidden || q.esm_hidden) return
         if (!estateInspectionForm && !isNeighbourhoodVoiceQuestionRenderable(q)) return
         if (!estateInspectionForm && !shouldShowQuestion(q, answers)) return
         const qRawLayout = String(q.question_type_raw ?? '').toLowerCase()
@@ -2106,7 +2106,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           return
         }
         const checklistIdx = qIdx
-        const qForType = estateEffectiveQuestionForRendering(q, estateInspectionForm, checklistIdx)
+        const qForType = estateEffectiveQuestionForRendering(q, estateInspectionForm, checklistIdx, esmInspectionForm)
         const qType = getQuestionType(qForType)
         const v = answers[q.id]
 
@@ -2713,7 +2713,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   let estateSectionSeq = 0
                   const useEstateListLayout = estateInspectionForm || esmInspectionForm
                   const rows = (section.questions || []).filter((q) => {
-                    if (q.nv_hidden) return false
+                    if (q.nv_hidden || q.esm_hidden) return false
                     if (useEstateListLayout) return true
                     if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
