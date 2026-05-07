@@ -11,12 +11,12 @@ import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { isCaretakerTemplate } from '@/lib/caretaker-template'
+import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   isEstateWalkaboutTemplate,
   ESTATE_WALKABOUT_CHECKLIST_QID,
   getCanonicalEstateWalkaboutTemplateForInsert,
 } from '@/lib/estate-walkabout-template'
-import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   createEstateWalkaboutActionsFromPayload,
   sendEstateWalkaboutRepairActionNotification,
@@ -88,6 +88,13 @@ function collectPhotoUrlsFromExtras(extras) {
       : []
   const singleUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
   return [...(singleUrl ? [singleUrl] : []), ...urls].filter((url) => typeof url === 'string' && url.trim())
+}
+
+function collectEsmIdCardPhotoUrls(extras) {
+  if (!extras || typeof extras !== 'object') return []
+  return Array.isArray(extras.id_card_photo_urls)
+    ? extras.id_card_photo_urls.filter((url) => typeof url === 'string' && url.trim())
+    : []
 }
 
 function getCaretakerSectionNumber(section) {
@@ -169,6 +176,105 @@ function collectCaretakerEmailNotifications({ template, answers, answerExtras, i
     })
   }
   return notifications
+}
+
+function collectEsmEmailNotifications({ template, answers, answerExtras }) {
+  if (!isEsmInspectionFormTemplate(template)) return []
+  const notifications = []
+  for (const section of template.sections || []) {
+    for (const q of section.questions || []) {
+      if (!q?.id) continue
+      const extras = answerExtras[q.id] || {}
+      const photoUrls = collectPhotoUrlsFromExtras(extras)
+      const idCardPhotoUrls = collectEsmIdCardPhotoUrls(extras)
+      const answer = answers[q.id]
+      const isYes = normalizeYesNoAnswer(answer) === 'yes'
+      const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+      const selectedRecipient = typeof extras.recipient_person_id === 'string' ? extras.recipient_person_id.trim() : ''
+      const base = {
+        sectionTitle: section.title || section.name || '',
+        questionText: q.question_text || q.label || q.id,
+        answer: answer == null ? '' : String(answer),
+        comment,
+        photoUrls: [...photoUrls, ...idCardPhotoUrls],
+      }
+
+      if (q.esm_recipient_on_yes === true && isYes && selectedRecipient) {
+        notifications.push({ ...base, to: selectedRecipient, routing: 'esm_graffiti_selected_recipient' })
+      }
+      if (q.esm_email_on_yes && isYes) {
+        notifications.push({ ...base, to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` })
+      }
+      if (q.esm_email_on_comment_or_issue && (comment || isYes)) {
+        notifications.push({ ...base, to: String(q.esm_email_on_comment_or_issue), routing: `esm_${q.esm_behavior || 'comment'}_comment` })
+      }
+      if (q.esm_email_on_photo && photoUrls.length > 0) {
+        notifications.push({ ...base, to: String(q.esm_email_on_photo), routing: `esm_${q.esm_behavior || 'photo'}_photo` })
+      }
+    }
+  }
+  return notifications
+}
+
+async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle, locationLine, notifications }) {
+  const result = { sent: 0, failed: [] }
+  const dedupe = new Set()
+  for (const notification of notifications || []) {
+    const to = String(notification.to || '').trim()
+    if (!to) continue
+    const dedupeKey = `${to}|${notification.routing}|${notification.questionText}`
+    if (dedupe.has(dedupeKey)) continue
+    dedupe.add(dedupeKey)
+    const photos = Array.isArray(notification.photoUrls) && notification.photoUrls.length
+      ? `<ul>${notification.photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
+      : '<p>No photo link recorded.</p>'
+    const html = `
+      <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+        <h1 style="font-size:18px;">ESM inspection notification</h1>
+        <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
+        ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
+        <p><strong>Section:</strong> ${escapeHtml(notification.sectionTitle || 'ESM form')}</p>
+        <p><strong>Question:</strong> ${escapeHtml(notification.questionText || '')}</p>
+        <p><strong>Answer:</strong> ${escapeHtml(notification.answer || '—')}</p>
+        ${notification.comment ? `<p><strong>Comment:</strong> ${escapeHtml(notification.comment)}</p>` : ''}
+        <p><strong>Photos:</strong></p>
+        ${photos}
+      </div>
+    `
+    const text = [
+      'ESM inspection notification',
+      locationLine ? `Location: ${locationLine}` : '',
+      notification.sectionTitle ? `Section: ${notification.sectionTitle}` : '',
+      notification.questionText ? `Question: ${notification.questionText}` : '',
+      notification.answer ? `Answer: ${notification.answer}` : '',
+      notification.comment ? `Comment: ${notification.comment}` : '',
+      ...(notification.photoUrls || []),
+    ].filter(Boolean).join('\n')
+    try {
+      const sendResult = await sendAppEmail({
+        to,
+        subject: `ESM inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
+        html,
+        text,
+      })
+      if (sendResult.ok) {
+        result.sent += 1
+        await insertOutboundEmailLog(sqlFn, {
+          inspectionId,
+          questionId: null,
+          emailTo: to,
+          emailRouting: notification.routing || 'esm_notification',
+          status: 'sent',
+          sentAt: new Date(),
+        })
+      } else {
+        result.failed.push({ email: to, error: sendResult.error || 'send_failed' })
+      }
+    } catch (error) {
+      result.failed.push({ email: to, error: error?.message || String(error) })
+    }
+  }
+  return result
 }
 
 async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspectionTitle, locationLine, notifications }) {
@@ -297,6 +403,18 @@ function mapSnapshotQuestion(q, qIndex) {
     create_action_on_yes: q.create_action_on_yes,
     create_action_on_no: q.create_action_on_no ?? true,
     esm_q4_abandoned_vehicle: q.esm_q4_abandoned_vehicle ?? false,
+    esm_behavior: q.esm_behavior ?? null,
+    esm_comment_always: q.esm_comment_always ?? false,
+    esm_comment_label: q.esm_comment_label ?? null,
+    esm_comment_helper: q.esm_comment_helper ?? null,
+    esm_comment_on_photo: q.esm_comment_on_photo ?? false,
+    esm_dual_photo_upload: q.esm_dual_photo_upload ?? false,
+    esm_recipient_on_yes: q.esm_recipient_on_yes ?? false,
+    esm_recipient_options: q.esm_recipient_options ?? null,
+    esm_email_on_yes: q.esm_email_on_yes ?? null,
+    esm_email_on_photo: q.esm_email_on_photo ?? null,
+    esm_email_on_comment_or_issue: q.esm_email_on_comment_or_issue ?? null,
+    esm_missing_email_warning: q.esm_missing_email_warning ?? null,
     require_comment_on_yes: q.require_comment_on_yes ?? false,
     require_comment_on_no: q.require_comment_on_no ?? true,
     require_photo_on_yes: q.require_photo_on_yes ?? false,
@@ -1260,7 +1378,8 @@ export async function POST(request) {
               ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
               : []
           const singleUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
-          const allUrls = singleUrl ? [singleUrl, ...urls] : urls
+          const idCardUrls = collectEsmIdCardPhotoUrls(extras)
+          const allUrls = singleUrl ? [singleUrl, ...urls, ...idCardUrls] : [...urls, ...idCardUrls]
           for (let i = 0; i < allUrls.length; i++) {
             const url = allUrls[i]
             const photoId = `photo_${inspectionId}_${questionId}_${Date.now()}_${i}`
@@ -1277,6 +1396,7 @@ export async function POST(request) {
     const actionsForPoster = []
     const walkaboutEmailResults = { sent: 0, failed: [] }
     const caretakerEmailResults = { sent: 0, failed: [] }
+    const esmEmailResults = { sent: 0, failed: [] }
     let walkaboutEstateName = ''
 
     // Estate Walkabout: photos embedded in checklist JSON (per item)
@@ -1431,7 +1551,7 @@ export async function POST(request) {
               VALUES (
                 ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
                 ${category}, null, ${actionTitle}, ${actionDescription}, ${actionLocation}, 'open',
-                ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(allPhotoUrls)}, ${actionCostCode}
+                ${comment || null}, ${actionRecipient}, true, ${JSON.stringify([...allPhotoUrls, ...collectEsmIdCardPhotoUrls(extras)])}, ${actionCostCode}
               )
             `
             const actionForPoster = {
@@ -1649,6 +1769,27 @@ export async function POST(request) {
       }
     }
 
+    if (isEsmInspectionFormTemplate(template)) {
+      try {
+        const notifications = collectEsmEmailNotifications({
+          template,
+          answers,
+          answerExtras: answer_extras,
+        })
+        const sent = await sendEsmEmailNotifications(sql, {
+          inspectionId,
+          inspectionTitle: template.name || 'ESM inspection',
+          locationLine: displayTitle || String(location || '').trim(),
+          notifications,
+        })
+        esmEmailResults.sent += sent.sent || 0
+        if (Array.isArray(sent.failed)) esmEmailResults.failed.push(...sent.failed)
+      } catch (esmEmailErr) {
+        console.warn('[Inspections] ESM notification email failed:', esmEmailErr?.message || esmEmailErr)
+        esmEmailResults.failed.push({ error: esmEmailErr?.message || String(esmEmailErr) })
+      }
+    }
+
     return NextResponse.json({
       inspectionId,
       id: inspectionId,
@@ -1669,10 +1810,10 @@ export async function POST(request) {
       pdfUrl: fullPdfUrl || undefined,
       fullPdfUrl: fullPdfUrl || undefined,
       posterPdfUrl: posterPdfUrl || undefined,
-      emails_sent: (walkaboutEmailResults.sent || 0) + (caretakerEmailResults.sent || 0) || undefined,
+      emails_sent: (walkaboutEmailResults.sent || 0) + (caretakerEmailResults.sent || 0) + (esmEmailResults.sent || 0) || undefined,
       email_failures:
-        walkaboutEmailResults.failed.length || caretakerEmailResults.failed.length
-          ? [...walkaboutEmailResults.failed, ...caretakerEmailResults.failed]
+        walkaboutEmailResults.failed.length || caretakerEmailResults.failed.length || esmEmailResults.failed.length
+          ? [...walkaboutEmailResults.failed, ...caretakerEmailResults.failed, ...esmEmailResults.failed]
           : undefined,
       ...(pdfErrorMessage ? { pdfError: pdfErrorMessage } : {}),
     }, { status: 201 })

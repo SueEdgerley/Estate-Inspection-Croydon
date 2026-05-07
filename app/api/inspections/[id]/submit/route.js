@@ -72,6 +72,113 @@ function getCaretakerQuestionPart(question, index) {
   return Number.isFinite(oneBased) && oneBased > 0 ? oneBased : index + 1
 }
 
+function collectEsmIdCardPhotoUrlsFromExtras(extras) {
+  const structured = extras?.structured && typeof extras.structured === 'object' ? extras.structured : {}
+  return Array.isArray(structured.id_card_photo_urls)
+    ? structured.id_card_photo_urls.filter((url) => typeof url === 'string' && url.trim())
+    : []
+}
+
+async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectionTitle, locationLine }) {
+  if (!isEsmInspectionFormTemplate(templateVersion)) return { sent: [], failed: [] }
+  const sent = []
+  const failed = []
+  const rowsByQuestionId = new Map((answerRows || []).map((row) => [String(row.question_id || ''), row]))
+  const dedupe = new Set()
+
+  for (const section of templateVersion.sections || []) {
+    for (const q of section.questions || []) {
+      if (!q?.id) continue
+      const row = rowsByQuestionId.get(String(q.id))
+      const extras = parseCaretakerAnswerNotes(row?.notes)
+      const photosResult = await sql`
+        SELECT blob_url FROM inspection_photos
+        WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
+      `
+      const dbPhotos = (photosResult.rows || []).map((p) => p.blob_url).filter(Boolean)
+      const photoUrls = [...new Set([...dbPhotos, ...extras.extraPhotoUrls])]
+      const idCardPhotoUrls = collectEsmIdCardPhotoUrlsFromExtras(extras)
+      const answer = answers[q.id]
+      const isYes = normalizeYesNoAnswer(answer) === 'yes'
+      const selectedRecipient = extras.recipient_person_id ? String(extras.recipient_person_id).trim() : ''
+      const targets = []
+
+      if (q.esm_recipient_on_yes === true && isYes && selectedRecipient) {
+        targets.push({ to: selectedRecipient, routing: 'esm_graffiti_selected_recipient' })
+      }
+      if (q.esm_email_on_yes && isYes) {
+        targets.push({ to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` })
+      }
+      if (q.esm_email_on_comment_or_issue && (extras.comment || isYes)) {
+        targets.push({ to: String(q.esm_email_on_comment_or_issue), routing: `esm_${q.esm_behavior || 'comment'}_comment` })
+      }
+      if (q.esm_email_on_photo && photoUrls.length > 0) {
+        targets.push({ to: String(q.esm_email_on_photo), routing: `esm_${q.esm_behavior || 'photo'}_photo` })
+      }
+
+      for (const target of targets) {
+        const to = String(target.to || '').trim()
+        if (!to) continue
+        const key = `${to}|${target.routing}|${q.id}`
+        if (dedupe.has(key)) continue
+        dedupe.add(key)
+        const allPhotoUrls = [...photoUrls, ...idCardPhotoUrls]
+        const questionText = q.question_text || q.label || q.id
+        const photoList = allPhotoUrls.length
+          ? `<ul>${allPhotoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
+          : '<p>No photo link recorded.</p>'
+        const html = `
+          <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+            <h1 style="font-size:18px;">ESM inspection notification</h1>
+            <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
+            ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
+            <p><strong>Section:</strong> ${escapeHtml(section.title || section.name || '')}</p>
+            <p><strong>Question:</strong> ${escapeHtml(questionText)}</p>
+            <p><strong>Answer:</strong> ${escapeHtml(answer == null ? '—' : String(answer))}</p>
+            ${extras.comment ? `<p><strong>Comment:</strong> ${escapeHtml(extras.comment)}</p>` : ''}
+            <p><strong>Photos:</strong></p>
+            ${photoList}
+          </div>
+        `
+        const text = [
+          'ESM inspection notification',
+          locationLine ? `Location: ${locationLine}` : '',
+          section.title || section.name ? `Section: ${section.title || section.name}` : '',
+          `Question: ${questionText}`,
+          answer == null ? '' : `Answer: ${String(answer)}`,
+          extras.comment ? `Comment: ${extras.comment}` : '',
+          ...allPhotoUrls,
+        ].filter(Boolean).join('\n')
+        try {
+          const sendResult = await sendAppEmail({
+            to,
+            subject: `ESM inspection: ${section.title || locationLine || inspectionTitle || 'notification'}`,
+            html,
+            text,
+          })
+          if (sendResult.ok) {
+            sent.push({ email: to, type: target.routing })
+            await insertOutboundEmailLog(sql, {
+              inspectionId,
+              questionId: q.id,
+              emailTo: to,
+              emailRouting: target.routing,
+              status: 'sent',
+              sentAt: new Date(),
+            })
+          } else {
+            failed.push({ email: to, error: sendResult.error || 'send_failed' })
+          }
+        } catch (error) {
+          failed.push({ email: to, error: error?.message || String(error) })
+        }
+      }
+    }
+  }
+
+  return { sent, failed }
+}
+
 async function sendCaretakerPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectorEmail, inspectionTitle, locationLine }) {
   if (!isCaretakerTemplate(templateVersion)) return { sent: 0, failed: [] }
   const sent = []
@@ -401,7 +508,7 @@ export async function POST(request, { params }) {
                 WHERE inspection_id = ${id} AND question_id = ${q.id}
               `
               const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
-              const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls])]
+              const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
               const costCode = extras.costCode || sectionCostCode || null
               let actionRecipient =
@@ -513,7 +620,7 @@ export async function POST(request, { params }) {
                 WHERE inspection_id = ${id} AND question_id = ${q.id}
               `
               const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
-              const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls])]
+              const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
               const costCode = extras.costCode || sectionCostCode || null
               let actionRecipient =
@@ -759,6 +866,28 @@ export async function POST(request, { params }) {
       } catch (caretakerEmailErr) {
         console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)
         actionCreationWarnings.push(`Caretaker notification error: ${caretakerEmailErr?.message || String(caretakerEmailErr)}`)
+      }
+    }
+
+    if (emailVersion && isEsmInspectionFormTemplate(emailVersion)) {
+      try {
+        const esmEmails = await sendEsmPhotoAndYesNotifications({
+          inspectionId: id,
+          templateVersion: emailVersion,
+          answers,
+          answerRows: answersResult.rows,
+          inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'ESM inspection',
+          locationLine: estateBlockLine,
+        })
+        if (Array.isArray(esmEmails.sent)) {
+          emailResults.sent.push(...esmEmails.sent)
+        }
+        if (Array.isArray(esmEmails.failed)) {
+          emailResults.failed.push(...esmEmails.failed)
+        }
+      } catch (esmEmailErr) {
+        console.error('[inspections/submit] ESM notifications:', esmEmailErr)
+        actionCreationWarnings.push(`ESM notification error: ${esmEmailErr?.message || String(esmEmailErr)}`)
       }
     }
 
