@@ -23,6 +23,18 @@ function formatActionStatus(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
+function isEsmInspectionRecord(inspection) {
+  const text = [
+    inspection?.template_name,
+    inspection?.template_key,
+    inspection?.type,
+    inspection?.source,
+  ].filter(Boolean).join(' ').toLowerCase()
+  if (!text) return false
+  if (text.includes('walkabout') || text.includes('caretaker') || text.includes('neighbourhood voice')) return false
+  return text.includes('esm') || text.includes('estate inspection')
+}
+
 export default function InspectionDetail() {
   const params = useParams()
   // Match wizard: dynamic [id] can be string | string[]; never await useParams() (sync hook).
@@ -211,6 +223,7 @@ export default function InspectionDetail() {
     String(inspection?.type || '').toLowerCase() === 'estate_walkabout' ||
     String(inspection?.template_name || '').toLowerCase().includes('walkabout') ||
     String(inspection?.template_key || '').toLowerCase() === 'estate_walkabout'
+  const isEsmInspection = isEsmInspectionRecord(inspection)
 
   if (loading) {
     return <div style={{ padding: '2rem' }}>Loading inspection...</div>
@@ -321,9 +334,27 @@ export default function InspectionDetail() {
         marginBottom: '1.5rem',
         border: '1px solid #e5e7eb'
       }}>
-        <h2 style={{ margin: '0 0 1.5rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-          Actions
-        </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600' }}>
+            Actions
+          </h2>
+          {id && isEsmInspection ? (
+            <Link
+              href={`/actions?inspection_id=${encodeURIComponent(id)}`}
+              style={{
+                padding: '0.6rem 1rem',
+                borderRadius: '0.5rem',
+                border: '1px solid #0f766e',
+                backgroundColor: '#0f766e',
+                color: 'white',
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Open Action Plan
+            </Link>
+          ) : null}
+        </div>
         <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
           Actions logged during this inspection will appear here.
         </p>
