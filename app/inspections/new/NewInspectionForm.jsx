@@ -582,6 +582,7 @@ function InspectionQuestion({
   const caretakerYesTriggersFollowUp = caretakerTemplate && question.caretaker_recipient_on_yes
   const actionRecipientWhen = question.action_recipient_required_when
   const showActionRecipient =
+    !esmInspectionQuestion &&
     !question.esm_recipient_on_yes &&
     ((actionRecipientWhen === 'on_yes' && isYes) ||
       (actionRecipientWhen === 'on_no' && isNo) ||
@@ -605,6 +606,7 @@ function InspectionQuestion({
     question.create_action_on_yes !== false
   const showActionBlock =
     qType === 'yes_no' &&
+    !esmInspectionQuestion &&
     !esmQ4AbandonedVehicle &&
     ((isNo && createActionOnNo) ||
       showActionRecipient ||
@@ -727,6 +729,8 @@ function InspectionQuestion({
           authorisation_text: '',
           cost_code: '',
         })
+      } else if (esmInspectionQuestion && qType === 'yes_no' && (val === 'No' || val === 'NA')) {
+        onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
       } else if (question.esm_recipient_on_yes && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { recipient_person_id: '' })
       } else if (actionRecipientWhen && !showRecipientForAnswer(actionRecipientWhen, val)) {
@@ -906,7 +910,7 @@ function InspectionQuestion({
           {question.esm_confirmation_message}
         </p>
       ) : null}
-      {esmShowRecipientDropdown ? (
+      {esmShowRecipientDropdown && question.esm_recipient_on_photo ? (
         <div>
           <label htmlFor={`esm-photo-recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
             {question.esm_recipient_label || 'Email recipient'} <span style={{ color: '#ef4444' }}>*</span>
