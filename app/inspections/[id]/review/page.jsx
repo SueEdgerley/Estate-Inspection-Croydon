@@ -30,6 +30,18 @@ function formatFailureEntry(entry) {
   return String(entry)
 }
 
+function isEsmInspectionRecord(inspection) {
+  const text = [
+    inspection?.template_name,
+    inspection?.template_key,
+    inspection?.type,
+    inspection?.source,
+  ].filter(Boolean).join(' ').toLowerCase()
+  if (!text) return false
+  if (text.includes('walkabout') || text.includes('caretaker') || text.includes('neighbourhood voice')) return false
+  return text.includes('esm') || text.includes('estate inspection')
+}
+
 export default function InspectionReview() {
   const params = useParams()
   const router = useRouter()
@@ -155,6 +167,7 @@ export default function InspectionReview() {
   }
 
   const submittedAlready = String(inspection.status || '').toLowerCase() === 'submitted'
+  const isEsmInspection = isEsmInspectionRecord(inspection)
 
   return (
     <div>
@@ -291,22 +304,43 @@ export default function InspectionReview() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard')}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#1d4ed8',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.5rem',
-              fontSize: '1rem',
-              fontWeight: '500',
-              cursor: 'pointer',
-            }}
-          >
-            Continue to dashboard
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {isEsmInspection ? (
+              <Link
+                href={`/actions?inspection_id=${encodeURIComponent(id)}`}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: '#0f766e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.5rem',
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  display: 'inline-block',
+                }}
+              >
+                Open Action Plan
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#1d4ed8',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.5rem',
+                fontSize: '1rem',
+                fontWeight: '500',
+                cursor: 'pointer',
+              }}
+            >
+              Continue to dashboard
+            </button>
+          </div>
         </div>
       )}
 
