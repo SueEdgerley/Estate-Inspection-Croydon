@@ -1455,6 +1455,7 @@ export async function POST(request) {
     const walkaboutEmailResults = { sent: 0, failed: [] }
     const caretakerEmailResults = { sent: 0, failed: [] }
     const esmEmailResults = { sent: 0, failed: [] }
+    const actionCreationWarnings = []
     let walkaboutEstateName = ''
 
     // Estate Walkabout: photos embedded in checklist JSON (per item)
@@ -1529,9 +1530,11 @@ export async function POST(request) {
         }
         for (const warning of esmActionsResult?.warnings || []) {
           console.warn('[Inspections] ESM action warning:', warning)
+          actionCreationWarnings.push(warning)
         }
       } catch (esmActErr) {
         console.warn('[Inspections] ESM actions:', esmActErr?.message || esmActErr)
+        actionCreationWarnings.push(`ESM actions: ${esmActErr?.message || String(esmActErr)}`)
       }
     }
 
@@ -1889,6 +1892,7 @@ export async function POST(request) {
         walkaboutEmailResults.failed.length || caretakerEmailResults.failed.length || esmEmailResults.failed.length
           ? [...walkaboutEmailResults.failed, ...caretakerEmailResults.failed, ...esmEmailResults.failed]
           : undefined,
+      ...(actionCreationWarnings.length > 0 ? { action_creation_warnings: actionCreationWarnings } : {}),
       ...(pdfErrorMessage ? { pdfError: pdfErrorMessage } : {}),
     }, { status: 201 })
   } catch (error) {
