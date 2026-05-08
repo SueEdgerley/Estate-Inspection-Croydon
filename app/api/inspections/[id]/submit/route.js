@@ -128,6 +128,12 @@ function parseInspectionTimeInput(value) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function safeActionText(value, fallback, maxLength) {
+  const text = String(value || fallback || '').trim()
+  const safe = text || String(fallback || 'Inspection action')
+  return maxLength && safe.length > maxLength ? safe.slice(0, maxLength) : safe
+}
+
 async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectionTitle, locationLine }) {
   if (!isEsmInspectionFormTemplate(templateVersion)) return { sent: [], failed: [] }
   const sent = []
@@ -558,12 +564,6 @@ export async function POST(request, { params }) {
             for (const q of sec.questions || []) {
               if (!q || !q.id) continue
               const val = answers[q.id]
-              const existing = await sql`
-                SELECT id FROM actions
-                WHERE inspection_id = ${id} AND question_id = ${q.id}
-                LIMIT 1
-              `
-              if (existing.rows.length > 0) continue
               const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
               const extras = parseCaretakerAnswerNotes(answerRow?.notes)
               const comment = extras.comment || ''
@@ -577,16 +577,32 @@ export async function POST(request, { params }) {
               const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
               const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
-              const isEsmAction = isEsmInspectionFormTemplate(templateVersion) && isEsmActionTrigger(q, val, extras, photoUrlsArr)
-              if (!shouldAutocreateCaretakerAction(q, val, sec) && !isEsmAction) continue
-              const category = isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category || 'other'
+              const isEsmInspection = isEsmInspectionFormTemplate(templateVersion)
+              const isEsmAction = isEsmInspection && isEsmActionTrigger(q, val, extras, photoUrlsArr)
+              if (!(isEsmInspection ? false : shouldAutocreateCaretakerAction(q, val, sec)) && !isEsmAction) continue
+              const category = safeActionText(isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category, 'other', 50)
+              const existing = isEsmAction
+                ? await sql`
+                    SELECT id FROM actions
+                    WHERE inspection_id = ${id}
+                      AND question_id = ${q.id}
+                      AND category = ${category}
+                      AND COALESCE(auto_created, false) = true
+                    LIMIT 1
+                  `
+                : await sql`
+                    SELECT id FROM actions
+                    WHERE inspection_id = ${id} AND question_id = ${q.id}
+                    LIMIT 1
+                  `
+              if (existing.rows.length > 0) continue
               const costCode = extras.costCode || sectionCostCode || null
               let actionRecipient = isEsmAction
                 ? getEsmActionRecipient(q, extras)
                 : (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
                   (recipientId != null ? String(recipientId).trim() : '') ||
                   null
-              if (!actionRecipient) {
+              if (!actionRecipient && !isEsmAction) {
                 const routed = await resolveIssueRoutingRecipient(sql, {
                   issueCategory: category,
                   issueType: q.issue_type ? String(q.issue_type) : null,
@@ -596,7 +612,7 @@ export async function POST(request, { params }) {
                 actionRecipient = routed?.personId || null
               }
               const priorityVal = extras.priority || q.action_priority || null
-              const title = `${sec.title || sec.name || 'Section'} – ${qText}`
+              const title = safeActionText(`${sec.title || sec.name || 'Section'} – ${qText}`, qText, 500)
               const description = isEsmAction
                 ? [
                     `Inspection ID: ${id}`,
@@ -627,7 +643,7 @@ export async function POST(request, { params }) {
                     assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
                     submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
                   })
-              const actionId = `action_${id}_${q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+              const actionId = `action_${id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
               try {
                 await sql`
                   INSERT INTO actions (
@@ -650,7 +666,7 @@ export async function POST(request, { params }) {
                 )
                 continue
               }
-              try {
+              if (!isEsmAction) try {
                 const team = await formatAssignedTeamLabel(sql, actionRecipient)
                 const detail = [comment, description].filter(Boolean).join('\n\n').slice(0, 2500)
                 const issueTypeLabel = String(category || 'issue').replace(/_/g, ' ')

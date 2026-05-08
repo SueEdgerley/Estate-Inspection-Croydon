@@ -528,6 +528,12 @@ function getEsmActionEmailRouting(question, extras = {}) {
   return String(question.email_routing || '').trim()
 }
 
+function safeActionText(value, fallback, maxLength) {
+  const text = String(value || fallback || '').trim()
+  const safe = text || String(fallback || 'Inspection action')
+  return maxLength && safe.length > maxLength ? safe.slice(0, maxLength) : safe
+}
+
 function answerValueFromRow(row) {
   if (!row) return ''
   if (row.answer_value != null && String(row.answer_value).trim() !== '') return String(row.answer_value)
@@ -1575,10 +1581,11 @@ export async function POST(request) {
         const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
         const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
-        const isEsmAction = isEsmInspectionFormTemplate(template) && isEsmActionTrigger(q, answer, extras, allPhotoUrls)
+        const isEsmInspection = isEsmInspectionFormTemplate(template)
+        const isEsmAction = isEsmInspection && isEsmActionTrigger(q, answer, extras, allPhotoUrls)
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
-        const category = isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category || 'Follow-up'
-        let isIssue = inspectionAnswerTriggersIssue(q, section, answer) || isEsmAction
+        const category = safeActionText(isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category, 'Follow-up', 50)
+        let isIssue = (isEsmInspection ? false : inspectionAnswerTriggersIssue(q, section, answer)) || isEsmAction
         if (
           isIssue &&
           isEstateWalkaboutTemplate(template) &&
@@ -1593,13 +1600,22 @@ export async function POST(request) {
 
         if (isIssue) {
           try {
-            const existingAction = await sql`
-              SELECT id FROM actions
-              WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
-              LIMIT 1
-            `
+            const existingAction = isEsmAction
+              ? await sql`
+                  SELECT id FROM actions
+                  WHERE inspection_id = ${inspectionId}
+                    AND question_id = ${q.id}
+                    AND category = ${category}
+                    AND COALESCE(auto_created, false) = true
+                  LIMIT 1
+                `
+              : await sql`
+                  SELECT id FROM actions
+                  WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
+                  LIMIT 1
+                `
             if (existingAction.rows.length > 0) continue
-            const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
+            const actionId = `action_${inspectionId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
             const isCaretakerAction = isCaretakerTemplate(template)
             const isEsmQ4Action = q.esm_q4_abandoned_vehicle === true
             const isGroundsAction =
@@ -1613,7 +1629,7 @@ export async function POST(request) {
                 String(extras.recipient_person_id).trim()
                   ? String(extras.recipient_person_id).trim()
                   : null
-            const actionTitle = isCaretakerAction
+            const actionTitleRaw = isCaretakerAction
               ? `${section.title || section.name || 'Section'} - ${qText}`
               : isEsmQ4Action
                 ? `${section.title || section.name || 'Section'} - ${qText}`
@@ -1622,6 +1638,7 @@ export async function POST(request) {
                 : isGroundsAction
                   ? `${section.title || section.name || 'Section'} - ${qText}`
                   : residentMessage
+            const actionTitle = safeActionText(actionTitleRaw, residentMessage, 500)
             const esmQ4Description = isEsmQ4Action
               ? [
                   qText,
@@ -1678,7 +1695,7 @@ export async function POST(request) {
               created_at: new Date(),
             }
             actionsForPoster.push(actionForPoster)
-            try {
+            if (!isEsmAction) try {
               const locLine = displayTitle || String(location || '').trim() || '—'
               const pdfR = await tryGenerateAndStoreIssueJobCardPdf(sql, {
                 actionId,
