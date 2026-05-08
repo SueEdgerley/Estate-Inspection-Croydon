@@ -32,6 +32,7 @@ import {
   isGroundsMaintenanceTemplate,
 } from '@/lib/grounds-maintenance-template'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
+import { createEsmActionsFromInspection } from '@/lib/esm-action-plan-actions'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   tryGenerateAndStoreIssueJobCardPdf,
@@ -77,49 +78,6 @@ function collectEsmIdCardPhotoUrlsFromExtras(extras) {
   return Array.isArray(structured.id_card_photo_urls)
     ? structured.id_card_photo_urls.filter((url) => typeof url === 'string' && url.trim())
     : []
-}
-
-function isEsmActionTrigger(question, answer, extras = {}, photoUrls = []) {
-  if (!question || !question.esm_behavior) return false
-  const isYes = normalizeYesNoAnswer(answer) === 'yes'
-  const comment = typeof extras.comment === 'string' && extras.comment.trim()
-  const hasPhotos = Array.isArray(photoUrls) && photoUrls.length > 0
-  if (question.esm_q4_abandoned_vehicle === true) return isYes
-  if (question.esm_recipient_on_yes === true) return isYes
-  if (question.esm_email_on_yes) return isYes
-  if (question.esm_email_on_comment_or_issue) return Boolean(comment || isYes)
-  if (question.esm_email_on_photo_to_selected_recipient === true) return hasPhotos && Boolean(extras.recipient_person_id)
-  if (question.esm_email_on_photo_and_comment) return hasPhotos && Boolean(comment)
-  if (question.esm_email_on_photo) return hasPhotos
-  return false
-}
-
-function getEsmActionCategory(question) {
-  const role = String(question?.esm_behavior || '').trim()
-  if (!role) return 'esm'
-  if (role.includes('health_safety')) return 'health_safety'
-  if (role.includes('fire_safety')) return 'fire_safety'
-  if (role.includes('abandoned_vehicle')) return 'parking_abandoned_vehicle'
-  if (role.includes('graffiti')) return 'graffiti'
-  if (role.includes('garage')) return 'garages'
-  if (role.includes('tree') || role.includes('ivy')) return 'grounds_maintenance'
-  if (role.includes('external_cleaning')) return 'cleaning'
-  return `esm_${role}`.slice(0, 50)
-}
-
-function getEsmActionRecipient(question, extras = {}) {
-  const selected = typeof extras.recipient_person_id === 'string' ? extras.recipient_person_id.trim() : ''
-  if (selected && !selected.includes('@')) return selected
-  return null
-}
-
-function getEsmActionEmailRouting(question, extras = {}) {
-  if (question.esm_email_on_yes) return String(question.esm_email_on_yes)
-  if (question.esm_email_on_comment_or_issue) return String(question.esm_email_on_comment_or_issue)
-  if (question.esm_email_on_photo_and_comment) return String(question.esm_email_on_photo_and_comment)
-  if (question.esm_email_on_photo) return String(question.esm_email_on_photo)
-  if (question.esm_email_on_photo_to_selected_recipient && extras.recipient_person_id) return String(extras.recipient_person_id)
-  return String(question.email_routing || '').trim()
 }
 
 function parseInspectionTimeInput(value) {
@@ -549,6 +507,27 @@ export async function POST(request, { params }) {
               `Estate walkabout actions: ${ewErr?.message || String(ewErr)}`
             )
           }
+        } else if (isEsmInspectionFormTemplate(templateVersion)) {
+          try {
+            const er = await createEsmActionsFromInspection(sql, {
+              inspectionId: id,
+              templateVersion,
+              answersRows: answersResult.rows,
+              answersMap: answers,
+              inspectorName: inspectionLive.inspector_name || inspectorName || inspectorEmail,
+              locationLine: estateBlockLine,
+              submittedAt: inspectionLive.submitted_at || new Date().toISOString(),
+              blockId: inspectionLive.block_id || inspection.block_id || null,
+            })
+            for (const w of er.warnings || []) {
+              actionCreationWarnings.push(w)
+            }
+          } catch (esmErr) {
+            console.error('[inspections/submit] ESM actions:', esmErr)
+            actionCreationWarnings.push(
+              `ESM actions: ${esmErr?.message || String(esmErr)}`
+            )
+          }
         } else {
           const sections = (templateVersion && templateVersion.sections) || []
           const completedAt = new Date().toISOString()
@@ -577,32 +556,20 @@ export async function POST(request, { params }) {
               const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
               const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
-              const isEsmInspection = isEsmInspectionFormTemplate(templateVersion)
-              const isEsmAction = isEsmInspection && isEsmActionTrigger(q, val, extras, photoUrlsArr)
-              if (!(isEsmInspection ? false : shouldAutocreateCaretakerAction(q, val, sec)) && !isEsmAction) continue
-              const category = safeActionText(isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category, 'other', 50)
-              const existing = isEsmAction
-                ? await sql`
-                    SELECT id FROM actions
-                    WHERE inspection_id = ${id}
-                      AND question_id = ${q.id}
-                      AND category = ${category}
-                      AND COALESCE(auto_created, false) = true
-                    LIMIT 1
-                  `
-                : await sql`
-                    SELECT id FROM actions
-                    WHERE inspection_id = ${id} AND question_id = ${q.id}
-                    LIMIT 1
-                  `
+              if (!shouldAutocreateCaretakerAction(q, val, sec)) continue
+              const category = safeActionText(q.action_category || q.category, 'other', 50)
+              const existing = await sql`
+                SELECT id FROM actions
+                WHERE inspection_id = ${id} AND question_id = ${q.id}
+                LIMIT 1
+              `
               if (existing.rows.length > 0) continue
               const costCode = extras.costCode || sectionCostCode || null
-              let actionRecipient = isEsmAction
-                ? getEsmActionRecipient(q, extras)
-                : (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
-                  (recipientId != null ? String(recipientId).trim() : '') ||
-                  null
-              if (!actionRecipient && !isEsmAction) {
+              let actionRecipient =
+                (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
+                (recipientId != null ? String(recipientId).trim() : '') ||
+                null
+              if (!actionRecipient) {
                 const routed = await resolveIssueRoutingRecipient(sql, {
                   issueCategory: category,
                   issueType: q.issue_type ? String(q.issue_type) : null,
@@ -613,36 +580,19 @@ export async function POST(request, { params }) {
               }
               const priorityVal = extras.priority || q.action_priority || null
               const title = safeActionText(`${sec.title || sec.name || 'Section'} – ${qText}`, qText, 500)
-              const description = isEsmAction
-                ? [
-                    `Inspection ID: ${id}`,
-                    completedAt ? `Date/time: ${completedAt}` : null,
-                    estateBlockLine ? `Estate / block: ${estateBlockLine}` : null,
-                    `Section: ${sec.title || sec.name || ''}`,
-                    `Question: ${qText}`,
-                    `Answer: ${answerLabel}`,
-                    comment ? `Comment: ${comment}` : null,
-                    photoRefs ? `Photo reference(s): ${photoRefs}` : null,
-                    getEsmActionEmailRouting(q, extras) ? `Email/routing: ${getEsmActionEmailRouting(q, extras)}` : null,
-                    actionRecipient ? `Recipient: ${actionRecipient}` : null,
-                    `Action category: ${category}`,
-                    inspectionLive.inspector_name || inspectorName || inspectorEmail
-                      ? `Submitted by: ${inspectionLive.inspector_name || inspectorName || inspectorEmail}`
-                      : null,
-                  ].filter(Boolean).join('\n')
-                : buildCaretakerActionDescription({
-                    inspectionId: id,
-                    completedAtIso: completedAt,
-                    estateBlockLine,
-                    sectionName: sec.title || sec.name || '',
-                    questionText: qText,
-                    answerLabel,
-                    comment,
-                    photoRefs,
-                    category,
-                    assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
-                    submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
-                  })
+              const description = buildCaretakerActionDescription({
+                inspectionId: id,
+                completedAtIso: completedAt,
+                estateBlockLine,
+                sectionName: sec.title || sec.name || '',
+                questionText: qText,
+                answerLabel,
+                comment,
+                photoRefs,
+                category,
+                assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
+                submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
+              })
               const actionId = `action_${id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
               try {
                 await sql`
@@ -666,7 +616,7 @@ export async function POST(request, { params }) {
                 )
                 continue
               }
-              if (!isEsmAction) try {
+              try {
                 const team = await formatAssignedTeamLabel(sql, actionRecipient)
                 const detail = [comment, description].filter(Boolean).join('\n\n').slice(0, 2500)
                 const issueTypeLabel = String(category || 'issue').replace(/_/g, ' ')

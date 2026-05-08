@@ -21,6 +21,7 @@ import {
   createEstateWalkaboutActionsFromPayload,
   sendEstateWalkaboutRepairActionNotification,
 } from '@/lib/estate-walkabout-actions'
+import { createEsmActionsFromPayload } from '@/lib/esm-action-plan-actions'
 import {
   tryGenerateAndStoreIssueJobCardPdf,
   formatDateGb,
@@ -483,49 +484,6 @@ function inspectionAnswerTriggersIssue(question, section, answer) {
   const direction = getActionTriggerOn(question, section)
   if (direction === 'yes') return norm === 'yes' && question.create_action_on_yes !== false
   return norm === 'no' && question.create_action_on_no !== false
-}
-
-function isEsmActionTrigger(question, answer, extras = {}, photoUrls = []) {
-  if (!question || !question.esm_behavior) return false
-  const isYes = normalizeYesNoAnswer(answer) === 'yes'
-  const comment = typeof extras.comment === 'string' && extras.comment.trim()
-  const hasPhotos = Array.isArray(photoUrls) && photoUrls.length > 0
-  if (question.esm_q4_abandoned_vehicle === true) return isYes
-  if (question.esm_recipient_on_yes === true) return isYes
-  if (question.esm_email_on_yes) return isYes
-  if (question.esm_email_on_comment_or_issue) return Boolean(comment || isYes)
-  if (question.esm_email_on_photo_to_selected_recipient === true) return hasPhotos && Boolean(extras.recipient_person_id)
-  if (question.esm_email_on_photo_and_comment) return hasPhotos && Boolean(comment)
-  if (question.esm_email_on_photo) return hasPhotos
-  return false
-}
-
-function getEsmActionCategory(question) {
-  const role = String(question?.esm_behavior || '').trim()
-  if (!role) return 'esm'
-  if (role.includes('health_safety')) return 'health_safety'
-  if (role.includes('fire_safety')) return 'fire_safety'
-  if (role.includes('abandoned_vehicle')) return 'parking_abandoned_vehicle'
-  if (role.includes('graffiti')) return 'graffiti'
-  if (role.includes('garage')) return 'garages'
-  if (role.includes('tree') || role.includes('ivy')) return 'grounds_maintenance'
-  if (role.includes('external_cleaning')) return 'cleaning'
-  return `esm_${role}`.slice(0, 50)
-}
-
-function getEsmActionRecipient(question, extras = {}) {
-  const selected = typeof extras.recipient_person_id === 'string' ? extras.recipient_person_id.trim() : ''
-  if (selected && !selected.includes('@')) return selected
-  return null
-}
-
-function getEsmActionEmailRouting(question, extras = {}) {
-  if (question.esm_email_on_yes) return String(question.esm_email_on_yes)
-  if (question.esm_email_on_comment_or_issue) return String(question.esm_email_on_comment_or_issue)
-  if (question.esm_email_on_photo_and_comment) return String(question.esm_email_on_photo_and_comment)
-  if (question.esm_email_on_photo) return String(question.esm_email_on_photo)
-  if (question.esm_email_on_photo_to_selected_recipient && extras.recipient_person_id) return String(extras.recipient_person_id)
-  return String(question.email_routing || '').trim()
 }
 
 function safeActionText(value, fallback, maxLength) {
@@ -1554,6 +1512,29 @@ export async function POST(request) {
       }
     }
 
+    if (isEsmInspectionFormTemplate(template)) {
+      try {
+        const esmActionsResult = await createEsmActionsFromPayload(sql, {
+          inspectionId,
+          template,
+          answers,
+          answerExtras: answer_extras,
+          inspectorName,
+          locationLine: displayTitle || String(location || '').trim(),
+          submittedAt: new Date().toISOString(),
+          blockId: bodyBlockId || null,
+        })
+        if (Array.isArray(esmActionsResult?.actions)) {
+          actionsForPoster.push(...esmActionsResult.actions)
+        }
+        for (const warning of esmActionsResult?.warnings || []) {
+          console.warn('[Inspections] ESM action warning:', warning)
+        }
+      } catch (esmActErr) {
+        console.warn('[Inspections] ESM actions:', esmActErr?.message || esmActErr)
+      }
+    }
+
     let emailGroupsByTeam = null
 
     for (const section of template.sections || []) {
@@ -1581,11 +1562,14 @@ export async function POST(request) {
         const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
         const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
-        const isEsmInspection = isEsmInspectionFormTemplate(template)
-        const isEsmAction = isEsmInspection && isEsmActionTrigger(q, answer, extras, allPhotoUrls)
+        if (isEsmInspectionFormTemplate(template)) {
+          // ESM action-plan rows are created by the dedicated helper above,
+          // matching the Walkabout best-effort action creation pattern.
+          continue
+        }
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
-        const category = safeActionText(isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category, 'Follow-up', 50)
-        let isIssue = (isEsmInspection ? false : inspectionAnswerTriggersIssue(q, section, answer)) || isEsmAction
+        const category = safeActionText(q.action_category || q.category, 'Follow-up', 50)
+        let isIssue = inspectionAnswerTriggersIssue(q, section, answer)
         if (
           isIssue &&
           isEstateWalkaboutTemplate(template) &&
@@ -1600,77 +1584,36 @@ export async function POST(request) {
 
         if (isIssue) {
           try {
-            const existingAction = isEsmAction
-              ? await sql`
-                  SELECT id FROM actions
-                  WHERE inspection_id = ${inspectionId}
-                    AND question_id = ${q.id}
-                    AND category = ${category}
-                    AND COALESCE(auto_created, false) = true
-                  LIMIT 1
-                `
-              : await sql`
-                  SELECT id FROM actions
-                  WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
-                  LIMIT 1
-                `
+            const existingAction = await sql`
+              SELECT id FROM actions
+              WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
+              LIMIT 1
+            `
             if (existingAction.rows.length > 0) continue
             const actionId = `action_${inspectionId}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
             const isCaretakerAction = isCaretakerTemplate(template)
-            const isEsmQ4Action = q.esm_q4_abandoned_vehicle === true
             const isGroundsAction =
               isGroundsMaintenanceTemplate(template) &&
               (q.action_category === 'grounds' || q.category === 'grounds')
             const qText = q.question_text || q.label || q.id
-            const actionRecipient = isEsmAction
-              ? getEsmActionRecipient(q, extras)
-              : (isCaretakerAction || isEsmQ4Action || q.action_recipient_required_when) &&
-                extras.recipient_person_id &&
-                String(extras.recipient_person_id).trim()
-                  ? String(extras.recipient_person_id).trim()
-                  : null
+            const actionRecipient =
+              (isCaretakerAction || q.action_recipient_required_when) &&
+              extras.recipient_person_id &&
+              String(extras.recipient_person_id).trim()
+                ? String(extras.recipient_person_id).trim()
+                : null
             const actionTitleRaw = isCaretakerAction
               ? `${section.title || section.name || 'Section'} - ${qText}`
-              : isEsmQ4Action
-                ? `${section.title || section.name || 'Section'} - ${qText}`
-                : isEsmAction
-                  ? `${section.title || section.name || 'Section'} - ${qText}`
-                : isGroundsAction
+              : isGroundsAction
                   ? `${section.title || section.name || 'Section'} - ${qText}`
                   : residentMessage
             const actionTitle = safeActionText(actionTitleRaw, residentMessage, 500)
-            const esmQ4Description = isEsmQ4Action
-              ? [
-                  qText,
-                  `Answer: ${String(answer ?? '')}`,
-                  extras.authorisation_text ? `Authorisation: ${String(extras.authorisation_text).trim()}` : null,
-                  comment ? `Comment/location: ${comment}` : null,
-                  extras.cost_code ? `Cost code: ${String(extras.cost_code).trim()}` : null,
-                  actionRecipient ? `Recipient: ${actionRecipient}` : null,
-                ].filter(Boolean).join('\n')
-              : ''
             const actionDescription = isCaretakerAction
               ? [qText, comment].filter(Boolean).join('\n\n')
-              : isEsmQ4Action
-                ? esmQ4Description
-                : isEsmAction
-                  ? [
-                      qText,
-                      `Answer: ${String(answer ?? '')}`,
-                      comment ? `Comment: ${comment}` : null,
-                      getEsmActionEmailRouting(q, extras) ? `Email/routing: ${getEsmActionEmailRouting(q, extras)}` : null,
-                      actionRecipient ? `Recipient: ${actionRecipient}` : null,
-                    ].filter(Boolean).join('\n')
-                : isGroundsAction
+              : isGroundsAction
                   ? [qText, `Answer: ${String(answer ?? '')}`, comment].filter(Boolean).join('\n\n')
                   : residentMessage
-            const actionCostCode =
-              isEsmQ4Action && extras.cost_code && String(extras.cost_code).trim()
-                ? String(extras.cost_code).trim()
-                : null
-            const actionLocation = isEsmAction
-              ? (String(location || '').trim() || displayTitle || null)
-              : isGroundsAction
+            const actionLocation = isGroundsAction
               ? (String(location || '').trim() || displayTitle || null)
               : null
             await sql`
@@ -1682,7 +1625,7 @@ export async function POST(request) {
               VALUES (
                 ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
                 ${category}, null, ${actionTitle}, ${actionDescription}, ${actionLocation}, 'open',
-                ${comment || null}, ${actionRecipient}, true, ${JSON.stringify([...allPhotoUrls, ...collectEsmIdCardPhotoUrls(extras)])}, ${actionCostCode}
+              ${comment || null}, ${actionRecipient}, true, ${JSON.stringify([...allPhotoUrls, ...collectEsmIdCardPhotoUrls(extras)])}, null
               )
             `
             const actionForPoster = {
@@ -1695,7 +1638,7 @@ export async function POST(request) {
               created_at: new Date(),
             }
             actionsForPoster.push(actionForPoster)
-            if (!isEsmAction) try {
+            try {
               const locLine = displayTitle || String(location || '').trim() || '—'
               const pdfR = await tryGenerateAndStoreIssueJobCardPdf(sql, {
                 actionId,
