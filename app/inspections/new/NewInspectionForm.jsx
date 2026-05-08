@@ -531,6 +531,7 @@ function InspectionQuestion({
   const caretakerShowPhotoOnYes = caretakerTemplate && question.caretaker_photo_on_yes && isYes
   const esmInspectionQuestion = estateInspectionForm || esmInspectionForm
   const esmRole = esmInspectionQuestion ? getEsmQuestionRole(question) : ''
+  const esmGradedQuestion = esmInspectionQuestion && qType === 'graded'
   const esmLiftPhotoComment =
     esmInspectionQuestion &&
     (esmRole === 'lifts_comment' || isEsmLiftQuestion(question)) &&
@@ -538,7 +539,7 @@ function InspectionQuestion({
   const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true && !estatePhotoAllowed
   const esmCommentOnPhoto =
     esmInspectionQuestion &&
-    (question.esm_comment_on_photo === true || esmRole === 'garages') &&
+    (esmGradedQuestion || question.esm_comment_on_photo === true || esmRole === 'garages') &&
     hasQuestionPhotos(extras)
   const esmShowComment = esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment
   const esmPhotosAdded = hasQuestionPhotos(extras)
@@ -592,7 +593,8 @@ function InspectionQuestion({
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
   const esmShowPhotoComment = esmInspectionQuestion && qType !== 'photo' && !esmQ4AbandonedVehicle
-  const esmPhotoAllowed = esmShowPhotoComment && (estatePhotoAllowed || question.include_photo || question.type_includes_photo)
+  const esmPhotoAllowed =
+    esmShowPhotoComment && (esmGradedQuestion || estatePhotoAllowed || question.include_photo || question.type_includes_photo)
   const esmUseDedicatedFollowUp =
     esmInspectionQuestion &&
     qType === 'yes_no' &&
