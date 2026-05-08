@@ -13,7 +13,11 @@ export async function GET() {
     const cu = userId ? await currentUser() : null
     const templates = await getTemplates()
     const normalized = templates.map(normalizeTemplate)
-    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    const roleCtx = await getAppRoleContextForClerkUser(
+      userId,
+      cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+    )
     const allowed = filterTemplatesForAppRole(normalized, {
       userId,
       systemRole: roleCtx.systemRole,

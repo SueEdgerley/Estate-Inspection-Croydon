@@ -39,7 +39,8 @@ export async function GET(request) {
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(
       clerkUserId,
-      cu?.publicMetadata?.isAdmin === true
+      cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
     )
     if (!mayViewManagerAnalytics(roleCtx.systemRole, roleCtx.clerkIsAdmin)) {
       return NextResponse.json({ error: 'Access denied', code: 'ROLE_NOT_PERMITTED' }, { status: 403 })

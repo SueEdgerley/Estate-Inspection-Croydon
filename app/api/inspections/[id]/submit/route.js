@@ -391,7 +391,11 @@ export async function POST(request, { params }) {
     }
 
     const cuSubmit = await currentUser()
-    const roleCtxSubmit = await getAppRoleContextForClerkUser(userId, cuSubmit?.publicMetadata?.isAdmin === true)
+    const roleCtxSubmit = await getAppRoleContextForClerkUser(
+      userId,
+      cuSubmit?.publicMetadata?.isAdmin === true,
+      { ...cuSubmit?.publicMetadata, ...cuSubmit?.privateMetadata, ...cuSubmit?.unsafeMetadata }
+    )
     const templateForRoleCheck = templateVersion && typeof templateVersion === 'object'
       ? {
           id: templateVersion.id ?? inspection.template_id,

@@ -23,7 +23,11 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Section not found' }, { status: 404 })
     }
     const cu = await currentUser()
-    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    const roleCtx = await getAppRoleContextForClerkUser(
+      userId,
+      cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+    )
     if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
       return NextResponse.json({ error: 'Forbidden: your role cannot access this form template' }, { status: 403 })
     }

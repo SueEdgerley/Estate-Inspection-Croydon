@@ -21,7 +21,11 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const cu = await currentUser()
-    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    const roleCtx = await getAppRoleContextForClerkUser(
+      userId,
+      cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+    )
 
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -291,7 +295,11 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const cu = await currentUser()
-    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    const roleCtx = await getAppRoleContextForClerkUser(
+      userId,
+      cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+    )
     if (!roleMayPostManualAction(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

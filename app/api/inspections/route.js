@@ -1186,7 +1186,11 @@ export async function POST(request) {
     }
 
     const cu = await currentUser()
-    const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
+    const roleCtx = await getAppRoleContextForClerkUser(
+      userId,
+      cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+    )
     if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
       return NextResponse.json(
         { error: 'Forbidden: your role cannot use this form template' },

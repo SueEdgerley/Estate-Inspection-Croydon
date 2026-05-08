@@ -31,7 +31,11 @@ async function resolveAuth() {
   } catch (e) {
     console.warn('[reports/inspections] provision:', e?.message)
   }
-  const roleCtx = await getAppRoleContextForClerkUser(userId, clerkIsAdmin)
+  const roleCtx = await getAppRoleContextForClerkUser(
+    userId,
+    clerkIsAdmin,
+    { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+  )
   if (!mayViewInspectionReports(roleCtx.systemRole, roleCtx.clerkIsAdmin)) {
     return {
       error: NextResponse.json(
