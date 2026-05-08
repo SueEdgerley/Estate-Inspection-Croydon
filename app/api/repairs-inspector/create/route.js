@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, ensureInspectionTimingFields, getPgUrl } from '@/lib/db'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
 
 export const runtime = 'nodejs'
@@ -31,6 +31,12 @@ function photoUrlsFromBody(value) {
   return []
 }
 
+function parseInspectionTimeInput(value) {
+  if (value == null || value === '') return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 export async function POST(request) {
   let debugPayload = null
   try {
@@ -39,6 +45,7 @@ export async function POST(request) {
 
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()
+    await ensureInspectionTimingFields()
     const repairFieldsAvailable = await ensureRepairActionFields(sql)
     if (!repairFieldsAvailable) {
       throw new Error('Repair action columns could not be verified or created on actions table')
@@ -58,6 +65,9 @@ export async function POST(request) {
     const repairNotes = clean(body.repair_notes)
     const photoUrls = photoUrlsFromBody(body.photo_urls || body.repair_photo_url)
     const primaryPhotoUrl = photoUrls[0] || null
+    const submittedAt = new Date()
+    const inspectionStartTime = parseInspectionTimeInput(body.inspection_start_time)
+    const inspectionEndTime = parseInspectionTimeInput(body.inspection_end_time) || submittedAt
     debugPayload = {
       estate_id: estateId || null,
       block_id: blockId || null,
@@ -156,12 +166,12 @@ export async function POST(request) {
       await sql`
         INSERT INTO inspections (
           id, type, location_label, inspector_name, inspector_id,
-          template_id, template_name, submitted_at, status, is_scheduled,
+          template_id, template_name, submitted_at, inspection_start_time, inspection_end_time, status, is_scheduled,
           title, description, estate_id, block_id, work_type
         )
         VALUES (
           ${inspectionId}::text, 'repairs_inspector', ${linkedLocation.label || estateBlock}::text, ${inspectorName}::text, ${inspectorEmail}::text,
-          'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
+          'repairs_inspector_direct', 'Repairs Inspector Form', ${submittedAt}, ${inspectionStartTime}, ${inspectionEndTime}, 'submitted', false,
           ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}::text, ${description}::text,
           ${linkedLocation.estate_id}::text, ${linkedLocation.block_id}::text, 'repairs_inspector'
         )
@@ -171,12 +181,12 @@ export async function POST(request) {
       await sql`
         INSERT INTO inspections (
           id, type, location_label, inspector_name, inspector_id,
-          template_id, template_name, submitted_at, status, is_scheduled,
+          template_id, template_name, submitted_at, inspection_start_time, inspection_end_time, status, is_scheduled,
           title, description
         )
         VALUES (
           ${inspectionId}::text, 'repairs_inspector', ${linkedLocation.label || estateBlock}::text, ${inspectorName}::text, ${inspectorEmail}::text,
-          'repairs_inspector_direct', 'Repairs Inspector Form', CURRENT_TIMESTAMP, 'submitted', false,
+          'repairs_inspector_direct', 'Repairs Inspector Form', ${submittedAt}, ${inspectionStartTime}, ${inspectionEndTime}, 'submitted', false,
           ${`Repairs Inspector - ${linkedLocation.label || estateBlock}`}::text, ${description}::text
         )
       `

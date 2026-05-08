@@ -15,8 +15,33 @@ const initialForm = {
   photo_urls: [],
 }
 
+function toDatetimeLocalValue(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function datetimeLocalToIso(value) {
+  if (!value) return undefined
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+}
+
+function getInspectionDurationLabel(startValue, endValue) {
+  const start = startValue ? new Date(startValue) : null
+  const end = endValue ? new Date(endValue) : new Date()
+  if (!start || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return ''
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+}
+
 export default function RepairsInspectorNewFormPage() {
   const [form, setForm] = useState(initialForm)
+  const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
+  const [inspectionEndTime, setInspectionEndTime] = useState('')
   const [locations, setLocations] = useState([])
   const [loadingLocations, setLoadingLocations] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -64,6 +89,7 @@ export default function RepairsInspectorNewFormPage() {
       return true
     })
   }, [locations, selectedLocation])
+  const inspectionDurationLabel = getInspectionDurationLabel(inspectionStartTime, inspectionEndTime)
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -114,6 +140,7 @@ export default function RepairsInspectorNewFormPage() {
 
     setSaving(true)
     try {
+      if (!inspectionEndTime) setInspectionEndTime(toDatetimeLocalValue())
       const response = await fetch('/api/repairs-inspector/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,6 +153,8 @@ export default function RepairsInspectorNewFormPage() {
           location: form.location.trim(),
           description: form.description.trim(),
           photo_urls: form.photo_urls,
+          inspection_start_time: datetimeLocalToIso(inspectionStartTime),
+          inspection_end_time: datetimeLocalToIso(inspectionEndTime),
         }),
       })
       const data = await response.json().catch(() => ({}))
@@ -133,6 +162,8 @@ export default function RepairsInspectorNewFormPage() {
 
       setMessage('Repair action created successfully.')
       setForm(initialForm)
+      setInspectionStartTime(toDatetimeLocalValue())
+      setInspectionEndTime('')
     } catch (err) {
       setError(err?.message || 'Failed to create repair action')
     } finally {
@@ -157,6 +188,38 @@ export default function RepairsInspectorNewFormPage() {
       </div>
 
       <form onSubmit={submit} style={{ display: 'grid', gap: '1rem' }}>
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Inspection time</h2>
+          <div style={gridStyle}>
+            <div>
+              <label htmlFor="inspection-start-time" style={labelStyle}>Inspection start time</label>
+              <input
+                id="inspection-start-time"
+                type="datetime-local"
+                value={inspectionStartTime}
+                onChange={(event) => setInspectionStartTime(event.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label htmlFor="inspection-end-time" style={labelStyle}>Inspection end time</label>
+              <input
+                id="inspection-end-time"
+                type="datetime-local"
+                value={inspectionEndTime}
+                onChange={(event) => setInspectionEndTime(event.target.value)}
+                style={inputStyle}
+              />
+              <p style={{ margin: '0.35rem 0 0', fontSize: '0.8125rem', color: '#64748b' }}>
+                Leave blank to use the submit time.
+              </p>
+            </div>
+          </div>
+          {inspectionDurationLabel ? (
+            <p style={{ margin: '0.75rem 0 0', fontSize: '0.875rem', color: '#374151' }}>Duration: {inspectionDurationLabel}</p>
+          ) : null}
+        </section>
+
         <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>Repair details</h2>
           <div style={gridStyle}>

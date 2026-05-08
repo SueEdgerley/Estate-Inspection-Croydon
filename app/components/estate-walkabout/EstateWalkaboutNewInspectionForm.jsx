@@ -172,6 +172,29 @@ function newChecklistItem() {
   }
 }
 
+function toDatetimeLocalValue(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function datetimeLocalToIso(value) {
+  if (!value) return undefined
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+}
+
+function getInspectionDurationLabel(startValue, endValue) {
+  const start = startValue ? new Date(startValue) : null
+  const end = endValue ? new Date(endValue) : new Date()
+  if (!start || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return ''
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+}
+
 export default function EstateWalkaboutNewInspectionForm({
   blocks = [],
   templates = [],
@@ -200,11 +223,14 @@ export default function EstateWalkaboutNewInspectionForm({
   const [offlineDraftId, setOfflineDraftId] = useState('')
   const [offlineDrafts, setOfflineDrafts] = useState([])
   const [offlineNotice, setOfflineNotice] = useState('')
+  const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
+  const [inspectionEndTime, setInspectionEndTime] = useState('')
 
   const locationBlocks = useMemo(
     () => blocks.filter((b) => b != null && b.active !== false),
     [blocks]
   )
+  const inspectionDurationLabel = getInspectionDurationLabel(inspectionStartTime, inspectionEndTime)
 
   useEffect(() => {
     let cancelled = false
@@ -313,6 +339,8 @@ export default function EstateWalkaboutNewInspectionForm({
         block_id: postgresBlockId.trim() || undefined,
         location: location.trim() || undefined,
         description: description.trim() || undefined,
+        inspection_start_time: datetimeLocalToIso(inspectionStartTime),
+        inspection_end_time: datetimeLocalToIso(inspectionEndTime),
         answers: {
           ...answers,
           [ESTATE_WALKABOUT_CHECKLIST_QID]: JSON.stringify(
@@ -329,7 +357,7 @@ export default function EstateWalkaboutNewInspectionForm({
         answer_extras: extras,
       }
     },
-    [postgresBlockId, location, description, answers, answerExtras, checklist]
+    [postgresBlockId, location, description, inspectionStartTime, inspectionEndTime, answers, answerExtras, checklist]
   )
 
   const currentDraftPayload = useMemo(
@@ -391,6 +419,8 @@ export default function EstateWalkaboutNewInspectionForm({
     setPostgresBlockId(body.block_id || payload.blockId || '')
     setLocation(body.location || payload.location || '')
     setDescription(body.description || payload.description || '')
+    setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
+    setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
     const restoredAnswers = { ...(body.answers || {}) }
     let restoredChecklist = []
     try {
@@ -513,6 +543,9 @@ export default function EstateWalkaboutNewInspectionForm({
 
     setIsSubmitting(true)
     try {
+      if (!inspectionEndTime) {
+        setInspectionEndTime(toDatetimeLocalValue())
+      }
       if (!isOnline) {
         saveCurrentOfflineDraft()
         setIsSubmitting(false)
@@ -822,6 +855,36 @@ export default function EstateWalkaboutNewInspectionForm({
               {submitError}
             </div>
           )}
+
+          <section style={cardStyle}>
+            <h2 style={h2Style}>Inspection time</h2>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+              <div>
+                <label style={labelStyle}>Inspection start time</label>
+                <input
+                  type="datetime-local"
+                  value={inspectionStartTime}
+                  onChange={(e) => setInspectionStartTime(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Inspection end time</label>
+                <input
+                  type="datetime-local"
+                  value={inspectionEndTime}
+                  onChange={(e) => setInspectionEndTime(e.target.value)}
+                  style={inputStyle}
+                />
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: EW.muted }}>
+                  Leave blank to use the submit time.
+                </p>
+              </div>
+            </div>
+            {inspectionDurationLabel ? (
+              <p style={{ margin: '12px 0 0', fontSize: 14, color: EW.text }}>Duration: {inspectionDurationLabel}</p>
+            ) : null}
+          </section>
 
           <section style={cardStyle}>
             <h2 style={h2Style}>Location</h2>

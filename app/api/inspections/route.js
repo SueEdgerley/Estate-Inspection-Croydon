@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { createHash } from 'crypto'
-import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
+import { ensureDatabase, ensureInspectionTimingFields, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
@@ -50,6 +50,7 @@ import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -95,6 +96,21 @@ function collectEsmIdCardPhotoUrls(extras) {
   return Array.isArray(extras.id_card_photo_urls)
     ? extras.id_card_photo_urls.filter((url) => typeof url === 'string' && url.trim())
     : []
+}
+
+function parseInspectionTimeInput(value) {
+  if (value == null || value === '') return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function operationalInspectionTimes(template, startValue, endValue, { defaultEnd = false } = {}) {
+  if (template && isNeighbourhoodVoiceTemplateVersion(template)) {
+    return { start: null, end: null }
+  }
+  const start = parseInspectionTimeInput(startValue)
+  const end = parseInspectionTimeInput(endValue) || (defaultEnd ? new Date() : null)
+  return { start, end }
 }
 
 function getCaretakerSectionNumber(section) {
@@ -467,6 +483,49 @@ function inspectionAnswerTriggersIssue(question, section, answer) {
   const direction = getActionTriggerOn(question, section)
   if (direction === 'yes') return norm === 'yes' && question.create_action_on_yes !== false
   return norm === 'no' && question.create_action_on_no !== false
+}
+
+function isEsmActionTrigger(question, answer, extras = {}, photoUrls = []) {
+  if (!question || !question.esm_behavior) return false
+  const isYes = normalizeYesNoAnswer(answer) === 'yes'
+  const comment = typeof extras.comment === 'string' && extras.comment.trim()
+  const hasPhotos = Array.isArray(photoUrls) && photoUrls.length > 0
+  if (question.esm_q4_abandoned_vehicle === true) return isYes
+  if (question.esm_recipient_on_yes === true) return isYes
+  if (question.esm_email_on_yes) return isYes
+  if (question.esm_email_on_comment_or_issue) return Boolean(comment || isYes)
+  if (question.esm_email_on_photo_to_selected_recipient === true) return hasPhotos && Boolean(extras.recipient_person_id)
+  if (question.esm_email_on_photo_and_comment) return hasPhotos && Boolean(comment)
+  if (question.esm_email_on_photo) return hasPhotos
+  return false
+}
+
+function getEsmActionCategory(question) {
+  const role = String(question?.esm_behavior || '').trim()
+  if (!role) return 'esm'
+  if (role.includes('health_safety')) return 'health_safety'
+  if (role.includes('fire_safety')) return 'fire_safety'
+  if (role.includes('abandoned_vehicle')) return 'parking_abandoned_vehicle'
+  if (role.includes('graffiti')) return 'graffiti'
+  if (role.includes('garage')) return 'garages'
+  if (role.includes('tree') || role.includes('ivy')) return 'grounds_maintenance'
+  if (role.includes('external_cleaning')) return 'cleaning'
+  return `esm_${role}`.slice(0, 50)
+}
+
+function getEsmActionRecipient(question, extras = {}) {
+  const selected = typeof extras.recipient_person_id === 'string' ? extras.recipient_person_id.trim() : ''
+  if (selected && !selected.includes('@')) return selected
+  return null
+}
+
+function getEsmActionEmailRouting(question, extras = {}) {
+  if (question.esm_email_on_yes) return String(question.esm_email_on_yes)
+  if (question.esm_email_on_comment_or_issue) return String(question.esm_email_on_comment_or_issue)
+  if (question.esm_email_on_photo_and_comment) return String(question.esm_email_on_photo_and_comment)
+  if (question.esm_email_on_photo) return String(question.esm_email_on_photo)
+  if (question.esm_email_on_photo_to_selected_recipient && extras.recipient_person_id) return String(extras.recipient_person_id)
+  return String(question.email_routing || '').trim()
 }
 
 function answerValueFromRow(row) {
@@ -1000,6 +1059,8 @@ export async function POST(request) {
     answers = {},
     answer_extras = {},
     draft: createDraft,
+    inspection_start_time,
+    inspection_end_time,
   } = body
 
   const dueDateParsed = parseDueDateInput(due_date)
@@ -1034,6 +1095,7 @@ export async function POST(request) {
 
     try {
       await ensureDatabase()
+      await ensureInspectionTimingFields()
       const cu = await currentUser()
       const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
       if (!roleMayCreateAdHocInspection(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
@@ -1067,11 +1129,13 @@ export async function POST(request) {
         explicit: body?.work_type,
         isScheduled: false,
       })
+      const adHocTimes = operationalInspectionTimes(adHocSnapshot, inspection_start_time, inspection_end_time)
 
       await sql`
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
-          template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
+          template_id, template_name, template_version_id, template_version, status, submitted_at,
+          inspection_start_time, inspection_end_time, created_at, updated_at,
           inspector_id, inspector_name, estate_id, block_id, source, work_type
         )
         VALUES (
@@ -1088,6 +1152,8 @@ export async function POST(request) {
           ${JSON.stringify(adHocVersion.snapshot)}::jsonb,
           'draft',
           NULL,
+          ${adHocTimes.start},
+          ${adHocTimes.end},
           ${new Date()},
           ${new Date()},
           ${inspectorEmail || null},
@@ -1174,6 +1240,7 @@ export async function POST(request) {
     }
 
     await ensureDatabase()
+    await ensureInspectionTimingFields()
     const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
     if (!loc.ok) {
       return NextResponse.json({ error: loc.message }, { status: loc.status })
@@ -1207,6 +1274,8 @@ export async function POST(request) {
       explicit: body?.work_type,
       isScheduled: false,
     })
+    const draftTimes = operationalInspectionTimes(template, inspection_start_time, inspection_end_time)
+    const submittedTimes = operationalInspectionTimes(template, inspection_start_time, inspection_end_time, { defaultEnd: true })
 
     // Draft-only: create inspection with status 'draft' for wizard flow (e.g. Neighbourhood Voice)
     if (createDraft === true) {
@@ -1216,7 +1285,8 @@ export async function POST(request) {
       await sql`
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
-          template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
+          template_id, template_name, template_version_id, template_version, status, submitted_at,
+          inspection_start_time, inspection_end_time, created_at, updated_at,
           inspector_id, inspector_name, estate_id, block_id, source, work_type
         )
         VALUES (
@@ -1233,6 +1303,8 @@ export async function POST(request) {
           ${JSON.stringify(templateVersion.snapshot)}::jsonb,
           'draft',
           NULL,
+          ${draftTimes.start},
+          ${draftTimes.end},
           ${new Date()},
           ${new Date()},
           ${inspectorEmail || null},
@@ -1274,7 +1346,8 @@ export async function POST(request) {
     await sql`
       INSERT INTO inspections (
         id, legacy_inspection_id, type, title, description, location_label, due_date,
-        template_id, template_name, template_version_id, template_version, status, submitted_at, created_at, updated_at,
+        template_id, template_name, template_version_id, template_version, status, submitted_at,
+        inspection_start_time, inspection_end_time, created_at, updated_at,
         inspector_id, inspector_name, estate_id, block_id, source, work_type, grading
       )
       VALUES (
@@ -1291,6 +1364,8 @@ export async function POST(request) {
         ${JSON.stringify(templateVersion.snapshot)}::jsonb,
         'submitted',
         ${new Date()},
+        ${submittedTimes.start},
+        ${submittedTimes.end},
         ${new Date()},
         ${new Date()},
         ${inspectorEmail || null},
@@ -1312,6 +1387,8 @@ export async function POST(request) {
         template_version = EXCLUDED.template_version,
         status = EXCLUDED.status,
         submitted_at = EXCLUDED.submitted_at,
+        inspection_start_time = COALESCE(EXCLUDED.inspection_start_time, inspections.inspection_start_time),
+        inspection_end_time = COALESCE(EXCLUDED.inspection_end_time, inspections.inspection_end_time),
         inspector_id = COALESCE(EXCLUDED.inspector_id, inspections.inspector_id),
         inspector_name = COALESCE(EXCLUDED.inspector_name, inspections.inspector_name),
         estate_id = COALESCE(EXCLUDED.estate_id, inspections.estate_id),
@@ -1498,9 +1575,10 @@ export async function POST(request) {
         const photoUrlSingle = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
         const allPhotoUrls = photoUrlSingle ? [photoUrlSingle, ...photoUrlsArr] : photoUrlsArr
 
+        const isEsmAction = isEsmInspectionFormTemplate(template) && isEsmActionTrigger(q, answer, extras, allPhotoUrls)
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
-        const category = q.action_category || q.category || 'Follow-up'
-        let isIssue = inspectionAnswerTriggersIssue(q, section, answer)
+        const category = isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category || 'Follow-up'
+        let isIssue = inspectionAnswerTriggersIssue(q, section, answer) || isEsmAction
         if (
           isIssue &&
           isEstateWalkaboutTemplate(template) &&
@@ -1515,6 +1593,12 @@ export async function POST(request) {
 
         if (isIssue) {
           try {
+            const existingAction = await sql`
+              SELECT id FROM actions
+              WHERE inspection_id = ${inspectionId} AND question_id = ${q.id}
+              LIMIT 1
+            `
+            if (existingAction.rows.length > 0) continue
             const actionId = `action_${inspectionId}_${q.id}_${Date.now()}`
             const isCaretakerAction = isCaretakerTemplate(template)
             const isEsmQ4Action = q.esm_q4_abandoned_vehicle === true
@@ -1522,16 +1606,19 @@ export async function POST(request) {
               isGroundsMaintenanceTemplate(template) &&
               (q.action_category === 'grounds' || q.category === 'grounds')
             const qText = q.question_text || q.label || q.id
-            const actionRecipient =
-              (isCaretakerAction || isEsmQ4Action || q.action_recipient_required_when) &&
-              extras.recipient_person_id &&
-              String(extras.recipient_person_id).trim()
-                ? String(extras.recipient_person_id).trim()
-                : null
+            const actionRecipient = isEsmAction
+              ? getEsmActionRecipient(q, extras)
+              : (isCaretakerAction || isEsmQ4Action || q.action_recipient_required_when) &&
+                extras.recipient_person_id &&
+                String(extras.recipient_person_id).trim()
+                  ? String(extras.recipient_person_id).trim()
+                  : null
             const actionTitle = isCaretakerAction
               ? `${section.title || section.name || 'Section'} - ${qText}`
               : isEsmQ4Action
                 ? `${section.title || section.name || 'Section'} - ${qText}`
+                : isEsmAction
+                  ? `${section.title || section.name || 'Section'} - ${qText}`
                 : isGroundsAction
                   ? `${section.title || section.name || 'Section'} - ${qText}`
                   : residentMessage
@@ -1549,6 +1636,14 @@ export async function POST(request) {
               ? [qText, comment].filter(Boolean).join('\n\n')
               : isEsmQ4Action
                 ? esmQ4Description
+                : isEsmAction
+                  ? [
+                      qText,
+                      `Answer: ${String(answer ?? '')}`,
+                      comment ? `Comment: ${comment}` : null,
+                      getEsmActionEmailRouting(q, extras) ? `Email/routing: ${getEsmActionEmailRouting(q, extras)}` : null,
+                      actionRecipient ? `Recipient: ${actionRecipient}` : null,
+                    ].filter(Boolean).join('\n')
                 : isGroundsAction
                   ? [qText, `Answer: ${String(answer ?? '')}`, comment].filter(Boolean).join('\n\n')
                   : residentMessage
@@ -1556,7 +1651,9 @@ export async function POST(request) {
               isEsmQ4Action && extras.cost_code && String(extras.cost_code).trim()
                 ? String(extras.cost_code).trim()
                 : null
-            const actionLocation = isGroundsAction
+            const actionLocation = isEsmAction
+              ? (String(location || '').trim() || displayTitle || null)
+              : isGroundsAction
               ? (String(location || '').trim() || displayTitle || null)
               : null
             await sql`

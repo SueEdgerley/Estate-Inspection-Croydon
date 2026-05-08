@@ -26,6 +26,8 @@ model Inspection {
   templateVersion     Json?     @map("template_version") @db.JsonB
   templateVersionId   String?   @map("template_version_id") @db.VarChar(255)
   dueDate             DateTime? @map("due_date") @db.Timestamptz
+  inspectionStartTime DateTime? @map("inspection_start_time") @db.Timestamptz
+  inspectionEndTime   DateTime? @map("inspection_end_time") @db.Timestamptz
   submittedAt         DateTime? @map("submitted_at") @db.Timestamptz
   workType            String?   @map("work_type") @db.VarChar(50)
   grading             String?   @db.VarChar(50)

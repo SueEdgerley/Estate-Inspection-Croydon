@@ -139,6 +139,29 @@ function stringifyPhotos(urls) {
   return arr.length ? JSON.stringify(arr) : ''
 }
 
+function toDatetimeLocalValue(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function datetimeLocalToIso(value) {
+  if (!value) return undefined
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+}
+
+function getInspectionDurationLabel(startValue, endValue) {
+  const start = startValue ? new Date(startValue) : null
+  const end = endValue ? new Date(endValue) : new Date()
+  if (!start || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return ''
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+}
+
 // Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo", "yesno", "Yes/No")
 function normalizeQuestionType(v) {
   if (v == null || v === '') return 'text'
@@ -1747,6 +1770,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [offlineDraftId, setOfflineDraftId] = useState('')
   const [offlineDrafts, setOfflineDrafts] = useState([])
   const [offlineNotice, setOfflineNotice] = useState('')
+  const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
+  const [inspectionEndTime, setInspectionEndTime] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -1933,6 +1958,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       !isNVTemplate(selectedTemplate) &&
       (isCaretakerTemplate(selectedTemplate) || isEsmInspectionFormTemplate(selectedTemplate))
   )
+  const showInspectionTimingFields = Boolean(selectedTemplate && !isNVTemplate(selectedTemplate))
+  const inspectionDurationLabel = showInspectionTimingFields
+    ? getInspectionDurationLabel(inspectionStartTime, inspectionEndTime)
+    : ''
   const lightCommentTextareaForTemplate = Boolean(
     selectedTemplate &&
       !isNVTemplate(selectedTemplate) &&
@@ -1997,8 +2026,14 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       description: description.trim() || undefined,
       answers,
       answer_extras: packedAnswerExtras,
+      ...(showInspectionTimingFields
+        ? {
+            inspection_start_time: datetimeLocalToIso(inspectionStartTime),
+            inspection_end_time: datetimeLocalToIso(inspectionEndTime),
+          }
+        : {}),
     }
-  }, [templateId, postgresBlockId, location, description, answers, answerExtras, selectedTemplate])
+  }, [templateId, postgresBlockId, location, description, answers, answerExtras, selectedTemplate, showInspectionTimingFields, inspectionStartTime, inspectionEndTime])
   const currentDraftPayload = useMemo(
     () => ({
       formType: selectedTemplate?.name || selectedTemplate?.template_key || templateId || 'Inspection',
@@ -2060,6 +2095,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setPostgresBlockId(body.block_id || payload.blockId || '')
     setLocation(body.location || payload.location || '')
     setDescription(body.description || payload.description || '')
+    setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
+    setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
     setAnswers(body.answers || {})
     setAnswerExtras(body.answer_extras || {})
     setSubmitError(null)
@@ -2326,6 +2363,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
     setIsSubmitting(true)
     try {
+      if (showInspectionTimingFields && !inspectionEndTime) {
+        setInspectionEndTime(toDatetimeLocalValue())
+      }
       if (!isOnline) {
         saveCurrentOfflineDraft()
         setIsSubmitting(false)
@@ -2496,6 +2536,44 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             }}
           >
             {submitError}
+          </div>
+        )}
+
+        {showInspectionTimingFields && (
+          <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}>
+            <h2 style={{ margin: '0 0 0.75rem', fontSize: '1rem', fontWeight: 700, color: '#111827' }}>Inspection time</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))', gap: '0.75rem' }}>
+              <div>
+                <label htmlFor="inspection_start_time" style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Inspection start time
+                </label>
+                <input
+                  id="inspection_start_time"
+                  type="datetime-local"
+                  value={inspectionStartTime}
+                  onChange={(e) => setInspectionStartTime(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '1rem', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label htmlFor="inspection_end_time" style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Inspection end time
+                </label>
+                <input
+                  id="inspection_end_time"
+                  type="datetime-local"
+                  value={inspectionEndTime}
+                  onChange={(e) => setInspectionEndTime(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '1rem', boxSizing: 'border-box' }}
+                />
+                <p style={{ margin: '0.35rem 0 0', fontSize: '0.8125rem', color: '#6b7280' }}>
+                  Leave blank to use the submit time.
+                </p>
+              </div>
+            </div>
+            {inspectionDurationLabel ? (
+              <p style={{ margin: '0.75rem 0 0', fontSize: '0.875rem', color: '#374151' }}>Duration: {inspectionDurationLabel}</p>
+            ) : null}
           </div>
         )}
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
-import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { ensureDatabase, ensureInspectionTimingFields, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail, getCurrentUserName } from '@/lib/auth'
 import {
   extractCaretakerRecipients,
@@ -77,6 +77,55 @@ function collectEsmIdCardPhotoUrlsFromExtras(extras) {
   return Array.isArray(structured.id_card_photo_urls)
     ? structured.id_card_photo_urls.filter((url) => typeof url === 'string' && url.trim())
     : []
+}
+
+function isEsmActionTrigger(question, answer, extras = {}, photoUrls = []) {
+  if (!question || !question.esm_behavior) return false
+  const isYes = normalizeYesNoAnswer(answer) === 'yes'
+  const comment = typeof extras.comment === 'string' && extras.comment.trim()
+  const hasPhotos = Array.isArray(photoUrls) && photoUrls.length > 0
+  if (question.esm_q4_abandoned_vehicle === true) return isYes
+  if (question.esm_recipient_on_yes === true) return isYes
+  if (question.esm_email_on_yes) return isYes
+  if (question.esm_email_on_comment_or_issue) return Boolean(comment || isYes)
+  if (question.esm_email_on_photo_to_selected_recipient === true) return hasPhotos && Boolean(extras.recipient_person_id)
+  if (question.esm_email_on_photo_and_comment) return hasPhotos && Boolean(comment)
+  if (question.esm_email_on_photo) return hasPhotos
+  return false
+}
+
+function getEsmActionCategory(question) {
+  const role = String(question?.esm_behavior || '').trim()
+  if (!role) return 'esm'
+  if (role.includes('health_safety')) return 'health_safety'
+  if (role.includes('fire_safety')) return 'fire_safety'
+  if (role.includes('abandoned_vehicle')) return 'parking_abandoned_vehicle'
+  if (role.includes('graffiti')) return 'graffiti'
+  if (role.includes('garage')) return 'garages'
+  if (role.includes('tree') || role.includes('ivy')) return 'grounds_maintenance'
+  if (role.includes('external_cleaning')) return 'cleaning'
+  return `esm_${role}`.slice(0, 50)
+}
+
+function getEsmActionRecipient(question, extras = {}) {
+  const selected = typeof extras.recipient_person_id === 'string' ? extras.recipient_person_id.trim() : ''
+  if (selected && !selected.includes('@')) return selected
+  return null
+}
+
+function getEsmActionEmailRouting(question, extras = {}) {
+  if (question.esm_email_on_yes) return String(question.esm_email_on_yes)
+  if (question.esm_email_on_comment_or_issue) return String(question.esm_email_on_comment_or_issue)
+  if (question.esm_email_on_photo_and_comment) return String(question.esm_email_on_photo_and_comment)
+  if (question.esm_email_on_photo) return String(question.esm_email_on_photo)
+  if (question.esm_email_on_photo_to_selected_recipient && extras.recipient_person_id) return String(extras.recipient_person_id)
+  return String(question.email_routing || '').trim()
+}
+
+function parseInspectionTimeInput(value) {
+  if (value == null || value === '') return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectionTitle, locationLine }) {
@@ -320,6 +369,7 @@ export async function POST(request, { params }) {
     }
 
     await ensureDatabase()
+    await ensureInspectionTimingFields()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
       return NextResponse.json(
@@ -328,6 +378,12 @@ export async function POST(request, { params }) {
       )
     }
     const { id } = await params
+    let body = {}
+    try {
+      body = await request.json()
+    } catch {
+      body = {}
+    }
     const inspectorEmail = await getCurrentUserEmail()
     const inspectorName = await getCurrentUserName()
 
@@ -404,6 +460,11 @@ export async function POST(request, { params }) {
     const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)
     const isNv = isNeighbourhoodVoiceTemplateVersion(templateVersion)
     const wasDraft = inspection.status === 'draft'
+    const submittedAtForTiming = new Date()
+    const requestStartTime = parseInspectionTimeInput(body?.inspection_start_time)
+    const requestEndTime = parseInspectionTimeInput(body?.inspection_end_time)
+    const inspectionStartTime = isNv ? null : requestStartTime || inspection.inspection_start_time || null
+    const inspectionEndTime = isNv ? null : requestEndTime || submittedAtForTiming
 
     const locRow = await sql`
       SELECT COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS location_line
@@ -419,7 +480,9 @@ export async function POST(request, { params }) {
     await sql`
       UPDATE inspections
       SET status = 'submitted',
-          submitted_at = CURRENT_TIMESTAMP,
+          submitted_at = ${submittedAtForTiming},
+          inspection_start_time = ${inspectionStartTime},
+          inspection_end_time = ${inspectionEndTime},
           pdf_generation_error = NULL,
           work_type = COALESCE(work_type, CASE
             WHEN COALESCE(is_scheduled, false) = true THEN 'caretaker_scheduled'
@@ -495,17 +558,15 @@ export async function POST(request, { params }) {
             for (const q of sec.questions || []) {
               if (!q || !q.id) continue
               const val = answers[q.id]
-              if (!shouldAutocreateCaretakerAction(q, val, sec)) continue
               const existing = await sql`
                 SELECT id FROM actions
-                WHERE inspection_id = ${id} AND question_id = ${q.id} AND status = 'open'
+                WHERE inspection_id = ${id} AND question_id = ${q.id}
                 LIMIT 1
               `
               if (existing.rows.length > 0) continue
               const answerRow = answersResult.rows.find((r) => r.question_id === q.id)
               const extras = parseCaretakerAnswerNotes(answerRow?.notes)
               const comment = extras.comment || ''
-              const category = q.action_category || q.category || 'other'
               const qText = q.question_text || q.label || q.id
               const norm = normalizeYesNoAnswer(val)
               const answerLabel = norm === 'yes' ? 'Yes' : norm === 'no' ? 'No' : String(val ?? '')
@@ -516,11 +577,15 @@ export async function POST(request, { params }) {
               const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
               const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
+              const isEsmAction = isEsmInspectionFormTemplate(templateVersion) && isEsmActionTrigger(q, val, extras, photoUrlsArr)
+              if (!shouldAutocreateCaretakerAction(q, val, sec) && !isEsmAction) continue
+              const category = isEsmAction ? getEsmActionCategory(q) : q.action_category || q.category || 'other'
               const costCode = extras.costCode || sectionCostCode || null
-              let actionRecipient =
-                (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
-                (recipientId != null ? String(recipientId).trim() : '') ||
-                null
+              let actionRecipient = isEsmAction
+                ? getEsmActionRecipient(q, extras)
+                : (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
+                  (recipientId != null ? String(recipientId).trim() : '') ||
+                  null
               if (!actionRecipient) {
                 const routed = await resolveIssueRoutingRecipient(sql, {
                   issueCategory: category,
@@ -532,19 +597,36 @@ export async function POST(request, { params }) {
               }
               const priorityVal = extras.priority || q.action_priority || null
               const title = `${sec.title || sec.name || 'Section'} – ${qText}`
-              const description = buildCaretakerActionDescription({
-                inspectionId: id,
-                completedAtIso: completedAt,
-                estateBlockLine,
-                sectionName: sec.title || sec.name || '',
-                questionText: qText,
-                answerLabel,
-                comment,
-                photoRefs,
-                category,
-                assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
-                submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
-              })
+              const description = isEsmAction
+                ? [
+                    `Inspection ID: ${id}`,
+                    completedAt ? `Date/time: ${completedAt}` : null,
+                    estateBlockLine ? `Estate / block: ${estateBlockLine}` : null,
+                    `Section: ${sec.title || sec.name || ''}`,
+                    `Question: ${qText}`,
+                    `Answer: ${answerLabel}`,
+                    comment ? `Comment: ${comment}` : null,
+                    photoRefs ? `Photo reference(s): ${photoRefs}` : null,
+                    getEsmActionEmailRouting(q, extras) ? `Email/routing: ${getEsmActionEmailRouting(q, extras)}` : null,
+                    actionRecipient ? `Recipient: ${actionRecipient}` : null,
+                    `Action category: ${category}`,
+                    inspectionLive.inspector_name || inspectorName || inspectorEmail
+                      ? `Submitted by: ${inspectionLive.inspector_name || inspectorName || inspectorEmail}`
+                      : null,
+                  ].filter(Boolean).join('\n')
+                : buildCaretakerActionDescription({
+                    inspectionId: id,
+                    completedAtIso: completedAt,
+                    estateBlockLine,
+                    sectionName: sec.title || sec.name || '',
+                    questionText: qText,
+                    answerLabel,
+                    comment,
+                    photoRefs,
+                    category,
+                    assigneeLabel: actionRecipient ? `Person id ${actionRecipient}` : '',
+                    submittedBy: inspectionLive.inspector_name || inspectorName || inspectorEmail || '',
+                  })
               const actionId = `action_${id}_${q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
               try {
                 await sql`
