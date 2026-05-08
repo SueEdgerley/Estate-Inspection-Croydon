@@ -947,6 +947,7 @@ function InspectionQuestion({
       ) : null}
     </div>
   ) : null
+  const esmDefaultPhotoCommentBlock = esmUseDedicatedFollowUp ? null : esmPhotoCommentBlock
 
   const buttonGroup = (optionList, firstButtonId) => (
     <div style={{ display: 'flex', gap: mobileStackedForm ? 10 : '10px', flexWrap: 'wrap', width: '100%' }}>
@@ -1407,7 +1408,7 @@ function InspectionQuestion({
         {!isNvTemplate &&
           !caretakerAlwaysPhoto &&
           (esmInspectionQuestion
-            ? esmPhotoCommentBlock
+            ? esmDefaultPhotoCommentBlock
             : estateInspectionForm
             ? estatePhotoAllowed && photoBlock
             : !isStdConditionRow && !eq.caretaker_graded_always_extras && photoBlock)}
@@ -1455,7 +1456,7 @@ function InspectionQuestion({
         </select>
         {!caretakerAlwaysPhoto &&
           (esmInspectionQuestion
-            ? esmPhotoCommentBlock
+            ? esmDefaultPhotoCommentBlock
             : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -1496,7 +1497,7 @@ function InspectionQuestion({
         </div>
         {!caretakerAlwaysPhoto &&
           (esmInspectionQuestion
-            ? esmPhotoCommentBlock
+            ? esmDefaultPhotoCommentBlock
             : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -1556,7 +1557,7 @@ function InspectionQuestion({
         />
         {!caretakerAlwaysPhoto &&
           (esmInspectionQuestion
-            ? esmPhotoCommentBlock
+            ? esmDefaultPhotoCommentBlock
             : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
         {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
       </div>
@@ -1722,7 +1723,7 @@ function InspectionQuestion({
       />
       {!caretakerAlwaysPhoto &&
         (esmInspectionQuestion
-          ? esmPhotoCommentBlock
+          ? esmDefaultPhotoCommentBlock
           : (((!isNvTemplate && !estateInspectionForm) || estatePhotoAllowed) ? photoBlock : null))}
       {error && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
     </div>
