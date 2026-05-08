@@ -1323,7 +1323,9 @@ function InspectionQuestion({
     const needComment = needPhoto || !!eq.nv_graded_require_comment_only
     const hasGrade = value != null && String(value).trim() !== ''
     const showGradedExtras =
-      isNvTemplate
+      esmInspectionQuestion
+        ? false
+        : isNvTemplate
         ? needComment && hasGrade
         : isStdConditionRow && needComment
           ? true
