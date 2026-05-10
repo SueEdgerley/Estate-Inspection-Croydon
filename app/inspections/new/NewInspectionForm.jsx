@@ -592,7 +592,21 @@ function InspectionQuestion({
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
-  const esmShowPhotoComment = esmInspectionQuestion && qType !== 'photo' && !esmQ4AbandonedVehicle
+  const esmYesNoIssueQuestion =
+    esmInspectionQuestion &&
+    qType === 'yes_no' &&
+    !esmQ4AbandonedVehicle &&
+    Boolean(
+      esmRole ||
+        question.esm_recipient_on_yes ||
+        question.esm_email_on_yes ||
+        question.triggers_email ||
+        question.require_photo_on_yes ||
+        question.include_photo ||
+        question.type_includes_photo
+    )
+  const esmShowPhotoComment =
+    esmInspectionQuestion && qType !== 'photo' && !esmQ4AbandonedVehicle && (!esmYesNoIssueQuestion || isYes)
   const esmPhotoAllowed =
     esmShowPhotoComment && (esmGradedQuestion || estatePhotoAllowed || question.include_photo || question.type_includes_photo)
   const esmUseDedicatedFollowUp =
@@ -949,7 +963,7 @@ function InspectionQuestion({
       ) : null}
     </div>
   ) : null
-  const esmDefaultPhotoCommentBlock = esmUseDedicatedFollowUp ? null : esmPhotoCommentBlock
+  const esmDefaultPhotoCommentBlock = esmUseDedicatedFollowUp || esmYesNoIssueQuestion ? null : esmPhotoCommentBlock
 
   const buttonGroup = (optionList, firstButtonId) => (
     <div style={{ display: 'flex', gap: mobileStackedForm ? 10 : '10px', flexWrap: 'wrap', width: '100%' }}>
