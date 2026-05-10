@@ -685,11 +685,15 @@ function InspectionQuestion({
   const caretakerFixedEmailDestination =
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
-  const isEsmSection11Or13 =
-    esmInspectionQuestion &&
-    qType === 'yes_no' &&
-    section &&
-    /^(11|13)\b/.test(String(section.title || section.name || '').trim())
+  const sectionDisplayNumber = Number(
+    section?.esm_display_number ??
+      section?.esm_display_order ??
+      section?.sort_order ??
+      section?.section_order ??
+      section?.order ??
+      0
+  )
+  const isEsmSection11Or13 = esmInspectionQuestion && qType === 'yes_no' && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
 
   const showCommentPhotoBlock =
     !esmUseDedicatedFollowUp &&
