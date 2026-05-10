@@ -172,7 +172,7 @@ export default function YesNoQuestion({
 
   const isTriggerYesDetail = triggerOnYes && isYes
 
-  const requiresComment = isTriggerYesDetail
+  let requiresComment = isTriggerYesDetail
     ? true
     : computeCaretakerRequiresComment({
         isNo,
@@ -183,7 +183,7 @@ export default function YesNoQuestion({
         answer,
       })
 
-  const requiresPhoto = isTriggerYesDetail
+  let requiresPhoto = isTriggerYesDetail
     ? true
     : computeCaretakerRequiresPhoto({
         isNo,
