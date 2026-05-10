@@ -238,6 +238,58 @@ function isEsmLightsWorkingConditionQuestion(question) {
   return text === 'please confirm the working condition of the lights'
 }
 
+function isEsmDuplicateFollowUpRow(question, section) {
+  const sectionText = normalizeQuestionTextForMatch(`${section?.title || ''} ${section?.name || ''}`)
+  const inPatchedIssueSection =
+    sectionText.includes('health and safety') ||
+    sectionText.includes('fire safety') ||
+    sectionText.includes('grounds maintenance')
+  if (!inPatchedIssueSection) return false
+
+  const rowText = normalizeQuestionTextForMatch(
+    [
+      question?.question_text,
+      question?.label,
+      question?.helper_text,
+      question?.instructions,
+      question?.question_key,
+    ].filter(Boolean).join(' ')
+  )
+  const typeText = normalizeQuestionTextForMatch(`${question?.question_type || ''} ${question?.question_type_raw || ''} ${question?.answer_mode || ''}`)
+  const expectedIssueQuestion =
+    rowText.includes('are there any health and safety issues') ||
+    rowText.includes('are there any fire safety issues') ||
+    rowText.includes('overall rating')
+
+  return (
+    !expectedIssueQuestion &&
+    (rowText.includes('provide a photo') ||
+      rowText.includes('add photo') ||
+      rowText.includes('photo upload') ||
+      rowText === 'comment' ||
+      rowText === 'comments' ||
+      rowText.includes('who does this need') ||
+      typeText.includes('photo') ||
+      typeText.includes('upload'))
+  )
+}
+
+function isEsmYesNoIssueQuestionByText(question) {
+  const text = normalizeQuestionTextForMatch(
+    [
+      question?.question_text,
+      question?.label,
+      question?.question_key,
+    ].filter(Boolean).join(' ')
+  )
+  return (
+    text.includes('are there any health and safety issues') ||
+    text.includes('are there any fire safety issues') ||
+    text.includes('are there any grounds maintenance issues') ||
+    (text.includes('are there any') && text.includes('issues'))
+  )
+}
+
 function isEsmLiftQuestion(question) {
   const text = normalizeQuestionTextForMatch([
     question?.question_text,
@@ -597,7 +649,8 @@ function InspectionQuestion({
     qType === 'yes_no' &&
     !esmQ4AbandonedVehicle &&
     Boolean(
-      esmRole ||
+      isEsmYesNoIssueQuestionByText(question) ||
+        esmRole ||
         question.esm_recipient_on_yes ||
         question.esm_email_on_yes ||
         question.triggers_email ||
@@ -2868,6 +2921,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   const useEstateListLayout = estateInspectionForm || esmInspectionForm
                   const rows = (section.questions || []).filter((q) => {
                     if (q.nv_hidden || q.esm_hidden) return false
+                    if (esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)) return false
                     if (useEstateListLayout) return true
                     if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
