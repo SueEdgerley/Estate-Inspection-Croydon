@@ -465,6 +465,7 @@ function InspectionQuestion({
   estateDisplayNumber,
   mobileStackedForm = false,
   lightCommentTextarea = false,
+  section = null,
 }) {
   const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
   const expandedSectionRef = useRef(null)
@@ -684,8 +685,15 @@ function InspectionQuestion({
   const caretakerFixedEmailDestination =
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
+  const isEsmSection11Or13 =
+    esmInspectionQuestion &&
+    qType === 'yes_no' &&
+    section &&
+    /^(11|13)\b/.test(String(section.title || section.name || '').trim())
+
   const showCommentPhotoBlock =
     !esmUseDedicatedFollowUp &&
+    !isEsmSection11Or13 &&
     (showComment ||
       showActionBlock ||
       (caretakerAlwaysPhoto && !caretakerSimplePhotoCapture) ||
@@ -2960,6 +2968,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       estateDisplayNumber,
                       mobileStackedForm: mobileStackedInspectionForm,
                       lightCommentTextarea: lightCommentTextareaForTemplate,
+                      section,
                     }
                     return useEstateListLayout ? (
                       <li key={q.id} style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}>
