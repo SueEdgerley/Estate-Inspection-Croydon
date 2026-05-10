@@ -25,6 +25,7 @@ export default function YesNoQuestion({
   alwaysShowCaretakerCommentPhoto = false,
   alwaysShowCaretakerRecipient = false,
   caretakerSections12Structured = false,
+  estateInspectionForm = false,
 }) {
   const [answer, setAnswer] = useState(value)
   const [comment, setComment] = useState('')
@@ -192,6 +193,15 @@ export default function YesNoQuestion({
         question,
         answer,
       })
+
+  // For ESM sections 11 and 13, suppress default photo/comment controls; only show in action panel on Yes
+  const isEsmSection11Or13 = estateInspectionForm && section?.name && (
+    section.name.startsWith('11.') || section.name.startsWith('13.')
+  )
+  if (isEsmSection11Or13) {
+    requiresComment = isYes
+    requiresPhoto = isYes
+  }
 
   const legacyNeedsDetailSection =
     answer != null &&

@@ -264,6 +264,7 @@ export default function QuestionRenderer({
               alwaysShowCaretakerComment={alwaysShowCaretakerComment}
               alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
               alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
+              estateInspectionForm={estateInspectionForm}
             />
           </>
         )
@@ -645,6 +646,7 @@ export default function QuestionRenderer({
           alwaysShowCaretakerCommentPhoto={true}
           alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
           caretakerSections12Structured={true}
+          estateInspectionForm={estateInspectionForm}
         />
       </div>
     )
