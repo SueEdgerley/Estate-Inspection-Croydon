@@ -641,12 +641,13 @@ function InspectionQuestion({
       Boolean(esmMissingEmailWarning) ||
       isExpanded)
   const showPhotoInYesNoFollowUp =
-    !isNvTemplate ||
-    photoRequired ||
-    (question.caretaker_recipient_on_yes && isYes) ||
-    !!extras.raise_issue ||
-    caretakerAlwaysPhoto ||
-    caretakerShowPhotoOnYes
+    !esmYesNoIssueQuestion &&
+    (!isNvTemplate ||
+      photoRequired ||
+      (question.caretaker_recipient_on_yes && isYes) ||
+      !!extras.raise_issue ||
+      caretakerAlwaysPhoto ||
+      caretakerShowPhotoOnYes)
   useEffect(() => {
     if (!isNvTemplate || !showCommentPhotoBlock) {
       didScrollRef.current = false
