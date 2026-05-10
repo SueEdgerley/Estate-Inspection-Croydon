@@ -36,6 +36,7 @@ const ESTATE_AREA_OPTIONS = ['West', 'South', 'Central', 'North']
 const STAFF_YN = [
   ['ew_st_caretaker_present', 'Is there a caretaker present?'],
   ['ew_st_repairs_officer_present', 'Is there a repairs officer present?'],
+  ['ew_st_esm_present', 'Is there an ESM present?'],
   ['ew_st_ward_cllr_present', 'Is there a Ward Cllr present?'],
 ]
 
