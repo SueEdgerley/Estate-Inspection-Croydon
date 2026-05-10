@@ -23,6 +23,20 @@ const hasClerkKeys =
 export default hasClerkKeys
   ? clerkMiddleware(
       async (auth, req) => {
+        const tracePayload = {
+          path: req.nextUrl.pathname,
+          method: req.method,
+          vercel_id: req.headers.get("x-vercel-id") || req.headers.get("x-vercel-request-id"),
+        };
+        if (
+          req.nextUrl.pathname.startsWith("/api/actions") ||
+          req.nextUrl.pathname.startsWith("/actions") ||
+          req.nextUrl.pathname.startsWith("/api/inspections") ||
+          req.nextUrl.pathname.startsWith("/inspections") ||
+          req.nextUrl.pathname.includes("action-plan")
+        ) {
+          console.warn("[access-trace] middleware:pass", tracePayload);
+        }
         if (isPublicRoute(req)) return;
         // Let /api/* reach route handlers (they call auth() and return 401/403 JSON).
         if (req.nextUrl.pathname.startsWith("/api")) return;

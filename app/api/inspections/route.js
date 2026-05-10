@@ -52,6 +52,7 @@ import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
+import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1191,7 +1192,23 @@ export async function POST(request) {
       cu?.publicMetadata?.isAdmin === true,
       { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
     )
-    if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
+    const mayCreateTemplate = roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)
+    logAccessTrace('api.inspections.create.permission', {
+      ...getRequestTrace(request),
+      user_id: userId,
+      ...roleTrace(roleCtx),
+      ...templateTrace(template),
+      permission: 'roleMayCreateInspectionWithTemplate',
+      allowed: mayCreateTemplate,
+    })
+    if (!mayCreateTemplate) {
+      logAccessTrace('api.inspections.create.forbidden', {
+        ...getRequestTrace(request),
+        user_id: userId,
+        ...roleTrace(roleCtx),
+        ...templateTrace(template),
+        failure_source: 'roleMayCreateInspectionWithTemplate',
+      })
       return NextResponse.json(
         { error: 'Forbidden: your role cannot use this form template' },
         { status: 403 }

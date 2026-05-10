@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { getTemplates, getTemplateSections, normalizeTemplate, normalizeSection } from '@/lib/airtable-client'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
+import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,7 +27,23 @@ export async function GET(request, { params }) {
       cu?.publicMetadata?.isAdmin === true,
       { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
     )
-    if (!roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)) {
+    const allowed = roleMayCreateInspectionWithTemplate(roleCtx.normalized, roleCtx.clerkIsAdmin, template)
+    logAccessTrace('api.airtable.template-sections.permission', {
+      ...getRequestTrace(request),
+      user_id: userId,
+      ...roleTrace(roleCtx),
+      ...templateTrace(template),
+      permission: 'roleMayCreateInspectionWithTemplate',
+      allowed,
+    })
+    if (!allowed) {
+      logAccessTrace('api.airtable.template-sections.forbidden', {
+        ...getRequestTrace(request),
+        user_id: userId,
+        ...roleTrace(roleCtx),
+        ...templateTrace(template),
+        failure_source: 'roleMayCreateInspectionWithTemplate',
+      })
       return NextResponse.json({ error: 'Forbidden: your role cannot access this form template' }, { status: 403 })
     }
     

@@ -4,6 +4,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getAppRoleContextForClerkUser, mayViewInspectionReports } from '@/lib/app-role-access'
+import { getRequestTrace, logAccessTrace, roleTrace } from '@/lib/access-trace'
 import {
   buildInspectionWhereConditions,
   joinSqlAnd,
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic'
 /** Match dashboard: unscoped listing until estate scoping is enforced. */
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
-async function resolveAuth() {
+async function resolveAuth(request) {
   const { userId } = await auth()
   if (!userId) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const cu = await currentUser()
@@ -36,7 +37,21 @@ async function resolveAuth() {
     clerkIsAdmin,
     { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
   )
-  if (!mayViewInspectionReports(roleCtx.systemRole, roleCtx.clerkIsAdmin)) {
+  const mayViewReports = mayViewInspectionReports(roleCtx.systemRole, roleCtx.clerkIsAdmin)
+  logAccessTrace('api.reports.inspections.permission', {
+    ...getRequestTrace(request),
+    user_id: userId,
+    ...roleTrace(roleCtx),
+    permission: 'mayViewInspectionReports',
+    allowed: mayViewReports,
+  })
+  if (!mayViewReports) {
+    logAccessTrace('api.reports.inspections.forbidden', {
+      ...getRequestTrace(request),
+      user_id: userId,
+      ...roleTrace(roleCtx),
+      failure_source: 'report summary route',
+    })
     return {
       error: NextResponse.json(
         { error: 'Forbidden', code: 'REPORTS_NOT_PERMITTED' },
@@ -59,6 +74,12 @@ async function resolveAuth() {
   `
   const internalUser = userRow.rows[0] || null
   if (!internalUser) {
+    logAccessTrace('api.reports.inspections.forbidden', {
+      ...getRequestTrace(request),
+      user_id: userId,
+      ...roleTrace(roleCtx),
+      failure_source: 'report summary route:user_not_provisioned',
+    })
     return {
       error: NextResponse.json(
         { error: 'User not provisioned', code: 'USER_NOT_PROVISIONED' },
@@ -107,7 +128,7 @@ function mergeExtraFilters(baseWhere, baseParams, extras) {
 }
 
 export async function GET(request) {
-  const authRes = await resolveAuth()
+  const authRes = await resolveAuth(request)
   if (authRes.error) return authRes.error
 
   await ensureDatabase()

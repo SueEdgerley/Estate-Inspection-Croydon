@@ -8,6 +8,7 @@ import {
   roleMayViewGlobalActionsList,
 } from '@/lib/app-role-access'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import { getRequestTrace, logAccessTrace, roleTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -40,7 +41,25 @@ export async function GET(request) {
     const questionId = searchParams.get('question_id')
 
     const globalList = !inspectionId
-    if (globalList && !roleMayViewGlobalActionsList(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+    const mayViewActions = !globalList || roleMayViewGlobalActionsList(roleCtx.normalized, roleCtx.clerkIsAdmin)
+    logAccessTrace('api.actions.get.permission', {
+      ...getRequestTrace(request),
+      user_id: userId,
+      inspection_id: inspectionId || null,
+      question_id: questionId || null,
+      global_list: globalList,
+      ...roleTrace(roleCtx),
+      permission: globalList ? 'roleMayViewGlobalActionsList' : 'inspection_actions_read',
+      allowed: mayViewActions,
+    })
+    if (!mayViewActions) {
+      logAccessTrace('api.actions.get.forbidden', {
+        ...getRequestTrace(request),
+        user_id: userId,
+        inspection_id: inspectionId || null,
+        ...roleTrace(roleCtx),
+        failure_source: '/api/actions',
+      })
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
@@ -300,7 +319,21 @@ export async function POST(request) {
       cu?.publicMetadata?.isAdmin === true,
       { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
     )
-    if (!roleMayPostManualAction(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
+    const mayPostManualAction = roleMayPostManualAction(roleCtx.normalized, roleCtx.clerkIsAdmin)
+    logAccessTrace('api.actions.post.permission', {
+      ...getRequestTrace(request),
+      user_id: userId,
+      ...roleTrace(roleCtx),
+      permission: 'roleMayPostManualAction',
+      allowed: mayPostManualAction,
+    })
+    if (!mayPostManualAction) {
+      logAccessTrace('api.actions.post.forbidden', {
+        ...getRequestTrace(request),
+        user_id: userId,
+        ...roleTrace(roleCtx),
+        failure_source: '/api/actions',
+      })
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

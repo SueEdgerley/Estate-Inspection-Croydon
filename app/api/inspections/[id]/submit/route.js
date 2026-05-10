@@ -43,6 +43,7 @@ import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } fr
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
+import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -410,10 +411,31 @@ export async function POST(request, { params }) {
       templateForRoleCheck &&
       !roleMayCreateInspectionWithTemplate(roleCtxSubmit.normalized, roleCtxSubmit.clerkIsAdmin, templateForRoleCheck)
     ) {
+      logAccessTrace('api.inspections.submit.forbidden', {
+        ...getRequestTrace(request),
+        user_id: userId,
+        inspection_id: id,
+        ...roleTrace(roleCtxSubmit),
+        ...templateTrace(templateForRoleCheck),
+        permission: 'roleMayCreateInspectionWithTemplate',
+        failure_source: 'roleMayCreateInspectionWithTemplate',
+        allowed: false,
+      })
       return NextResponse.json(
         { error: 'Forbidden: your role cannot submit this inspection type' },
         { status: 403 }
       )
+    }
+    if (templateForRoleCheck) {
+      logAccessTrace('api.inspections.submit.permission', {
+        ...getRequestTrace(request),
+        user_id: userId,
+        inspection_id: id,
+        ...roleTrace(roleCtxSubmit),
+        ...templateTrace(templateForRoleCheck),
+        permission: 'roleMayCreateInspectionWithTemplate',
+        allowed: true,
+      })
     }
     if (
       templateForRoleCheck &&
