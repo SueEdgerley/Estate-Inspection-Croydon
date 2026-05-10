@@ -39,6 +39,26 @@ export async function GET(request) {
     searchParams = new URL(request.url).searchParams
     const inspectionId = searchParams.get('inspection_id')
     const questionId = searchParams.get('question_id')
+    let actionInspectionTrace = {}
+    if (inspectionId) {
+      try {
+        const inspectionTraceResult = await sql`
+          SELECT id, template_id, template_name, type, source
+          FROM inspections
+          WHERE id = ${inspectionId}
+          LIMIT 1
+        `
+        const inspectionTraceRow = inspectionTraceResult.rows[0] || null
+        actionInspectionTrace = {
+          inspection_template_id: inspectionTraceRow?.template_id || null,
+          template_name: inspectionTraceRow?.template_name || null,
+          inspection_type: inspectionTraceRow?.type || null,
+          inspection_source: inspectionTraceRow?.source || null,
+        }
+      } catch (traceError) {
+        actionInspectionTrace = { inspection_trace_error: traceError?.message || String(traceError) }
+      }
+    }
 
     const globalList = !inspectionId
     const mayViewActions = !globalList || roleMayViewGlobalActionsList(roleCtx.normalized, roleCtx.clerkIsAdmin)
@@ -48,6 +68,7 @@ export async function GET(request) {
       inspection_id: inspectionId || null,
       question_id: questionId || null,
       global_list: globalList,
+      ...actionInspectionTrace,
       ...roleTrace(roleCtx),
       permission: globalList ? 'roleMayViewGlobalActionsList' : 'inspection_actions_read',
       allowed: mayViewActions,
@@ -57,6 +78,7 @@ export async function GET(request) {
         ...getRequestTrace(request),
         user_id: userId,
         inspection_id: inspectionId || null,
+        ...actionInspectionTrace,
         ...roleTrace(roleCtx),
         failure_source: '/api/actions',
       })
