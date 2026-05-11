@@ -194,7 +194,7 @@ export default function YesNoQuestion({
         answer,
       })
 
-  // For ESM section 11 only, suppress default photo/comment controls; only show in the action panel on Yes.
+  // For ESM sections 11 and 13, suppress default photo/comment controls; only use the dedicated Yes follow-up panel.
   const sectionDisplayNumber = Number(
     section?.esm_display_number ??
       section?.esm_display_order ??
@@ -203,8 +203,8 @@ export default function YesNoQuestion({
       section?.order ??
       0
   )
-  const isEsmSection11 = estateInspectionForm && sectionDisplayNumber === 11
-  if (isEsmSection11) {
+  const isEsmSection11Or13 = estateInspectionForm && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
+  if (isEsmSection11Or13) {
     requiresComment = false
     requiresPhoto = false
   }

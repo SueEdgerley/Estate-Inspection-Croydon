@@ -274,6 +274,31 @@ function isEsmDuplicateFollowUpRow(question, section) {
   )
 }
 
+function isEsmDuplicateIssueQuestion(question, section, seenIssueKeys) {
+  const sectionText = normalizeQuestionTextForMatch(`${section?.title || ''} ${section?.name || ''}`)
+  const inPatchedIssueSection =
+    sectionText.includes('health and safety') ||
+    sectionText.includes('fire safety') ||
+    sectionText.includes('grounds maintenance')
+  if (!inPatchedIssueSection) return false
+
+  if (!isEsmYesNoIssueQuestionByText(question)) return false
+
+  const rowText = normalizeQuestionTextForMatch(
+    [
+      question?.question_text,
+      question?.label,
+      question?.helper_text,
+      question?.instructions,
+      question?.question_key,
+    ].filter(Boolean).join(' ')
+  )
+  const key = `${sectionText}::${rowText}`
+  if (seenIssueKeys.has(key)) return true
+  seenIssueKeys.add(key)
+  return false
+}
+
 function isEsmYesNoIssueQuestionByText(question) {
   const text = normalizeQuestionTextForMatch(
     [
@@ -2929,9 +2954,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   let caretakerRowIdx = 0
                   let estateSectionSeq = 0
                   const useEstateListLayout = estateInspectionForm || esmInspectionForm
+                  const seenEsmIssueQuestionKeys = new Set()
                   const rows = (section.questions || []).filter((q) => {
                     if (q.nv_hidden || q.esm_hidden) return false
                     if (esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)) return false
+                    if (esmInspectionForm && isEsmDuplicateIssueQuestion(q, section, seenEsmIssueQuestionKeys)) return false
                     if (useEstateListLayout) return true
                     if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
