@@ -82,6 +82,16 @@ export default function PhotoUploadControl({
             const data = JSON.parse(xhr.responseText)
             if (data?.url) urlsToAdd.push(data.url)
           } catch {}
+        } else {
+          let message = 'Photo upload failed. Please try again.'
+          try {
+            const data = JSON.parse(xhr.responseText)
+            message = data?.error || data?.details || message
+          } catch {}
+          setUploading(false)
+          setUploadError(message)
+          e.target.value = ''
+          return
         }
         processNext(index + 1)
       })

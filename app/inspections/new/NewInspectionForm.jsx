@@ -359,12 +359,6 @@ const CARETAKER_YN_COLORS = {
   NA: { border: '#64748b', bg: '#f1f5f9', selectedBg: '#64748b', text: '#334155' },
 }
 
-const ESM_Q4_COST_CODES = [
-  'C20395.641620.0000 (South central)',
-  'C20400.641620.0000 (North)',
-  'C203410.641620.0000 (East)',
-]
-
 function hasQuestionPhotos(extras) {
   return Array.isArray(extras?.photo_urls) && extras.photo_urls.some((u) => typeof u === 'string' && u.trim())
 }
@@ -472,9 +466,10 @@ function InspectionQuestion({
   const didScrollRef = useRef(false)
   const rawCostBlob = `${question.question_text || ''} ${question.label || ''}`.toLowerCase()
   const estateCostCodeSelectNeedsApi =
-    estateInspectionForm &&
+    (estateInspectionForm || esmInspectionForm || question.esm_q4_abandoned_vehicle === true) &&
     (() => {
       const qt = getQuestionType(question)
+      if (question.esm_q4_abandoned_vehicle === true) return true
       if (qt !== 'select' && qt !== 'single_select') return false
       if ((question.options || []).length > 0) return false
       return (
@@ -645,6 +640,15 @@ function InspectionQuestion({
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
+  const sectionDisplayNumber = Number(
+    section?.esm_display_number ??
+      section?.esm_display_order ??
+      section?.sort_order ??
+      section?.section_order ??
+      section?.order ??
+      0
+  )
+  const isEsmSection11Or13 = esmInspectionQuestion && qType === 'yes_no' && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
   const esmYesNoIssueQuestion =
     esmInspectionQuestion &&
     qType === 'yes_no' &&
@@ -660,7 +664,11 @@ function InspectionQuestion({
         question.type_includes_photo
     )
   const esmShowPhotoComment =
-    esmInspectionQuestion && qType !== 'photo' && !esmQ4AbandonedVehicle && (!esmYesNoIssueQuestion || isYes)
+    esmInspectionQuestion &&
+    qType !== 'photo' &&
+    !esmQ4AbandonedVehicle &&
+    !isEsmSection11Or13 &&
+    (!esmYesNoIssueQuestion || isYes)
   const esmPhotoAllowed =
     esmShowPhotoComment && (esmGradedQuestion || estatePhotoAllowed || question.include_photo || question.type_includes_photo)
   const esmUseDedicatedFollowUp =
@@ -685,16 +693,6 @@ function InspectionQuestion({
   const caretakerFixedEmailDestination =
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
-  const sectionDisplayNumber = Number(
-    section?.esm_display_number ??
-      section?.esm_display_order ??
-      section?.sort_order ??
-      section?.section_order ??
-      section?.order ??
-      0
-  )
-  const isEsmSection11Or13 = esmInspectionQuestion && qType === 'yes_no' && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
-
   const showCommentPhotoBlock =
     !esmUseDedicatedFollowUp &&
     !isEsmSection11Or13 &&
@@ -1171,9 +1169,9 @@ function InspectionQuestion({
               }}
             >
               <option value="">Select cost code…</option>
-              {ESM_Q4_COST_CODES.map((costCode) => (
-                <option key={costCode} value={costCode}>
-                  {costCode}
+              {estateApiCostCodes.map((costCode) => (
+                <option key={costCode.value} value={costCode.value}>
+                  {costCode.label}
                 </option>
               ))}
             </select>
