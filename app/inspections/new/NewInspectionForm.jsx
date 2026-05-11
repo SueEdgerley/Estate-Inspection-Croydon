@@ -2955,10 +2955,15 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   let estateSectionSeq = 0
                   const useEstateListLayout = estateInspectionForm || esmInspectionForm
                   const seenEsmIssueQuestionKeys = new Set()
-                  const rows = (section.questions || []).filter((q) => {
-                    if (q.nv_hidden || q.esm_hidden) return false
-                    if (esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)) return false
-                    if (esmInspectionForm && isEsmDuplicateIssueQuestion(q, section, seenEsmIssueQuestionKeys)) return false
+                  console.log(`[ESM-RENDER] Section "${section?.title}", total questions: ${(section.questions || []).length}`)
+                  const rows = (section.questions || []).filter((q, idx) => {
+                    const hidden = q.nv_hidden || q.esm_hidden
+                    const isDupFollowUp = esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)
+                    const isDupIssue = esmInspectionForm && isEsmDuplicateIssueQuestion(q, section, seenEsmIssueQuestionKeys)
+                    if (hidden || isDupFollowUp || isDupIssue) {
+                      console.log(`[ESM-RENDER] Section "${section?.title}", Q${idx} "${q?.question_text}" FILTERED: hidden=${hidden}, dupFollowUp=${isDupFollowUp}, dupIssue=${isDupIssue}`)
+                      return false
+                    }
                     if (useEstateListLayout) return true
                     if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
