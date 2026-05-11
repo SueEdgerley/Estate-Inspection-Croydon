@@ -1011,6 +1011,7 @@ export default function EstateWalkaboutNewInspectionForm({
             <h2 style={h2Style}>1. Staff present</h2>
             {yna('ew_st_caretaker_present', 'Is there a caretaker present?')}
             {yna('ew_st_repairs_officer_present', 'Is there a repairs officer present?')}
+            {yna('ew_st_esm_present', 'Is there an ESM present?')}
             {yna('ew_st_ward_cllr_present', 'Is there a Ward Cllr present?')}
             <div style={{ marginBottom: 18 }}>
               <label style={labelStyle}>What is the name of the repairs officer?</label>
