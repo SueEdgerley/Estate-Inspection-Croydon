@@ -622,12 +622,27 @@ function InspectionQuestion({
     esmInspectionQuestion &&
     (esmRole === 'lifts_comment' || isEsmLiftQuestion(question)) &&
     hasQuestionPhotos(extras)
+  const sectionDisplayNumber = Number(
+    section?.esm_display_number ??
+      section?.esm_display_order ??
+      section?.sort_order ??
+      section?.section_order ??
+      section?.order ??
+      0
+  )
+  const isEsmSection11Or13 =
+    esmInspectionQuestion &&
+    qType === 'yes_no' &&
+    (sectionDisplayNumber === 11 ||
+      sectionDisplayNumber === 13 ||
+      esmRole === 'health_safety_issue' ||
+      esmRole === 'fire_safety_issue')
   const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true && !estatePhotoAllowed
   const esmCommentOnPhoto =
     esmInspectionQuestion &&
     (esmGradedQuestion || question.esm_comment_on_photo === true || esmRole === 'garages') &&
     hasQuestionPhotos(extras)
-  const esmShowComment = esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment
+  const esmShowComment = !isEsmSection11Or13 && (esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment)
   const esmPhotosAdded = hasQuestionPhotos(extras)
   const esmRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.esm_recipient_options) && question.esm_recipient_options.length
@@ -678,15 +693,6 @@ function InspectionQuestion({
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
-  const sectionDisplayNumber = Number(
-    section?.esm_display_number ??
-      section?.esm_display_order ??
-      section?.sort_order ??
-      section?.section_order ??
-      section?.order ??
-      0
-  )
-  const isEsmSection11Or13 = esmInspectionForm && qType === 'yes_no' && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
   const esmYesNoIssueQuestion =
     esmInspectionQuestion &&
     qType === 'yes_no' &&
