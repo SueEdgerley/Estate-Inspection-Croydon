@@ -2008,6 +2008,21 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         applyNeighbourhoodVoicePatchesToList(templateList)
         for (const t of templateList) {
           applyTemplateDisplayPatches(t)
+          // Log ESM template structure after patching
+          if (isEsmInspectionFormTemplate && isEsmInspectionFormTemplate(t)) {
+            const sections = t.sections || []
+            console.log(`[LOAD-TEMPLATES] ESM Template "${t.name}", ${sections.length} sections`)
+            sections.forEach((sec, sidx) => {
+              const secName = sec.title || sec.name || `Sec ${sidx}`
+              const questions = sec.questions || []
+              console.log(`[LOAD-TEMPLATES]   [${sidx}] ${secName}: ${questions.length} questions`)
+              questions.forEach((q, qidx) => {
+                const qtext = q.question_text || q.label || '(no text)'
+                const hidden = q.esm_hidden || q.nv_hidden ? ' [HIDDEN]' : ''
+                console.log(`[LOAD-TEMPLATES]     Q${qidx}: ${qtext.substring(0, 50)}${hidden}`)
+              })
+            })
+          }
         }
 
         if (!cancelled) {
@@ -2967,6 +2982,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                     if (useEstateListLayout) return true
                     if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
+                  })
+                  console.log(`[ESM-RENDER] Section "${section?.title}", filtered rows: ${rows.length}/${(section.questions || []).length}`)
+                  rows.forEach((row, idx) => {
+                    const questionText = row?.question_text || row?.label || '(no text)'
+                    console.log(`[ESM-RENDER]   Row ${idx}: ${questionText}`)
                   })
                   const items = rows.map((q) => {
                     estateSectionSeq += 1
