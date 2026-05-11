@@ -293,7 +293,20 @@ function isEsmDuplicateIssueQuestion(question, section, seenIssueKeys) {
       question?.question_key,
     ].filter(Boolean).join(' ')
   )
-  const key = `${sectionText}::${rowText}`
+
+  // For ESM sections 11 (Health and Safety) and 13 (Fire Safety), treat them as the same section
+  // for duplicate detection purposes, since Q11 and Q13 are the same question
+  const sectionDisplayNumber = section?.esm_display_number ??
+    section?.esm_display_order ??
+    section?.sort_order ??
+    section?.section_order ??
+    section?.order ??
+    0
+  const normalizedSectionText = (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
+    ? 'health_and_fire_safety_combined'
+    : sectionText
+
+  const key = `${normalizedSectionText}::${rowText}`
   if (seenIssueKeys.has(key)) return true
   seenIssueKeys.add(key)
   return false
