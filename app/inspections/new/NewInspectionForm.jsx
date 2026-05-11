@@ -673,7 +673,7 @@ function InspectionQuestion({
       section?.order ??
       0
   )
-  const isEsmSection11Or13 = esmInspectionQuestion && qType === 'yes_no' && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
+  const isEsmSection11Or13 = esmInspectionForm && qType === 'yes_no' && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
   const esmYesNoIssueQuestion =
     esmInspectionQuestion &&
     qType === 'yes_no' &&

@@ -21,7 +21,10 @@ import {
 } from '../../../../../lib/caretaker-action-details'
 import { validateRequiredQuestions } from '../../../../../lib/airtable'
 import { handleYesAnswer, handleNoAnswer } from '../../../../../lib/yesno-action-handler'
-import { isEstateInspectionFormTemplate } from '../../../../../lib/standard-inspection-form'
+import {
+  isEstateInspectionFormTemplate,
+  isEsmInspectionFormTemplate,
+} from '../../../../../lib/standard-inspection-form'
 
 export default function InspectionSection() {
   const params = useParams()
@@ -345,6 +348,7 @@ await fetch(`/api/inspections/${id}/answers`, {
     urlSectionNum <= 5
 
   let estateInspectionForm = false
+  let esmInspectionForm = false
   if (inspection && !isCaretakerInspection) {
     let tv = inspection.template_version
     if (typeof tv === 'string') {
@@ -356,12 +360,15 @@ await fetch(`/api/inspections/${id}/answers`, {
     }
     if (tv && typeof tv === 'object') {
       estateInspectionForm = isEstateInspectionFormTemplate(tv)
+      esmInspectionForm = isEsmInspectionFormTemplate(tv)
     } else {
-      estateInspectionForm = isEstateInspectionFormTemplate({
+      const templateSpec = {
         name: inspection.template_name,
         id: inspection.template_id,
         template_key: inspection.template_key,
-      })
+      }
+      estateInspectionForm = isEstateInspectionFormTemplate(templateSpec)
+      esmInspectionForm = isEsmInspectionFormTemplate(templateSpec)
     }
   }
 
@@ -444,6 +451,7 @@ await fetch(`/api/inspections/${id}/answers`, {
             alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
             caretakerSections12Structured={caretakerSections12Structured}
             estateInspectionForm={estateInspectionForm}
+            esmInspectionForm={esmInspectionForm}
           />
         )}
         {!section && (

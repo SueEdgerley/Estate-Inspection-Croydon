@@ -26,6 +26,7 @@ export default function YesNoQuestion({
   alwaysShowCaretakerRecipient = false,
   caretakerSections12Structured = false,
   estateInspectionForm = false,
+  esmInspectionForm = false,
 }) {
   const [answer, setAnswer] = useState(value)
   const [comment, setComment] = useState('')
@@ -203,7 +204,7 @@ export default function YesNoQuestion({
       section?.order ??
       0
   )
-  const isEsmSection11Or13 = estateInspectionForm && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
+  const isEsmSection11Or13 = esmInspectionForm && (sectionDisplayNumber === 11 || sectionDisplayNumber === 13)
   if (isEsmSection11Or13) {
     requiresComment = false
     requiresPhoto = false

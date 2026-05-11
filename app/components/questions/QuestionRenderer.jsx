@@ -66,6 +66,7 @@ export default function QuestionRenderer({
   caretakerSections12Structured = false,
   subLabelIndex = 0,
   estateInspectionForm = false,
+  esmInspectionForm = false,
 }) {
   const [localValue, setLocalValue] = useState(value ?? '')
   const [recipientOptions, setRecipientOptions] = useState([])
@@ -265,6 +266,7 @@ export default function QuestionRenderer({
               alwaysShowCaretakerCommentPhoto={alwaysShowCaretakerCommentPhoto}
               alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
               estateInspectionForm={estateInspectionForm}
+              esmInspectionForm={esmInspectionForm}
             />
           </>
         )
