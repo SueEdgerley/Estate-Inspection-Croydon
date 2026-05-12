@@ -20,7 +20,7 @@ const INTERNAL_TABS = [
 /** Filter panel tabs (Manage Inspections list view only) — layout only; fields map to existing `filters` keys. */
 const INSPECTION_FILTER_TABS = [
   { id: 'users', label: 'Users' },
-  { id: 'templates', label: 'Templates' },
+  { id: 'templates', label: 'Forms' },
   { id: 'locations', label: 'Locations' },
   { id: 'gradings', label: 'Gradings' },
   { id: 'dates', label: 'Date Range' },
@@ -48,6 +48,7 @@ export default function InspectionsListPage() {
     dateFrom: '',
     dateTo: '',
     type: 'all',
+    form: 'all',
     search: '',
     /** inspector email; matches inspections.inspector_id — owner/admin only in API */
     inspector: 'all',
@@ -62,6 +63,7 @@ export default function InspectionsListPage() {
     groupsAvailable: false,
     message: null,
   })
+  const [formOptions, setFormOptions] = useState([])
 
   const pathname = usePathname()
   const prevPathRef = useRef(null)
@@ -71,6 +73,7 @@ export default function InspectionsListPage() {
     if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
     if (filters.dateTo) params.set('dateTo', filters.dateTo)
     if (filters.type && filters.type !== 'all') params.set('type', filters.type)
+    if (filters.form && filters.form !== 'all') params.set('templateName', filters.form)
     if (filters.search && filters.search.trim()) params.set('search', filters.search.trim())
     if (filters.inspector && filters.inspector !== 'all') params.set('inspector', filters.inspector)
     if (filters.completionScope) params.set('completionScope', filters.completionScope)
@@ -102,7 +105,7 @@ export default function InspectionsListPage() {
     const cameFromOutsideInspections =
       prev != null && prev !== '' && !prev.startsWith('/inspections')
     if (cameFromOutsideInspections) {
-      setFilters((f) => ({ ...f, type: 'all', search: '', inspector: 'all', completionScope: 'active' }))
+      setFilters((f) => ({ ...f, type: 'all', form: 'all', search: '', inspector: 'all', completionScope: 'active' }))
     }
     prevPathRef.current = pathname
 
@@ -243,6 +246,16 @@ export default function InspectionsListPage() {
   const isSubmittedRow = (row) => String(row.status || '').toLowerCase() === 'submitted'
 
   const filteredInspections = useMemo(() => inspections, [inspections])
+
+  useEffect(() => {
+    const names = inspections
+      .map((row) => (typeof row.template_name === 'string' ? row.template_name.trim() : ''))
+      .filter(Boolean)
+    if (names.length === 0) return
+    setFormOptions((prev) =>
+      Array.from(new Set([...prev, ...names])).sort((a, b) => a.localeCompare(b, 'en-GB'))
+    )
+  }, [inspections])
 
   const summaryRows = filteredInspections
   const visibleInspectionIds = filteredInspections.map((row) => row.id).filter(Boolean)
@@ -667,17 +680,17 @@ export default function InspectionsListPage() {
             {inspectionFilterTab === 'templates' && (
               <div role="tabpanel">
                 <h2 style={{ margin: '0 0 0.35rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#111827' }}>
-                  Filter by template type
+                  Filter by form
                 </h2>
                 <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.55 }}>
-                  Limit the list to a single inspection type.
+                  Limit the list to a single inspection form.
                 </p>
                 <label style={{ display: 'block', fontSize: '0.8125rem', marginBottom: '0.35rem', color: '#374151', fontWeight: 500 }}>
-                  Type
+                  Form
                 </label>
                 <select
-                  value={filters.type}
-                  onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}
+                  value={filters.form}
+                  onChange={(e) => setFilters((f) => ({ ...f, form: e.target.value }))}
                   style={{
                     maxWidth: '24rem',
                     width: '100%',
@@ -688,11 +701,12 @@ export default function InspectionsListPage() {
                     backgroundColor: '#fff',
                   }}
                 >
-                  <option value="all">All types</option>
-                  <option value="inspection">Inspection form</option>
-                  <option value="street">Street</option>
-                  <option value="block">Block</option>
-                  <option value="estate">Estate</option>
+                  <option value="all">All forms</option>
+                  {formOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
@@ -806,6 +820,7 @@ export default function InspectionsListPage() {
                 dateFrom: '',
                 dateTo: '',
                 type: 'all',
+                form: 'all',
                 search: '',
                 inspector: 'all',
                 completionScope: 'active',
@@ -948,6 +963,7 @@ export default function InspectionsListPage() {
                 dateFrom: '',
                 dateTo: '',
                 type: 'all',
+                form: 'all',
                 search: '',
                 inspector: 'all',
                 completionScope: 'active',

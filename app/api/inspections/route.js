@@ -834,6 +834,7 @@ export async function GET(request) {
       dateTo: searchParams.get('dateTo') || '',
       type: searchParams.get('type') || 'all',
       template: searchParams.get('template') || 'all',
+      templateName: searchParams.get('templateName') || '',
       workType: searchParams.get('workType') || 'all',
       role: searchParams.get('role') || 'all',
       estateId: searchParams.get('estateId') || '',
