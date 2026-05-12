@@ -41,6 +41,9 @@ function actionSearchText(action) {
     display.comment,
     display.location,
     display.blockLocation,
+    display.inspectionTemplateName,
+    display.inspectorName,
+    display.contextLocation,
     display.status,
     display.priority,
     display.assignedTo,
@@ -318,17 +321,23 @@ export default function ActionsPage() {
                     boxShadow: selectedId === a.id ? '0 0 0 2px rgba(37,99,235,0.12)' : '0 1px 3px rgba(15, 23, 42, 0.08)',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                    <strong style={{ color: '#111827', fontSize: '1rem' }}>{notRecorded(display.issue || display.comment)}</strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={cardEyebrowStyle}>{notRecorded(display.inspectionTemplateName)}</div>
+                      <strong style={{ color: '#111827', fontSize: '1rem' }}>{notRecorded(display.contextLocation)}</strong>
+                    </div>
                     <span style={statusBadgeStyle}>{display.status}</span>
                   </div>
-                  <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.875rem' }}>
-                    {notRecorded(display.location)}
+                  <div style={inspectionContextGridStyle}>
+                    <ContextItem label="Inspector" value={display.inspectorName} />
+                    <ContextItem label="Inspection date" value={display.inspectionDate} />
+                  </div>
+                  <div style={{ marginTop: '0.75rem', color: '#111827', fontSize: '0.95rem', fontWeight: 700 }}>
+                    {notRecorded(display.issue || display.comment)}
                   </div>
                   <div style={cardMetaGridStyle}>
-                    <span><strong>Location:</strong> {notRecorded(display.blockLocation)}</span>
-                    <span><strong>Inspection date:</strong> {display.inspectionDate}</span>
                     <span><strong>Section/category:</strong> {notRecorded(display.section)}</span>
+                    <span><strong>Question/comment:</strong> {notRecorded(display.comment || display.issue)}</span>
                   </div>
                   <div style={{ marginTop: '0.35rem', color: '#334155', fontSize: '0.875rem' }}>
                     Assigned: {notRecorded(display.assignedTo)} | Priority: {notRecorded(display.priority)}
@@ -378,12 +387,20 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
       </div>
 
       <section style={sectionStyle}>
+        <h3 style={sectionHeadingStyle}>Inspection context</h3>
+        <DetailRow label="Form/template" value={display.inspectionTemplateName} />
+        <DetailRow label="Inspector" value={display.inspectorName} />
+        <DetailRow label="Estate/block/location" value={display.contextLocation} />
+        <DetailRow label="Inspection date" value={display.inspectionDate} />
+      </section>
+
+      <section style={sectionStyle}>
         <h3 style={sectionHeadingStyle}>Issue</h3>
         <DetailRow label="Section/category" value={display.section} />
         <DetailRow label="Issue/question summary" value={display.issue} />
         {display.rating ? <DetailRow label="Rating" value={display.rating} /> : null}
         <DetailRow label="Comment" value={display.comment} multiline />
-        <DetailRow label="Block/location" value={[display.location, display.blockLocation].filter(Boolean).join(' - ')} />
+        <DetailRow label="Estate/block/location" value={display.contextLocation} />
         {photos.length ? (
           <div style={{ marginTop: '0.75rem' }}>
             <div style={detailLabelStyle}>Photo</div>
@@ -406,7 +423,6 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
         <DetailRow label="Priority" value={display.priority} />
         <DetailRow label="Status" value={display.status} />
         <DetailRow label="Submitted by" value={display.submittedBy} />
-        <DetailRow label="Inspection date" value={display.inspectionDate} />
         <DetailRow label="Assigned to" value={display.assignedTo} />
         <DetailRow label="Target completion date" value={display.targetCompletionDate} />
         {display.repairNotes ? <DetailRow label="Notes/update" value={display.repairNotes} multiline /> : null}
@@ -476,6 +492,15 @@ function DetailRow({ label, value, multiline = false }) {
   )
 }
 
+function ContextItem({ label, value }) {
+  return (
+    <div>
+      <span style={contextLabelStyle}>{label}</span>
+      <span style={contextValueStyle}>{notRecorded(value)}</span>
+    </div>
+  )
+}
+
 function Field({ label, children }) {
   return (
     <label style={{ display: 'block', marginTop: '0.75rem' }}>
@@ -502,6 +527,43 @@ const cardMetaGridStyle = {
   marginTop: '0.45rem',
   color: '#334155',
   fontSize: '0.875rem',
+}
+
+const cardEyebrowStyle = {
+  marginBottom: '0.25rem',
+  color: '#1d4ed8',
+  fontSize: '0.78rem',
+  fontWeight: 800,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+}
+
+const inspectionContextGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+  gap: '0.5rem',
+  marginTop: '0.75rem',
+  padding: '0.75rem',
+  borderRadius: '0.65rem',
+  background: '#f8fafc',
+  border: '1px solid #e2e8f0',
+}
+
+const contextLabelStyle = {
+  display: 'block',
+  marginBottom: '0.15rem',
+  color: '#64748b',
+  fontSize: '0.72rem',
+  fontWeight: 800,
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+}
+
+const contextValueStyle = {
+  display: 'block',
+  color: '#0f172a',
+  fontSize: '0.875rem',
+  fontWeight: 600,
 }
 
 const filterBannerStyle = {
