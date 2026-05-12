@@ -6,14 +6,7 @@ import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { buildWalkaboutActionPlanPdf } from '@/lib/pdf/buildWalkaboutActionPlanPdf'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
-import { buildActionDisplay, cleanActionDisplayText(...) } from '@/lib/action-display-formatter'
-
-function cleanDisplayText(value) {
-  return String(value ?? '')
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+import { buildActionDisplay, cleanActionDisplayText } from '@/lib/action-display-formatter'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -222,12 +215,12 @@ async function generate(request, { params }) {
         section: meta.section || sections.get(String(row.section_id || '')) || action?.section_name || row.section_id || '',
         question: cleanIssueTitle(action, meta.question || questionId),
         issue: cleanIssueTitle(action, meta.question || questionId),
-        comment: cleanDisplayText(comment || cleanActionSummary(action) || answerDisplay(row)),
-        actionSummary: cleanDisplayText(comment || cleanActionSummary(action) || answerDisplay(row)),
+        comment: cleanActionDisplayText(comment || cleanActionSummary(action) || answerDisplay(row)),
+        actionSummary: cleanActionDisplayText(comment || cleanActionSummary(action) || answerDisplay(row)),
         location: action?.location || inspection.location_label || inspection.estate_block_name || '',
         status: action?.status || 'Open',
         jobNumber: actionJobNumber(action),
-        raisedBy: cleanDisplayText(inspection.inspector_name || inspection.inspector_id),
+        raisedBy: cleanActionDisplayText(inspection.inspector_name || inspection.inspector_id),
         hasPhoto,
       })
     }
@@ -247,7 +240,7 @@ async function generate(request, { params }) {
         location: action.location || inspection.location_label || inspection.estate_block_name || '',
         status: action.status || 'Open',
         jobNumber: actionJobNumber(action),
-        raisedBy: cleanDisplayText(inspection.inspector_name || inspection.inspector_id),
+        raisedBy: cleanActionDisplayText(inspection.inspector_name || inspection.inspector_id),
         hasPhoto: parsePhotoUrls(action.photo_urls).length > 0,
       })
     }
