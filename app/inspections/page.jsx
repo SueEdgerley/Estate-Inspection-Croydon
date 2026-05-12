@@ -12,6 +12,16 @@ function normalizeInspectionListRows(data) {
   return data.map((r) => withInspectionPdfDefaults(r))
 }
 
+function normalizeTemplateOptionNames(templates) {
+  if (!Array.isArray(templates)) return []
+  const names = templates
+    .map((template) =>
+      String(template?.name || template?.template_name || template?.templateName || '').trim()
+    )
+    .filter(Boolean)
+  return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'en-GB'))
+}
+
 const INTERNAL_TABS = [
   { id: 'summary', label: 'Summary', icon: '📋' },
   { id: 'inspections', label: 'Manage Inspections', icon: '📄' },
@@ -195,6 +205,28 @@ export default function InspectionsListPage() {
     }
   }, [pathname, activeTab])
 
+  useEffect(() => {
+    const isList = pathname === '/inspections' || pathname === '/inspections/'
+    if (!isList || activeTab !== 'inspections') return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/templates?t=${Date.now()}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled || !res.ok) return
+        setFormOptions(normalizeTemplateOptionNames(data.templates))
+      } catch {
+        /* keep current options if forms cannot be loaded */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [pathname, activeTab])
+
   const formatDate = (dateString) => {
     if (!dateString) return '–'
     const d = new Date(dateString)
@@ -246,16 +278,6 @@ export default function InspectionsListPage() {
   const isSubmittedRow = (row) => String(row.status || '').toLowerCase() === 'submitted'
 
   const filteredInspections = useMemo(() => inspections, [inspections])
-
-  useEffect(() => {
-    const names = inspections
-      .map((row) => (typeof row.template_name === 'string' ? row.template_name.trim() : ''))
-      .filter(Boolean)
-    if (names.length === 0) return
-    setFormOptions((prev) =>
-      Array.from(new Set([...prev, ...names])).sort((a, b) => a.localeCompare(b, 'en-GB'))
-    )
-  }, [inspections])
 
   const summaryRows = filteredInspections
   const visibleInspectionIds = filteredInspections.map((row) => row.id).filter(Boolean)
