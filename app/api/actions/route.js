@@ -100,7 +100,12 @@ export async function GET(request) {
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
             a.created_at, a.updated_at,
-            COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+            COALESCE(
+              CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END,
+              NULLIF(trim(completed_person.name), ''),
+              NULLIF(trim(completed_user.email), ''),
+              CASE WHEN i.inspector_id LIKE '%@%' THEN NULLIF(trim(i.inspector_id), '') END
+            ) AS created_by,
             p.name AS assigned_to,
             p.email AS assigned_to_email,
             i.title AS inspection_title,
@@ -116,6 +121,8 @@ export async function GET(request) {
             COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN users completed_user ON completed_user.clerk_user_id = i.inspector_id OR lower(trim(completed_user.email)) = lower(trim(i.inspector_id))
+          LEFT JOIN people completed_person ON completed_person.id = completed_user.people_id OR lower(trim(completed_person.email)) = lower(trim(COALESCE(completed_user.email, i.inspector_id, '')))
           LEFT JOIN estates e ON e.id = i.estate_id
           LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
           LEFT JOIN people p ON p.id = a.recipient_person_id
@@ -134,7 +141,12 @@ export async function GET(request) {
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
             a.created_at, a.updated_at,
-            COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+            COALESCE(
+              CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END,
+              NULLIF(trim(completed_person.name), ''),
+              NULLIF(trim(completed_user.email), ''),
+              CASE WHEN i.inspector_id LIKE '%@%' THEN NULLIF(trim(i.inspector_id), '') END
+            ) AS created_by,
             p.name AS assigned_to,
             p.email AS assigned_to_email,
             i.title AS inspection_title,
@@ -150,6 +162,8 @@ export async function GET(request) {
             COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN users completed_user ON completed_user.clerk_user_id = i.inspector_id OR lower(trim(completed_user.email)) = lower(trim(i.inspector_id))
+          LEFT JOIN people completed_person ON completed_person.id = completed_user.people_id OR lower(trim(completed_person.email)) = lower(trim(COALESCE(completed_user.email, i.inspector_id, '')))
           LEFT JOIN estates e ON e.id = i.estate_id
           LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
           LEFT JOIN people p ON p.id = a.recipient_person_id
@@ -168,7 +182,12 @@ export async function GET(request) {
             a.job_number, a.expected_completion_date,
             a.repair_notes, a.repair_photo_url, a.repair_updated_at,
             a.created_at, a.updated_at,
-            COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
+            COALESCE(
+              CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END,
+              NULLIF(trim(completed_person.name), ''),
+              NULLIF(trim(completed_user.email), ''),
+              CASE WHEN i.inspector_id LIKE '%@%' THEN NULLIF(trim(i.inspector_id), '') END
+            ) AS created_by,
             p.name AS assigned_to,
             p.email AS assigned_to_email,
             i.title AS inspection_title,
@@ -184,6 +203,8 @@ export async function GET(request) {
             COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
+          LEFT JOIN users completed_user ON completed_user.clerk_user_id = i.inspector_id OR lower(trim(completed_user.email)) = lower(trim(i.inspector_id))
+          LEFT JOIN people completed_person ON completed_person.id = completed_user.people_id OR lower(trim(completed_person.email)) = lower(trim(COALESCE(completed_user.email, i.inspector_id, '')))
           LEFT JOIN estates e ON e.id = i.estate_id
           LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
           LEFT JOIN people p ON p.id = a.recipient_person_id
@@ -215,7 +236,7 @@ export async function GET(request) {
               NULL::text AS repair_photo_url,
               NULL::timestamptz AS repair_updated_at,
               a.created_at, a.updated_at,
-              'Inspector' AS created_by,
+              NULL::text AS created_by,
               'Assigned' AS assigned_to,
               NULL::text AS assigned_to_email,
               NULL::text AS inspection_title,
@@ -248,7 +269,7 @@ export async function GET(request) {
               NULL::text AS repair_photo_url,
               NULL::timestamptz AS repair_updated_at,
               a.created_at, a.updated_at,
-              'Inspector' AS created_by,
+              NULL::text AS created_by,
               'Assigned' AS assigned_to,
               NULL::text AS assigned_to_email,
               NULL::text AS inspection_title,
@@ -281,7 +302,7 @@ export async function GET(request) {
               NULL::text AS repair_photo_url,
               NULL::timestamptz AS repair_updated_at,
               a.created_at, a.updated_at,
-              'Inspector' AS created_by,
+              NULL::text AS created_by,
               'Assigned' AS assigned_to,
               NULL::text AS assigned_to_email,
               NULL::text AS inspection_title,

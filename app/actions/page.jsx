@@ -42,7 +42,7 @@ function actionSearchText(action) {
     display.location,
     display.blockLocation,
     display.inspectionTemplateName,
-    display.inspectorName,
+    display.completedBy,
     display.contextLocation,
     display.status,
     display.priority,
@@ -329,7 +329,7 @@ export default function ActionsPage() {
                     <span style={statusBadgeStyle}>{display.status}</span>
                   </div>
                   <div style={inspectionContextGridStyle}>
-                    <ContextItem label="Inspector" value={display.inspectorName} />
+                    <ContextItem label="Completed by" value={display.completedBy} />
                     <ContextItem label="Inspection date" value={display.inspectionDate} />
                   </div>
                   <div style={{ marginTop: '0.75rem', color: '#111827', fontSize: '0.95rem', fontWeight: 700 }}>
@@ -389,7 +389,7 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
       <section style={sectionStyle}>
         <h3 style={sectionHeadingStyle}>Inspection context</h3>
         <DetailRow label="Form/template" value={display.inspectionTemplateName} />
-        <DetailRow label="Inspector" value={display.inspectorName} />
+        <DetailRow label="Completed by" value={display.completedBy} />
         <DetailRow label="Estate/block/location" value={display.contextLocation} />
         <DetailRow label="Inspection date" value={display.inspectionDate} />
       </section>
