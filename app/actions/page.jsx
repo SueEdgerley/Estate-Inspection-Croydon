@@ -81,6 +81,7 @@ export default function ActionsPage() {
   const [form, setForm] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [downloadingActionPlan, setDownloadingActionPlan] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [inspectionId, setInspectionId] = useState(null)
@@ -226,6 +227,39 @@ export default function ActionsPage() {
   }
 
   const closeDetail = () => setSelectedId('')
+  const downloadActionPlanPdf = async () => {
+    if (!inspectionId) return
+    setDownloadingActionPlan(true)
+    setError('')
+    try {
+      const res = await fetch('/api/actions/action-plan-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          inspectionId,
+          actionIds: filteredActions.map((action) => action.id),
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || 'Could not generate action plan PDF')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `action-plan-${inspectionId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err?.message || 'Could not generate action plan PDF')
+    } finally {
+      setDownloadingActionPlan(false)
+    }
+  }
   const inspectionFilterAction = actions[0]
   const inspectionFilterLabel = inspectionFilterAction
     ? [
@@ -251,9 +285,23 @@ export default function ActionsPage() {
           <div>
             <strong>Showing issues for inspection:</strong> {inspectionFilterLabel || inspectionId}
           </div>
-          <Link href="/actions" style={clearFilterLinkStyle}>
-            Clear filter
-          </Link>
+          <div style={filterActionsStyle}>
+            <button
+              type="button"
+              onClick={downloadActionPlanPdf}
+              disabled={downloadingActionPlan}
+              style={{
+                ...downloadPdfButtonStyle,
+                opacity: downloadingActionPlan ? 0.72 : 1,
+                cursor: downloadingActionPlan ? 'wait' : 'pointer',
+              }}
+            >
+              {downloadingActionPlan ? 'Preparing PDF...' : 'Download Action Plan PDF'}
+            </button>
+            <Link href="/actions" style={clearFilterLinkStyle}>
+              Clear filter
+            </Link>
+          </div>
         </div>
       ) : null}
 
@@ -515,6 +563,25 @@ const clearFilterLinkStyle = {
   color: '#0f766e',
   background: '#fff',
   textDecoration: 'none',
+  fontWeight: 700,
+  fontSize: '0.875rem',
+}
+
+const filterActionsStyle = {
+  display: 'flex',
+  gap: '0.5rem',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+}
+
+const downloadPdfButtonStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  border: '1px solid #0f766e',
+  borderRadius: '0.5rem',
+  padding: '0.45rem 0.7rem',
+  color: '#fff',
+  background: '#0f766e',
   fontWeight: 700,
   fontSize: '0.875rem',
 }
