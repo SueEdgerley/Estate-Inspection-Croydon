@@ -343,6 +343,7 @@ export async function POST(request, { params }) {
       )
     }
     const { id } = await params
+    console.log('[inspections/submit] route entry', { inspectionId: id })
     let body = {}
     try {
       body = await request.json()
@@ -973,6 +974,11 @@ export async function POST(request, { params }) {
 
     // Save recipient records (best-effort — inspection is already submitted)
     const sentList = Array.isArray(emailResults?.sent) ? emailResults.sent : []
+    const sendCount = sentList.length
+    const failureList = Array.isArray(emailResults?.failed) ? emailResults.failed : []
+    console.log('[inspections/submit] emails_sent', sendCount)
+    console.log('[inspections/submit] email_failures', failureList)
+
     for (let i = 0; i < sentList.length; i++) {
       const recipient = sentList[i]
       const emailAddr = recipient?.email != null ? String(recipient.email).trim() : ''

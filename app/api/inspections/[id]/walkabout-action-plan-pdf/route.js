@@ -1,11 +1,19 @@
-import { NextResponse } from 'next/server'
+
+    import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { buildWalkaboutActionPlanPdf } from '@/lib/pdf/buildWalkaboutActionPlanPdf'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
-import { buildActionDisplay, cleanActionDisplayText } from '@/lib/action-display-formatter'
+import { buildActionDisplay, cleanActionDisplayText(...) } from '@/lib/action-display-formatter'
+
+function cleanDisplayText(value) {
+  return String(value ?? '')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

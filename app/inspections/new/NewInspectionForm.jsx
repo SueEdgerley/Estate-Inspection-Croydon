@@ -2250,6 +2250,20 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setOfflineNotice('Offline draft loaded. Review it, then submit when you are online.')
   }
 
+  const submitPendingInspection = async (inspectionId) => {
+    const submitRes = await fetch(`/api/inspections/${inspectionId}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    const submitData = await submitRes.json().catch(() => ({}))
+    if (!submitRes.ok || submitData.error) {
+      const msg = submitData.error || submitData.details || `Submit failed (${submitRes.status})`
+      throw new Error(msg)
+    }
+    return submitData
+  }
+
   const submitOfflineDraft = async (draft) => {
     if (!isOnline) {
       setOfflineNotice('You are offline. Reconnect before submitting saved drafts.')
@@ -2271,10 +2285,15 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setSubmitError(data.error || data.details || `Request failed (${res.status})`)
         return
       }
+      const inspectionId = data.inspectionId ?? data.id
+      if (!inspectionId) {
+        setSubmitError('Save reported success but no inspection ID was returned.')
+        return
+      }
+      await submitPendingInspection(inspectionId)
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
-      const inspectionId = data.inspectionId ?? data.id
-      if (inspectionId) router.push(`/inspections/${inspectionId}`)
+      router.push(`/inspections/${inspectionId}`)
     } catch (err) {
       setSubmitError(err.message || 'Something went wrong')
     } finally {
@@ -2546,11 +2565,25 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         )
       }
       const inspectionId = data.inspectionId ?? data.id
-      if (inspectionId) {
-        router.push(`/inspections/${inspectionId}`)
-      } else {
+      if (!inspectionId) {
         setSubmitError('Save may have succeeded. Open the inspections list to confirm, or try again.')
+        return
       }
+
+      const submitRes = await fetch(`/api/inspections/${inspectionId}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+      const submitData = await submitRes.json().catch(() => ({}))
+      if (!submitRes.ok || submitData.error) {
+        const msg = submitData.error || submitData.details || `Submit failed (${submitRes.status})`
+        setSubmitError(msg)
+        console.error('[inspection final submit] submit route failed', submitRes.status, submitData)
+        return
+      }
+
+      router.push(`/inspections/${inspectionId}`)
     } catch (err) {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         saveCurrentOfflineDraft()
