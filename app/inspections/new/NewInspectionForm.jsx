@@ -215,6 +215,7 @@ function getQuestionType(question) {
     (question.comment_required_when === 'on_no' ||
       question.photo_required_when === 'on_no' ||
       question.comment_required_when === 'on_yes' ||
+
       question.photo_required_when === 'on_yes') &&
     !raw
   return normalizeQuestionType(raw || (hasYesNoBehavior ? 'yes_no' : 'text'))
@@ -237,7 +238,6 @@ function isEsmLightsWorkingConditionQuestion(question) {
   const text = normalizeQuestionTextForMatch(question?.question_text || question?.label)
   return text === 'please confirm the working condition of the lights'
 }
-
 function isEsmDuplicateFollowUpRow(question, section) {
   const sectionText = normalizeQuestionTextForMatch(`${section?.title || ''} ${section?.name || ''}`)
   const inPatchedIssueSection =
@@ -632,6 +632,9 @@ function InspectionQuestion({
       section?.section_order ??
       section?.order ??
       0
+  )
+  const sectionText = normalizeQuestionTextForMatch(
+    `${section?.title || ''} ${section?.name || ''} ${section?.label || ''}`
   )
   const esmIssueSectionByTitle =
     sectionText.includes('health and safety') ||
