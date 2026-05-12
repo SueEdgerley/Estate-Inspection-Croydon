@@ -215,6 +215,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const [jobTitleOptions, setJobTitleOptions] = useState([])
 
   const [submitError, setSubmitError] = useState(null)
+  const [submitWarning, setSubmitWarning] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
   const [toastMessage, setToastMessage] = useState('')
@@ -441,6 +442,10 @@ export default function EstateWalkaboutNewInspectionForm({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      body: JSON.stringify({
+        inspection_start_time: datetimeLocalToIso(inspectionStartTime),
+        inspection_end_time: datetimeLocalToIso(inspectionEndTime),
+      }),
     })
     const submitData = await submitRes.json().catch(() => ({}))
     if (!submitRes.ok || submitData.error) {
@@ -459,12 +464,13 @@ export default function EstateWalkaboutNewInspectionForm({
     if (!body) return
     setIsSubmitting(true)
     setSubmitError(null)
+    setSubmitWarning(null)
     try {
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, draft: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) {
@@ -476,7 +482,18 @@ export default function EstateWalkaboutNewInspectionForm({
         setSubmitError('Save reported success but no inspection ID was returned.')
         return
       }
-      await submitPendingInspection(inspectionId)
+      const submitData = await submitPendingInspection(inspectionId)
+      const submitWarnings = [
+        ...(Array.isArray(submitData.email_failures) && submitData.email_failures.length > 0
+          ? [`Email failures: ${submitData.email_failures.map((failure) => failure.error || failure.email || failure.recipient || 'send failed').join('; ')}`]
+          : []),
+        ...(Array.isArray(submitData.action_creation_warnings) ? submitData.action_creation_warnings : []),
+        ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
+      ]
+      if (submitWarnings.length > 0) {
+        setSubmitWarning(submitWarnings.join(' '))
+        return
+      }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
       router.push(`/inspections/${inspectionId}`)
@@ -557,6 +574,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitError(null)
+    setSubmitWarning(null)
     const errs = validate()
     if (Object.keys(errs).length > 0) return
 
@@ -574,7 +592,7 @@ export default function EstateWalkaboutNewInspectionForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(currentSubmitBody),
+        body: JSON.stringify({ ...currentSubmitBody, draft: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -590,7 +608,18 @@ export default function EstateWalkaboutNewInspectionForm({
         setSubmitError('Save reported success but no inspection ID was returned.')
         return
       }
-      await submitPendingInspection(inspectionId)
+      const submitData = await submitPendingInspection(inspectionId)
+      const submitWarnings = [
+        ...(Array.isArray(submitData.email_failures) && submitData.email_failures.length > 0
+          ? [`Email failures: ${submitData.email_failures.map((failure) => failure.error || failure.email || failure.recipient || 'send failed').join('; ')}`]
+          : []),
+        ...(Array.isArray(submitData.action_creation_warnings) ? submitData.action_creation_warnings : []),
+        ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
+      ]
+      if (submitWarnings.length > 0) {
+        setSubmitWarning(submitWarnings.join(' '))
+        return
+      }
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -876,6 +905,20 @@ export default function EstateWalkaboutNewInspectionForm({
               }}
             >
               {submitError}
+            </div>
+          )}
+          {submitWarning && (
+            <div
+              style={{
+                padding: 12,
+                marginBottom: 20,
+                background: '#fffbeb',
+                color: '#92400e',
+                borderRadius: EW.radius,
+                fontSize: 14,
+              }}
+            >
+              Inspection submitted, but follow-up work needs attention: {submitWarning}
             </div>
           )}
 

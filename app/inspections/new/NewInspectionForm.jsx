@@ -1913,6 +1913,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [answers, setAnswers] = useState({})
   const [answerExtras, setAnswerExtras] = useState({})
   const [submitError, setSubmitError] = useState(null)
+  const [submitWarning, setSubmitWarning] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
   const [startingWizard, setStartingWizard] = useState(false)
@@ -2255,6 +2256,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      body: JSON.stringify({
+        inspection_start_time: datetimeLocalToIso(inspectionStartTime),
+        inspection_end_time: datetimeLocalToIso(inspectionEndTime),
+      }),
     })
     const submitData = await submitRes.json().catch(() => ({}))
     if (!submitRes.ok || submitData.error) {
@@ -2273,12 +2278,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     if (!body) return
     setIsSubmitting(true)
     setSubmitError(null)
+    setSubmitWarning(null)
     try {
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, draft: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) {
@@ -2290,7 +2296,18 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setSubmitError('Save reported success but no inspection ID was returned.')
         return
       }
-      await submitPendingInspection(inspectionId)
+      const submitData = await submitPendingInspection(inspectionId)
+      const submitWarnings = [
+        ...(Array.isArray(submitData.email_failures) && submitData.email_failures.length > 0
+          ? [`Email failures: ${submitData.email_failures.map((failure) => failure.error || failure.email || failure.recipient || 'send failed').join('; ')}`]
+          : []),
+        ...(Array.isArray(submitData.action_creation_warnings) ? submitData.action_creation_warnings : []),
+        ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
+      ]
+      if (submitWarnings.length > 0) {
+        setSubmitWarning(submitWarnings.join(' '))
+        return
+      }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
       router.push(`/inspections/${inspectionId}`)
@@ -2524,6 +2541,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitError(null)
+    setSubmitWarning(null)
     const errs = validate()
     if (Object.keys(errs).length > 0) return
 
@@ -2541,7 +2559,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(currentSubmitBody),
+        body: JSON.stringify({ ...currentSubmitBody, draft: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -2559,27 +2577,22 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setSubmitError(data.error || data.details || 'Save failed')
         return
       }
-      if (data.pdfError) {
-        window.alert(
-          `Inspection was saved, but the full PDF could not be generated or uploaded:\n\n${String(data.pdfError).slice(0, 500)}`
-        )
-      }
       const inspectionId = data.inspectionId ?? data.id
       if (!inspectionId) {
         setSubmitError('Save may have succeeded. Open the inspections list to confirm, or try again.')
         return
       }
 
-      const submitRes = await fetch(`/api/inspections/${inspectionId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      })
-      const submitData = await submitRes.json().catch(() => ({}))
-      if (!submitRes.ok || submitData.error) {
-        const msg = submitData.error || submitData.details || `Submit failed (${submitRes.status})`
-        setSubmitError(msg)
-        console.error('[inspection final submit] submit route failed', submitRes.status, submitData)
+      const submitData = await submitPendingInspection(inspectionId)
+      const submitWarnings = [
+        ...(Array.isArray(submitData.email_failures) && submitData.email_failures.length > 0
+          ? [`Email failures: ${submitData.email_failures.map((failure) => failure.error || failure.email || failure.recipient || 'send failed').join('; ')}`]
+          : []),
+        ...(Array.isArray(submitData.action_creation_warnings) ? submitData.action_creation_warnings : []),
+        ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
+      ]
+      if (submitWarnings.length > 0) {
+        setSubmitWarning(submitWarnings.join(' '))
         return
       }
 
@@ -2716,6 +2729,21 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             }}
           >
             {submitError}
+          </div>
+        )}
+
+        {submitWarning && (
+          <div
+            style={{
+              padding: '0.75rem',
+              marginBottom: '1.5rem',
+              backgroundColor: '#fef3c7',
+              color: '#92400e',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+            }}
+          >
+            Inspection submitted, but follow-up work needs attention: {submitWarning}
           </div>
         )}
 

@@ -789,6 +789,96 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
   }
 }
 
+async function persistInspectionResponses({ inspectionId, template, answers = {}, answer_extras = {} }) {
+  const questionsById = new Map()
+  template.sections.forEach((sec) => {
+    ;(sec.questions || []).forEach((q) => questionsById.set(q.id, { ...q, sectionId: sec.id }))
+  })
+
+  // Persist answers into Postgres inspection_answers (system of record)
+  try {
+    for (const [questionId, answer] of Object.entries(answers)) {
+      if (answer === undefined || answer === null) continue
+      const question = questionsById.get(questionId)
+      if (!question) continue
+      const extras = answer_extras[questionId] || {}
+      const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
+      const packedNotes = typeof extras.notes === 'string' && extras.notes.trim()
+        ? extras.notes.trim()
+        : packNvWizardExtras(extras)
+
+      const questionType = question.question_type || 'text'
+      const rawValue = typeof answer === 'string' ? answer : String(answer)
+      const lower = String(answer).toLowerCase()
+      const answerBoolean =
+        questionType === 'yes_no'
+          ? (lower === 'yes' ? true : lower === 'no' ? false : null)
+          : null
+      const asNumber = Number(answer)
+      const answerNumber =
+        questionType === 'number' && Number.isFinite(asNumber) ? asNumber : null
+
+      const answerId = `answer_${inspectionId}_${questionId}`
+
+      // Base columns only (matches POST /api/inspections/[id]/answers). Phase-2 routing columns
+      // (triggers_task, etc.) require migration 20250302000000; omit so inserts work on init schema.
+      await sql`
+        INSERT INTO inspection_answers (
+          id, inspection_id, section_id, question_id, question_type,
+          answer_value, answer_text, answer_number, answer_boolean, notes
+        )
+        VALUES (
+          ${answerId},
+          ${inspectionId},
+          ${question.sectionId},
+          ${questionId},
+          ${questionType},
+          ${rawValue},
+          ${rawValue},
+          ${answerNumber},
+          ${answerBoolean},
+          ${packedNotes || comment || null}
+        )
+        ON CONFLICT (inspection_id, question_id) DO UPDATE SET
+          answer_value = EXCLUDED.answer_value,
+          answer_text = EXCLUDED.answer_text,
+          answer_number = EXCLUDED.answer_number,
+          answer_boolean = EXCLUDED.answer_boolean,
+          notes = EXCLUDED.notes,
+          updated_at = CURRENT_TIMESTAMP
+      `
+    }
+  } catch (answersErr) {
+    console.error('[Inspections] Could not persist inspection answers to Postgres:', answersErr)
+  }
+
+  // Store photos in inspection_photos for PDF/noticeboard pipeline
+  try {
+    for (const [questionId, answer] of Object.entries(answers)) {
+      if (answer === undefined || answer === null) continue
+      const extras = answer_extras[questionId] || {}
+      const urls = Array.isArray(extras.photo_urls)
+        ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
+        : Array.isArray(extras.photoUrls)
+          ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
+          : []
+      const singleUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
+      const idCardUrls = collectEsmIdCardPhotoUrls(extras)
+      const allUrls = singleUrl ? [singleUrl, ...urls, ...idCardUrls] : [...urls, ...idCardUrls]
+      for (let i = 0; i < allUrls.length; i++) {
+        const url = allUrls[i]
+        const photoId = `photo_${inspectionId}_${questionId}_${Date.now()}_${i}`
+        await sql`
+          INSERT INTO inspection_photos (id, inspection_id, question_id, blob_url, blob_key, filename)
+          VALUES (${photoId}, ${inspectionId}, ${questionId}, ${url}, null, null)
+        `
+      }
+    }
+  } catch (photoErr) {
+    console.warn('[Inspections] Could not store photos for PDF pipeline:', photoErr.message)
+  }
+}
+
 export async function GET(request) {
   const { userId } = await auth()
   console.log('auth userId', userId)
@@ -1301,6 +1391,7 @@ export async function POST(request) {
           ${workType}
         )
       `
+      await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
       return NextResponse.json(
         {
           inspectionId,
@@ -1385,93 +1476,7 @@ export async function POST(request) {
         updated_at = ${new Date()}
     `
 
-    const questionsById = new Map()
-    template.sections.forEach((sec) => {
-      ;(sec.questions || []).forEach((q) => questionsById.set(q.id, { ...q, sectionId: sec.id }))
-    })
-
-    // Persist answers into Postgres inspection_answers (system of record)
-    try {
-      for (const [questionId, answer] of Object.entries(answers)) {
-          if (answer === undefined || answer === null) continue
-          const question = questionsById.get(questionId)
-          if (!question) continue
-          const extras = answer_extras[questionId] || {}
-          const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
-          const packedNotes = typeof extras.notes === 'string' && extras.notes.trim()
-            ? extras.notes.trim()
-            : packNvWizardExtras(extras)
-
-          const questionType = question.question_type || 'text'
-          const rawValue = typeof answer === 'string' ? answer : String(answer)
-          const lower = String(answer).toLowerCase()
-          const answerBoolean =
-            questionType === 'yes_no'
-              ? (lower === 'yes' ? true : lower === 'no' ? false : null)
-              : null
-          const asNumber = Number(answer)
-          const answerNumber =
-            questionType === 'number' && Number.isFinite(asNumber) ? asNumber : null
-
-          const answerId = `answer_${inspectionId}_${questionId}`
-
-          // Base columns only (matches POST /api/inspections/[id]/answers). Phase-2 routing columns
-          // (triggers_task, etc.) require migration 20250302000000; omit so inserts work on init schema.
-          await sql`
-            INSERT INTO inspection_answers (
-              id, inspection_id, section_id, question_id, question_type,
-              answer_value, answer_text, answer_number, answer_boolean, notes
-            )
-            VALUES (
-              ${answerId},
-              ${inspectionId},
-              ${question.sectionId},
-              ${questionId},
-              ${questionType},
-              ${rawValue},
-              ${rawValue},
-              ${answerNumber},
-              ${answerBoolean},
-              ${packedNotes || comment || null}
-            )
-            ON CONFLICT (inspection_id, question_id) DO UPDATE SET
-              answer_value = EXCLUDED.answer_value,
-              answer_text = EXCLUDED.answer_text,
-              answer_number = EXCLUDED.answer_number,
-              answer_boolean = EXCLUDED.answer_boolean,
-              notes = EXCLUDED.notes,
-              updated_at = CURRENT_TIMESTAMP
-          `
-        }
-    } catch (answersErr) {
-      console.error('[Inspections] Could not persist inspection answers to Postgres:', answersErr)
-    }
-
-    // Store photos in inspection_photos for PDF/noticeboard pipeline
-    try {
-      for (const [questionId, answer] of Object.entries(answers)) {
-          if (answer === undefined || answer === null) continue
-          const extras = answer_extras[questionId] || {}
-          const urls = Array.isArray(extras.photo_urls)
-            ? extras.photo_urls.filter((u) => typeof u === 'string' && u)
-            : Array.isArray(extras.photoUrls)
-              ? extras.photoUrls.filter((u) => typeof u === 'string' && u)
-              : []
-          const singleUrl = typeof extras.photoUrl === 'string' && extras.photoUrl.trim() ? extras.photoUrl.trim() : null
-          const idCardUrls = collectEsmIdCardPhotoUrls(extras)
-          const allUrls = singleUrl ? [singleUrl, ...urls, ...idCardUrls] : [...urls, ...idCardUrls]
-          for (let i = 0; i < allUrls.length; i++) {
-            const url = allUrls[i]
-            const photoId = `photo_${inspectionId}_${questionId}_${Date.now()}_${i}`
-            await sql`
-              INSERT INTO inspection_photos (id, inspection_id, question_id, blob_url, blob_key, filename)
-              VALUES (${photoId}, ${inspectionId}, ${questionId}, ${url}, null, null)
-            `
-          }
-      }
-    } catch (photoErr) {
-      console.warn('[Inspections] Could not store photos for PDF pipeline:', photoErr.message)
-    }
+    await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
 
     const actionsForPoster = []
     const walkaboutEmailResults = { sent: 0, failed: [] }

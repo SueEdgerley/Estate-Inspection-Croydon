@@ -7,6 +7,34 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const STATUS_VALUES = ['open', 'in_progress', 'completed', 'closed']
+const OPTIONAL_INSPECTION_COLUMNS = [
+  'form_name',
+  'completed_by_name',
+  'created_by_name',
+  'user_email',
+  'address',
+  'location',
+]
+
+async function getAvailableInspectionColumns() {
+  try {
+    const result = await sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'inspections'
+        AND column_name = ANY(${OPTIONAL_INSPECTION_COLUMNS})
+    `
+    return new Set((result.rows || []).map((row) => row.column_name))
+  } catch (error) {
+    console.warn('[Action Detail API] inspection column lookup failed:', error?.message || error)
+    return new Set()
+  }
+}
+
+function optionalInspectionColumn(availableColumns, columnName) {
+  return availableColumns.has(columnName) ? `i.${columnName}` : 'NULL::text'
+}
 
 function normalizeStatus(value) {
   const status = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
@@ -40,7 +68,15 @@ export async function GET(request, { params }) {
     }
     const { id } = await params
     await ensureRepairActionFields(sql)
-    const result = await sql`
+    const availableInspectionColumns = await getAvailableInspectionColumns()
+    const inspectionFormName = optionalInspectionColumn(availableInspectionColumns, 'form_name')
+    const inspectionCompletedByName = optionalInspectionColumn(availableInspectionColumns, 'completed_by_name')
+    const inspectionCreatedByName = optionalInspectionColumn(availableInspectionColumns, 'created_by_name')
+    const inspectionUserEmail = optionalInspectionColumn(availableInspectionColumns, 'user_email')
+    const inspectionAddress = optionalInspectionColumn(availableInspectionColumns, 'address')
+    const inspectionLocation = optionalInspectionColumn(availableInspectionColumns, 'location')
+    const result = await sql.query(
+      `
       SELECT 
         a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
         a.category, a.priority, a.title, a.description, a.location, a.status,
@@ -49,26 +85,55 @@ export async function GET(request, { params }) {
         a.created_at, a.updated_at,
         COALESCE(
           CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END,
+          NULLIF(trim(${inspectionCompletedByName}), ''),
+          NULLIF(trim(${inspectionCreatedByName}), ''),
           NULLIF(trim(completed_person.name), ''),
           NULLIF(trim(completed_user.email), ''),
+          NULLIF(trim(${inspectionUserEmail}), ''),
           CASE WHEN i.inspector_id LIKE '%@%' THEN NULLIF(trim(i.inspector_id), '') END
         ) AS created_by,
         p.name AS assigned_to,
         p.email AS assigned_to_email,
         i.title AS inspection_title,
         i.template_name AS inspection_template_name,
+        tv.snapshot->>'title' AS template_title,
+        COALESCE(tv.snapshot->>'name', tv.template_name) AS template_name,
+        ${inspectionFormName} AS inspection_form_name,
         i.type AS inspection_type,
+        i.source AS inspection_source,
+        i.location_label AS inspection_location_label,
+        ${inspectionAddress} AS inspection_address,
+        ${inspectionLocation} AS inspection_location,
+        CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END AS inspection_inspector_name,
+        ${inspectionCompletedByName} AS inspection_completed_by_name,
+        ${inspectionCreatedByName} AS inspection_created_by_name,
+        ${inspectionUserEmail} AS inspection_user_email,
+        NULLIF(trim(completed_user.email), '') AS inspection_inspector_email,
+        NULLIF(trim(i.inspector_id), '') AS inspection_inspector_id,
         i.due_date AS inspection_due_date,
-        COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
+        i.submitted_at AS inspection_submitted_at,
+        i.created_at AS inspection_created_at,
+        e.name AS estate_name,
+        b.name AS block_name,
+        COALESCE(
+          NULLIF(CONCAT_WS(' / ', e.name, b.name), ''),
+          i.location_label,
+          ${inspectionAddress},
+          ${inspectionLocation},
+          i.title
+        ) AS estate_block_name
       FROM actions a
       LEFT JOIN inspections i ON i.id = a.inspection_id
+      LEFT JOIN template_versions tv ON tv.id = i.template_version_id
       LEFT JOIN users completed_user ON completed_user.clerk_user_id = i.inspector_id OR lower(trim(completed_user.email)) = lower(trim(i.inspector_id))
       LEFT JOIN people completed_person ON completed_person.id = completed_user.people_id OR lower(trim(completed_person.email)) = lower(trim(COALESCE(completed_user.email, i.inspector_id, '')))
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
       LEFT JOIN people p ON p.id = a.recipient_person_id
-      WHERE a.id = ${id}
-    `
+      WHERE a.id = $1
+    `,
+      [id]
+    )
 
     if (result.rows.length === 0) {
       return NextResponse.json(

@@ -343,7 +343,7 @@ export async function POST(request, { params }) {
       )
     }
     const { id } = await params
-    console.log('[inspections/submit] route entry', { inspectionId: id })
+    console.log('[inspections/submit] submit route entered', { inspectionId: id })
     let body = {}
     try {
       body = await request.json()
@@ -976,8 +976,9 @@ export async function POST(request, { params }) {
     const sentList = Array.isArray(emailResults?.sent) ? emailResults.sent : []
     const sendCount = sentList.length
     const failureList = Array.isArray(emailResults?.failed) ? emailResults.failed : []
-    console.log('[inspections/submit] emails_sent', sendCount)
-    console.log('[inspections/submit] email_failures', failureList)
+    console.log('[inspections/submit] inspection id', { inspectionId: id })
+    console.log('[inspections/submit] emails_sent', { inspectionId: id, count: sendCount })
+    console.log('[inspections/submit] email_failures', { inspectionId: id, count: failureList.length, failures: failureList })
 
     for (let i = 0; i < sentList.length; i++) {
       const recipient = sentList[i]
@@ -1008,17 +1009,24 @@ export async function POST(request, { params }) {
       }
     }
 
+    const warnings = [
+      ...(failureList.length > 0 ? ['One or more notification emails failed to send.'] : []),
+      ...(actionCreationWarnings.length > 0 ? actionCreationWarnings : []),
+      ...(pdfError ? [`PDF warning: ${pdfError}`] : []),
+    ]
+
     return NextResponse.json(
       {
         inspectionId: id,
         pdfUrl: fullPdfUrl || null,
         fullPdfUrl: fullPdfUrl || null,
         posterPdfUrl: posterPdfUrl || null,
-        emails_sent: Array.isArray(emailResults?.sent) ? emailResults.sent.length : 0,
-        ...(Array.isArray(emailResults?.failed) && emailResults.failed.length > 0
-          ? { email_failures: emailResults.failed }
+        emails_sent: sendCount,
+        ...(failureList.length > 0
+          ? { email_failures: failureList }
           : {}),
         ...(actionCreationWarnings.length > 0 ? { action_creation_warnings: actionCreationWarnings } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
         ...(pdfError ? { pdfError } : {}),
       },
       { status: 201 }
