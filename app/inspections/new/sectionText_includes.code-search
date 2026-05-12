@@ -1,0 +1,27 @@
+# Query: sectionText.includes
+# ContextLines: 1
+
+10 results - 1 file
+
+app\inspections\new\NewInspectionForm.jsx:
+  243    const inPatchedIssueSection =
+  244:     sectionText.includes('health and safety') ||
+  245:     sectionText.includes('fire safety') ||
+  246:     sectionText.includes('grounds maintenance')
+  247    if (!inPatchedIssueSection) return false
+  248:   const isEsmSection11Or13 = sectionText.includes('health and safety') || sectionText.includes('fire safety')
+  249  
+
+  282    const inPatchedIssueSection =
+  283:     sectionText.includes('health and safety') ||
+  284:     sectionText.includes('fire safety') ||
+  285:     sectionText.includes('grounds maintenance')
+  286    if (!inPatchedIssueSection) return false
+
+  638    const sectionTitleText = normalizeQuestionTextForMatch(
+  `${section?.title || ''} ${section?.name || ''} ${section?.label || ''}`
+)
+const esmIssueSectionByTitle =
+  sectionTitleText.includes('health and safety') ||
+  sectionTitleText.includes('fire safety')
+  641    const isEsmSection11Or13IssueQuestion =
