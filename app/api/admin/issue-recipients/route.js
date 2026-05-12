@@ -12,10 +12,18 @@ function normalizeEmail(value) {
   return value && String(value).trim().toLowerCase()
 }
 
-function displayCategory(category) {
-  if (category === CATEGORY) return 'Issue recipient'
+function displayCategory(category, role) {
+  if (category === CATEGORY || role === CATEGORY) return 'Issue recipient'
   if (category === 'staff') return 'Staff'
   return category ? String(category) : 'Person'
+}
+
+function isIssueRecipient(row) {
+  const category = row?.category ? String(row.category).trim().toLowerCase() : ''
+  const role = row?.role ? String(row.role).trim().toLowerCase() : ''
+  return [category, role].some((value) =>
+    ['issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox'].includes(value)
+  )
 }
 
 async function requireAdmin() {
@@ -43,6 +51,10 @@ export async function GET() {
         created_at
       FROM people
       WHERE COALESCE(active, true) = true
+        AND (
+          lower(trim(COALESCE(category, ''))) IN ('issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox')
+          OR lower(trim(COALESCE(role, ''))) IN ('issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox')
+        )
       ORDER BY
         CASE WHEN category = ${CATEGORY} THEN 0 ELSE 1 END,
         LOWER(name),
@@ -51,8 +63,8 @@ export async function GET() {
     return NextResponse.json(
       result.rows.map((row) => ({
         ...row,
-        recipient_type: row.category === CATEGORY ? 'routing_mailbox' : 'existing_person',
-        category_label: displayCategory(row.category),
+        recipient_type: isIssueRecipient(row) ? 'routing_mailbox' : 'existing_person',
+        category_label: displayCategory(row.category, row.role),
       }))
     )
   } catch (e) {
@@ -80,6 +92,7 @@ export async function POST(request) {
         SET
           name = ${name},
           email = ${email},
+          role = ${CATEGORY},
           active = true,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ${existingRow.id}
@@ -95,8 +108,8 @@ export async function POST(request) {
       return NextResponse.json({
         ...row,
         reused: true,
-        recipient_type: row.category === CATEGORY ? 'routing_mailbox' : 'existing_person',
-        category_label: displayCategory(row.category),
+        recipient_type: isIssueRecipient(row) ? 'routing_mailbox' : 'existing_person',
+        category_label: displayCategory(row.category, row.role),
       })
     }
     const id =
@@ -119,7 +132,7 @@ export async function POST(request) {
       ...row,
       reused: false,
       recipient_type: 'routing_mailbox',
-      category_label: displayCategory(row.category),
+      category_label: displayCategory(row.category, row.role),
     })
   } catch (e) {
     console.error('issue-recipients POST:', e)

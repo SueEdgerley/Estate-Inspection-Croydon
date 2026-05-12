@@ -12,10 +12,18 @@ function normalizeEmail(value) {
   return value && String(value).trim().toLowerCase()
 }
 
-function displayCategory(category) {
-  if (category === CATEGORY) return 'Issue recipient'
+function displayCategory(category, role) {
+  if (category === CATEGORY || role === CATEGORY) return 'Issue recipient'
   if (category === 'staff') return 'Staff'
   return category ? String(category) : 'Person'
+}
+
+function isIssueRecipient(row) {
+  const category = row?.category ? String(row.category).trim().toLowerCase() : ''
+  const role = row?.role ? String(row.role).trim().toLowerCase() : ''
+  return [category, role].some((value) =>
+    ['issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox'].includes(value)
+  )
 }
 
 async function requireAdmin() {
@@ -34,7 +42,13 @@ export async function PATCH(request, { params }) {
   try {
     await ensureDatabase()
     const cur = await sql`
-      SELECT id, name, email, active FROM people WHERE id = ${id} AND category = ${CATEGORY} LIMIT 1
+      SELECT id, name, email, category, role, active FROM people
+      WHERE id = ${id}
+        AND (
+          lower(trim(COALESCE(category, ''))) IN ('issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox')
+          OR lower(trim(COALESCE(role, ''))) IN ('issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox')
+        )
+      LIMIT 1
     `
     if (!cur.rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const body = await request.json().catch(() => ({}))
@@ -58,15 +72,24 @@ export async function PATCH(request, { params }) {
           SET
             name = ${name},
             email = ${em},
+            role = ${CATEGORY},
             active = true,
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ${clashRow.id}
         `
-        await sql`
-          UPDATE people
-          SET active = false, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ${id} AND category = ${CATEGORY}
-        `
+        if (cur.rows[0].category === CATEGORY) {
+          await sql`
+            UPDATE people
+            SET active = false, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${id} AND category = ${CATEGORY}
+          `
+        } else {
+          await sql`
+            UPDATE people
+            SET role = null, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${id} AND role = ${CATEGORY}
+          `
+        }
         const reused = (
           await sql`
             SELECT id, name, email, category, role, job_title, active
@@ -79,8 +102,8 @@ export async function PATCH(request, { params }) {
           ...reused,
           reused: true,
           replaced_id: id,
-          recipient_type: reused.category === CATEGORY ? 'routing_mailbox' : 'existing_person',
-          category_label: displayCategory(reused.category),
+          recipient_type: isIssueRecipient(reused) ? 'routing_mailbox' : 'existing_person',
+          category_label: displayCategory(reused.category, reused.role),
         })
       }
       email = em
@@ -89,14 +112,14 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Provide name and/or email' }, { status: 400 })
     }
     await sql`
-      UPDATE people SET name = ${name}, email = ${email}, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}
+      UPDATE people SET name = ${name}, email = ${email}, role = ${CATEGORY}, updated_at = CURRENT_TIMESTAMP WHERE id = ${id}
     `
     const row = (await sql`SELECT id, name, email, category, role, job_title, active FROM people WHERE id = ${id}`).rows[0]
     return NextResponse.json({
       ...row,
       reused: false,
-      recipient_type: row.category === CATEGORY ? 'routing_mailbox' : 'existing_person',
-      category_label: displayCategory(row.category),
+      recipient_type: isIssueRecipient(row) ? 'routing_mailbox' : 'existing_person',
+      category_label: displayCategory(row.category, row.role),
     })
   } catch (e) {
     console.error('issue-recipients PATCH:', e)
@@ -117,14 +140,36 @@ export async function DELETE(request, { params }) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   try {
     await ensureDatabase()
-    const del = await sql`
-      UPDATE people
-      SET active = false, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${id} AND category = ${CATEGORY}
-      RETURNING id
-    `
+    const current = (
+      await sql`
+        SELECT id, category, role
+        FROM people
+        WHERE id = ${id}
+          AND (
+            lower(trim(COALESCE(category, ''))) IN ('issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox')
+            OR lower(trim(COALESCE(role, ''))) IN ('issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox')
+          )
+        LIMIT 1
+      `
+    ).rows[0]
+    if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const del =
+      current.category === CATEGORY
+        ? await sql`
+            UPDATE people
+            SET active = false, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${id} AND category = ${CATEGORY}
+            RETURNING id
+          `
+        : await sql`
+            UPDATE people
+            SET role = null, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${id} AND role = ${CATEGORY}
+            RETURNING id
+          `
     if (del.rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json({ ok: true, id: del.rows[0].id, active: false })
+    return NextResponse.json({ ok: true, id: del.rows[0].id, active: current.category === CATEGORY ? false : true })
   } catch (e) {
     console.error('issue-recipients DELETE:', e)
     return NextResponse.json({ error: e.message }, { status: 500 })

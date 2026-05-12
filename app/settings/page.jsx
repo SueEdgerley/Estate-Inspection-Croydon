@@ -385,7 +385,7 @@ export default function SettingsPage() {
       <p style={{ margin: '0 0 1.5rem 0', color: '#6b7280', fontSize: '0.9375rem' }}>
         <strong>Manage Users</strong> lists Clerk-linked app accounts (<code style={{ fontSize: '0.85em' }}>users</code>).{' '}
         <strong>Staff directory</strong> is for assignments (<code style={{ fontSize: '0.85em' }}>people</code>, staff rows — add before someone signs in if needed).{' '}
-        <strong>Issue Recipients</strong> can be routing mailboxes or existing active people records used by inspection recipient dropdowns.
+        <strong>Issue Recipients</strong> lists named issue-routing recipients and mailboxes used by inspection recipient dropdowns.
       </p>
 
       {loadError && (
@@ -723,7 +723,7 @@ export default function SettingsPage() {
       <section id="issue-recipients" style={card}>
         <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Issue Recipients</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
-          Named mailboxes and existing active people available for inspection issue routing and recipient options on forms.
+          Named issue-routing recipients and mailboxes available for inspection recipient options on forms.
         </p>
 
         <form onSubmit={addRecipient} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>
@@ -791,7 +791,7 @@ export default function SettingsPage() {
                           style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
                         />
                       </td>
-                      <td style={td}>{r.category_label || (r.category === 'issue_recipient' ? 'Issue recipient' : 'Person')}</td>
+                      <td style={td}>{r.category_label || (r.category === 'issue_recipient' || r.role === 'issue_recipient' ? 'Issue recipient' : 'Person')}</td>
                       <td style={td}>
                         <button type="button" onClick={() => saveRecipientEdit(r.id)} disabled={saving} style={{ marginRight: 8 }}>
                           Save
@@ -805,9 +805,9 @@ export default function SettingsPage() {
                     <>
                       <td style={td}>{r.name}</td>
                       <td style={td}>{r.email}</td>
-                      <td style={td}>{r.category_label || (r.category === 'issue_recipient' ? 'Issue recipient' : 'Person')}</td>
+                      <td style={td}>{r.category_label || (r.category === 'issue_recipient' || r.role === 'issue_recipient' ? 'Issue recipient' : 'Person')}</td>
                       <td style={td}>
-                        {r.category === 'issue_recipient' ? (
+                        {r.category === 'issue_recipient' || r.role === 'issue_recipient' ? (
                           <>
                             <button
                               type="button"
