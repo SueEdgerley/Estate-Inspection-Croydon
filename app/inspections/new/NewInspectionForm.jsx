@@ -245,6 +245,7 @@ function isEsmDuplicateFollowUpRow(question, section) {
     sectionText.includes('fire safety') ||
     sectionText.includes('grounds maintenance')
   if (!inPatchedIssueSection) return false
+  const isEsmSection11Or13 = sectionText.includes('health and safety') || sectionText.includes('fire safety')
 
   const rowText = normalizeQuestionTextForMatch(
     [
@@ -268,6 +269,8 @@ function isEsmDuplicateFollowUpRow(question, section) {
       rowText.includes('photo upload') ||
       rowText === 'comment' ||
       rowText === 'comments' ||
+      (isEsmSection11Or13 && rowText.includes('add comment')) ||
+      (isEsmSection11Or13 && rowText.includes('comments')) ||
       rowText.includes('who does this need') ||
       typeText.includes('photo') ||
       typeText.includes('upload'))
@@ -630,19 +633,24 @@ function InspectionQuestion({
       section?.order ??
       0
   )
-  const isEsmSection11Or13 =
+  const esmIssueSectionByTitle =
+    sectionText.includes('health and safety') ||
+    sectionText.includes('fire safety')
+  const isEsmSection11Or13IssueQuestion =
     esmInspectionQuestion &&
     qType === 'yes_no' &&
-    (sectionDisplayNumber === 11 ||
-      sectionDisplayNumber === 13 ||
-      esmRole === 'health_safety_issue' ||
-      esmRole === 'fire_safety_issue')
+    (esmRole === 'health_safety_issue' ||
+      esmRole === 'fire_safety_issue' ||
+      ((sectionDisplayNumber === 11 || sectionDisplayNumber === 13 || esmIssueSectionByTitle) &&
+        isEsmYesNoIssueQuestionByText(question)))
   const esmCommentAlways = esmInspectionQuestion && question.esm_comment_always === true && !estatePhotoAllowed
   const esmCommentOnPhoto =
     esmInspectionQuestion &&
     (esmGradedQuestion || question.esm_comment_on_photo === true || esmRole === 'garages') &&
     hasQuestionPhotos(extras)
-  const esmShowComment = !isEsmSection11Or13 && (esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment)
+  const esmShowComment =
+    ((isEsmSection11Or13IssueQuestion && isYes) || !isEsmSection11Or13IssueQuestion) &&
+    (esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment)
   const esmPhotosAdded = hasQuestionPhotos(extras)
   const esmRecipientOptions = normalizeOptionObjects(
     Array.isArray(question.esm_recipient_options) && question.esm_recipient_options.length
@@ -655,11 +663,17 @@ function InspectionQuestion({
           ? ESM_GRAFFITI_RECIPIENT_OPTIONS
           : []
   )
+  const esmSection11Or13PeopleRecipient =
+    isEsmSection11Or13IssueQuestion &&
+    question.esm_recipient_on_yes === true &&
+    question.esm_use_people_recipients === true &&
+    isYes
   const esmShowRecipientDropdown =
     esmInspectionQuestion &&
-    esmRecipientOptions.length > 0 &&
-    ((question.esm_recipient_on_yes === true && isYes) ||
-      (question.esm_recipient_on_photo === true && esmPhotosAdded))
+    ((esmRecipientOptions.length > 0 &&
+      ((question.esm_recipient_on_yes === true && isYes) ||
+        (question.esm_recipient_on_photo === true && esmPhotosAdded))) ||
+      esmSection11Or13PeopleRecipient)
   const esmMissingEmailWarning = esmInspectionQuestion && isYes ? String(question.esm_missing_email_warning || '') : ''
   const caretakerShowCommentWithPhotoUpload =
     caretakerAlwaysPhoto && !caretakerSimplePhotoCapture && question.caretaker_comment_on_photo === true
@@ -711,7 +725,6 @@ function InspectionQuestion({
     esmInspectionQuestion &&
     qType !== 'photo' &&
     !esmQ4AbandonedVehicle &&
-    !isEsmSection11Or13 &&
     (!esmYesNoIssueQuestion || isYes)
   const esmPhotoAllowed =
     esmShowPhotoComment && (esmGradedQuestion || estatePhotoAllowed || question.include_photo || question.type_includes_photo)
@@ -720,7 +733,11 @@ function InspectionQuestion({
     qType === 'yes_no' &&
     isYes &&
     !esmQ4AbandonedVehicle &&
-    (esmPhotoAllowed || esmShowRecipientDropdown || Boolean(esmMissingEmailWarning) || esmRole)
+    (esmPhotoAllowed ||
+      esmShowRecipientDropdown ||
+      Boolean(esmMissingEmailWarning) ||
+      esmRole ||
+      isEsmSection11Or13IssueQuestion)
   const caretakerYesCreatesAction =
     caretakerTemplate &&
     isYes &&
@@ -737,9 +754,12 @@ function InspectionQuestion({
   const caretakerFixedEmailDestination =
     caretakerTemplate && isYes && showActionBlock ? getCaretakerFixedEmailDestination(question) : ''
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
+  const suppressEsmSection11Or13StandaloneComment =
+    isEsmSection11Or13IssueQuestion && esmUseDedicatedFollowUp
+  const showStandaloneComment = showComment && !suppressEsmSection11Or13StandaloneComment
   const showCommentPhotoBlock =
     !esmUseDedicatedFollowUp &&
-    !isEsmSection11Or13 &&
+    !isEsmSection11Or13IssueQuestion &&
     (showComment ||
       showActionBlock ||
       (caretakerAlwaysPhoto && !caretakerSimplePhotoCapture) ||
@@ -1281,7 +1301,7 @@ function InspectionQuestion({
                 ) : null}
               </div>
             )}
-            {showComment && (
+            {showStandaloneComment && (
               <>
                 <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                   {caretakerYesTriggersFollowUp
@@ -1396,7 +1416,7 @@ function InspectionQuestion({
                 {esmMissingEmailWarning}
               </p>
             ) : null}
-            {!showComment && showCaretakerRecipientDropdown && (
+            {!showStandaloneComment && showCaretakerRecipientDropdown && (
               <>
                 <label htmlFor={`recipient-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
                   Who does this need to go to <span style={{ color: '#ef4444' }}>*</span>
@@ -2027,21 +2047,6 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         applyNeighbourhoodVoicePatchesToList(templateList)
         for (const t of templateList) {
           applyTemplateDisplayPatches(t)
-          // Log ESM template structure after patching
-          if (isEsmInspectionFormTemplate && isEsmInspectionFormTemplate(t)) {
-            const sections = t.sections || []
-            console.log(`[LOAD-TEMPLATES] ESM Template "${t.name}", ${sections.length} sections`)
-            sections.forEach((sec, sidx) => {
-              const secName = sec.title || sec.name || `Sec ${sidx}`
-              const questions = sec.questions || []
-              console.log(`[LOAD-TEMPLATES]   [${sidx}] ${secName}: ${questions.length} questions`)
-              questions.forEach((q, qidx) => {
-                const qtext = q.question_text || q.label || '(no text)'
-                const hidden = q.esm_hidden || q.nv_hidden ? ' [HIDDEN]' : ''
-                console.log(`[LOAD-TEMPLATES]     Q${qidx}: ${qtext.substring(0, 50)}${hidden}`)
-              })
-            })
-          }
         }
 
         if (!cancelled) {
@@ -2122,13 +2127,6 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
     return getSectionsWithOrderedQuestions(selectedTemplate)
   }, [selectedTemplate])
-
-  useEffect(() => {
-    if ((!estateInspectionForm && !esmInspectionForm) || process.env.NODE_ENV !== 'development') return
-    for (const section of inspectionRenderSections) {
-      console.log(section.title || section.name, (section.questions || []).length)
-    }
-  }, [estateInspectionForm, esmInspectionForm, inspectionRenderSections])
 
   const estateChecklistIndexByQid = useMemo(
     () =>
@@ -2989,23 +2987,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   let estateSectionSeq = 0
                   const useEstateListLayout = estateInspectionForm || esmInspectionForm
                   const seenEsmIssueQuestionKeys = new Set()
-                  console.log(`[ESM-RENDER] Section "${section?.title}", total questions: ${(section.questions || []).length}`)
                   const rows = (section.questions || []).filter((q, idx) => {
                     const hidden = q.nv_hidden || q.esm_hidden
                     const isDupFollowUp = esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)
                     const isDupIssue = esmInspectionForm && isEsmDuplicateIssueQuestion(q, section, seenEsmIssueQuestionKeys)
                     if (hidden || isDupFollowUp || isDupIssue) {
-                      console.log(`[ESM-RENDER] Section "${section?.title}", Q${idx} "${q?.question_text}" FILTERED: hidden=${hidden}, dupFollowUp=${isDupFollowUp}, dupIssue=${isDupIssue}`)
                       return false
                     }
                     if (useEstateListLayout) return true
                     if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
                     return shouldShowQuestion(q, answers)
-                  })
-                  console.log(`[ESM-RENDER] Section "${section?.title}", filtered rows: ${rows.length}/${(section.questions || []).length}`)
-                  rows.forEach((row, idx) => {
-                    const questionText = row?.question_text || row?.label || '(no text)'
-                    console.log(`[ESM-RENDER]   Row ${idx}: ${questionText}`)
                   })
                   const items = rows.map((q) => {
                     estateSectionSeq += 1

@@ -225,15 +225,15 @@ export default function YesNoQuestion({
     alwaysShowCaretakerCommentPhoto ||
     legacyNeedsDetailSection
 
-  const showCommentField =
-    isS12 || alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || requiresComment
-  const showPhotoField = isS12 || alwaysShowCaretakerCommentPhoto || requiresPhoto
-
   const requiresRecipient = isTriggerYesDetail
   const showRecipientField =
     recipientQ &&
     triggerOnYes &&
     (alwaysShowCaretakerRecipient || isTriggerYesDetail)
+
+  const showCommentField =
+    isS12 || alwaysShowCaretakerComment || alwaysShowCaretakerCommentPhoto || requiresComment
+  const showPhotoField = isS12 || alwaysShowCaretakerCommentPhoto || requiresPhoto
 
   const recipientValue = recipientQ ? allAnswers[recipientQ.id] ?? '' : ''
 
