@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { buildWalkaboutActionPlanPdf } from '@/lib/pdf/buildWalkaboutActionPlanPdf'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+import { buildActionDisplay, cleanActionDisplayText } from '@/lib/action-display-formatter'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -43,21 +44,13 @@ function answerDisplay(row) {
   return ''
 }
 
-function cleanDisplayText(value) {
-  const text = String(value || '').trim()
-  if (!text) return ''
-  if (/^https?:\/\//i.test(text)) return ''
-  if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) return ''
-  return text
-}
-
 function parseLabelledActionDescription(description) {
   const fields = {}
   for (const line of String(description || '').split(/\r?\n/)) {
     const match = line.match(/^\s*([^:]+):\s*(.*)\s*$/)
     if (!match) continue
     const key = match[1].trim().toLowerCase()
-    const value = cleanDisplayText(match[2])
+    const value = cleanActionDisplayText(match[2])
     if (!value || value === '—' || key === 'inspection' || key === 'estate / area' || key === 'photos') continue
     fields[key] = value
   }
@@ -65,14 +58,18 @@ function parseLabelledActionDescription(description) {
 }
 
 function cleanIssueTitle(action, templateQuestion) {
+  const display = buildActionDisplay(action || {})
+  if (display.issue) return display.issue
   const parsed = parseLabelledActionDescription(action?.description)
-  const title = cleanDisplayText(action?.title).replace(/^Walkabout\s*[—-]\s*/i, '').trim()
-  return cleanDisplayText(parsed.item || templateQuestion || title)
+  const title = cleanActionDisplayText(action?.title).replace(/^Walkabout\s*[—-]\s*/i, '').trim()
+  return cleanActionDisplayText(parsed.item || templateQuestion || title)
 }
 
 function cleanActionSummary(action, fallback = '') {
+  const display = buildActionDisplay(action || {})
+  if (display.comment) return display.comment
   const parsed = parseLabelledActionDescription(action?.description)
-  return cleanDisplayText(
+  return cleanActionDisplayText(
     action?.comment ||
       parsed['action summary'] ||
       parsed.comment ||
@@ -81,8 +78,10 @@ function cleanActionSummary(action, fallback = '') {
 }
 
 function actionJobNumber(action) {
+  const display = buildActionDisplay(action || {})
+  if (display.jobNumber) return display.jobNumber
   const parsed = parseLabelledActionDescription(action?.description)
-  return cleanDisplayText(action?.job_number || parsed['order raised number'] || parsed['job number'])
+  return cleanActionDisplayText(action?.job_number || parsed['order raised number'] || parsed['job number'])
 }
 
 function buildQuestionLookup(templateVersion) {

@@ -2,6 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import {
+  actionInspectionDate,
+  buildActionDisplay,
+  cleanActionDisplayText,
+  displayActionStatus,
+  formatActionDate,
+} from '@/lib/action-display-formatter'
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -11,18 +18,6 @@ const STATUS_OPTIONS = [
 ]
 
 const PRIORITY_OPTIONS = ['', 'low', 'medium', 'high', 'urgent']
-
-function parsePhotoUrls(raw) {
-  if (Array.isArray(raw)) return raw.filter((url) => typeof url === 'string' && url.trim())
-  if (typeof raw === 'string' && raw.trim()) {
-    try {
-      return parsePhotoUrls(JSON.parse(raw))
-    } catch {
-      return raw.startsWith('http') ? [raw] : []
-    }
-  }
-  return []
-}
 
 function notRecorded(value) {
   if (value === undefined || value === null) return 'Not recorded'
@@ -37,37 +32,22 @@ function dateInputValue(value) {
   return date.toISOString().slice(0, 10)
 }
 
-function displayStatus(value) {
-  const status = String(value || 'open').replace(/[_-]+/g, ' ')
-  return status.replace(/\b\w/g, (char) => char.toUpperCase())
-}
-
-function actionSource(action) {
-  return action.inspection_template_name || action.inspection_source || action.inspection_type || action.category
-}
-
-function actionInspectionDate(action) {
-  return action.inspection_submitted_at || action.inspection_created_at || action.created_at || action.inspection_due_date
-}
-
 function actionSearchText(action) {
+  const display = buildActionDisplay(action)
   return [
-    action.estate_block_name,
-    action.estate_name,
-    action.block_name,
-    action.inspection_location_label,
-    action.location,
-    action.title,
-    action.description,
-    action.comment,
-    action.repair_notes,
-    action.status,
-    displayStatus(action.status),
-    action.assigned_to,
-    action.assigned_to_email,
-    action.job_number,
-    action.inspection_title,
-    actionSource(action),
+    display.section,
+    display.issue,
+    display.rating,
+    display.comment,
+    display.location,
+    display.blockLocation,
+    display.status,
+    display.priority,
+    display.assignedTo,
+    display.jobNumber,
+    display.submittedBy,
+    display.inspectionDate,
+    cleanActionDisplayText(action.assigned_to_email),
   ]
     .filter(Boolean)
     .join(' ')
@@ -156,29 +136,7 @@ export default function ActionsPage() {
     setMessage('')
   }, [selectedAction])
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Not recorded'
-    const date = new Date(dateString)
-    if (Number.isNaN(date.getTime())) return 'Not recorded'
-    return date.toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
-  const formatShortDate = (dateString) => {
-    if (!dateString) return 'Not recorded'
-    const date = new Date(dateString)
-    if (Number.isNaN(date.getTime())) return 'Not recorded'
-    return date.toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-  }
+  const formatShortDate = (dateString) => formatActionDate(dateString)
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -249,7 +207,7 @@ export default function ActionsPage() {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `action-plan-${inspectionId}.pdf`
+      link.download = `action-plan.pdf`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -261,13 +219,14 @@ export default function ActionsPage() {
     }
   }
   const inspectionFilterAction = actions[0]
+  const inspectionFilterDisplay = inspectionFilterAction ? buildActionDisplay(inspectionFilterAction) : null
   const inspectionFilterLabel = inspectionFilterAction
     ? [
-        inspectionFilterAction.estate_block_name,
-        inspectionFilterAction.inspection_location_label || inspectionFilterAction.location,
+        inspectionFilterDisplay.location,
+        inspectionFilterDisplay.blockLocation,
         formatShortDate(actionInspectionDate(inspectionFilterAction)),
       ].filter(Boolean).join(' - ')
-    : inspectionId
+    : ''
 
   return (
     <div>
@@ -283,7 +242,7 @@ export default function ActionsPage() {
       {inspectionId ? (
         <div style={filterBannerStyle}>
           <div>
-            <strong>Showing issues for inspection:</strong> {inspectionFilterLabel || inspectionId}
+            <strong>Showing issues for inspection:</strong> {inspectionFilterLabel || 'Selected inspection'}
           </div>
           <div style={filterActionsStyle}>
             <button
@@ -346,35 +305,39 @@ export default function ActionsPage() {
                 No issues match your search.
               </div>
             ) : null}
-            {filteredActions.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => setSelectedId(a.id)}
-                style={{
-                  ...cardButtonStyle,
-                  borderColor: selectedId === a.id ? '#2563eb' : '#e5e7eb',
-                  boxShadow: selectedId === a.id ? '0 0 0 2px rgba(37,99,235,0.12)' : '0 1px 3px rgba(15, 23, 42, 0.08)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                  <strong style={{ color: '#111827', fontSize: '1rem' }}>{notRecorded(a.title || a.description || a.comment)}</strong>
-                  <span style={statusBadgeStyle}>{displayStatus(a.status)}</span>
-                </div>
-                <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.875rem' }}>
-                  {notRecorded(a.estate_block_name)}
-                </div>
-                <div style={cardMetaGridStyle}>
-                  <span><strong>Location:</strong> {notRecorded(a.inspection_location_label || a.location)}</span>
-                  <span><strong>Inspection date:</strong> {formatShortDate(actionInspectionDate(a))}</span>
-                  <span><strong>Form/source:</strong> {notRecorded(actionSource(a))}</span>
-                </div>
-                <div style={{ marginTop: '0.35rem', color: '#334155', fontSize: '0.875rem' }}>
-                  Assigned: {notRecorded(a.assigned_to)} | Priority: {notRecorded(a.priority)}
-                  {a.job_number ? ` | Job: ${a.job_number}` : ''}
-                </div>
-              </button>
-            ))}
+            {filteredActions.map((a) => {
+              const display = buildActionDisplay(a)
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setSelectedId(a.id)}
+                  style={{
+                    ...cardButtonStyle,
+                    borderColor: selectedId === a.id ? '#2563eb' : '#e5e7eb',
+                    boxShadow: selectedId === a.id ? '0 0 0 2px rgba(37,99,235,0.12)' : '0 1px 3px rgba(15, 23, 42, 0.08)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                    <strong style={{ color: '#111827', fontSize: '1rem' }}>{notRecorded(display.issue || display.comment)}</strong>
+                    <span style={statusBadgeStyle}>{display.status}</span>
+                  </div>
+                  <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.875rem' }}>
+                    {notRecorded(display.location)}
+                  </div>
+                  <div style={cardMetaGridStyle}>
+                    <span><strong>Location:</strong> {notRecorded(display.blockLocation)}</span>
+                    <span><strong>Inspection date:</strong> {display.inspectionDate}</span>
+                    <span><strong>Section/category:</strong> {notRecorded(display.section)}</span>
+                  </div>
+                  <div style={{ marginTop: '0.35rem', color: '#334155', fontSize: '0.875rem' }}>
+                    Assigned: {notRecorded(display.assignedTo)} | Priority: {notRecorded(display.priority)}
+                    {display.jobNumber ? ` | Job: ${display.jobNumber}` : ''}
+                    {display.hasPhoto ? ' | Photo attached' : ''}
+                  </div>
+                </button>
+              )
+            })}
           </div>
 
           {selectedAction && selectedActionVisible ? (
@@ -382,7 +345,6 @@ export default function ActionsPage() {
               action={selectedAction}
               form={form}
               people={people}
-              formatDate={formatDate}
               setField={setField}
               saveAction={saveAction}
               saving={saving}
@@ -397,9 +359,9 @@ export default function ActionsPage() {
   )
 }
 
-function ActionDetail({ action, form, people, formatDate, setField, saveAction, saving, error, message, onClose }) {
-  const photos = [...parsePhotoUrls(action.repair_photo_url), ...parsePhotoUrls(action.photo_urls)]
-  const source = actionSource(action)
+function ActionDetail({ action, form, people, setField, saveAction, saving, error, message, onClose }) {
+  const display = buildActionDisplay(action)
+  const photos = display.photoUrls
 
   return (
     <aside style={detailStyle}>
@@ -409,7 +371,7 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
             Action detail
           </p>
           <h2 style={{ margin: 0, color: '#111827', fontSize: '1.35rem' }}>
-            {notRecorded(action.title || action.description || action.comment)}
+            {notRecorded(display.issue || display.comment)}
           </h2>
         </div>
         <button type="button" onClick={onClose} style={closeButtonStyle}>Close</button>
@@ -417,11 +379,11 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
 
       <section style={sectionStyle}>
         <h3 style={sectionHeadingStyle}>Issue</h3>
-        <DetailRow label="Category/form source" value={source} />
-        <DetailRow label="Estate/block" value={action.estate_block_name} />
-        <DetailRow label="Location" value={action.inspection_location_label || action.location} />
-        <DetailRow label="Issue/question title" value={action.title || action.question_id} />
-        <DetailRow label="Full issue description/comment" value={[action.description, action.comment].filter(Boolean).join('\n\n')} multiline />
+        <DetailRow label="Section/category" value={display.section} />
+        <DetailRow label="Issue/question summary" value={display.issue} />
+        {display.rating ? <DetailRow label="Rating" value={display.rating} /> : null}
+        <DetailRow label="Comment" value={display.comment} multiline />
+        <DetailRow label="Block/location" value={[display.location, display.blockLocation].filter(Boolean).join(' - ')} />
         {photos.length ? (
           <div style={{ marginTop: '0.75rem' }}>
             <div style={detailLabelStyle}>Photo</div>
@@ -435,17 +397,19 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
             </div>
           </div>
         ) : (
-          <DetailRow label="Photo" value="" />
+          <DetailRow label="Photo" value={display.hasPhoto ? 'Photo attached' : ''} />
         )}
       </section>
 
       <section style={sectionStyle}>
         <h3 style={sectionHeadingStyle}>Tracking</h3>
-        <DetailRow label="Created by" value={action.created_by} />
-        <DetailRow label="Raised date" value={formatDate(action.created_at)} />
-        <DetailRow label="Assigned to" value={action.assigned_to} />
-        <DetailRow label="Target completion date" value={action.expected_completion_date || action.inspection_due_date ? formatDate(action.expected_completion_date || action.inspection_due_date) : ''} />
-        <DetailRow label="Inspection ID" value={action.inspection_id} />
+        <DetailRow label="Priority" value={display.priority} />
+        <DetailRow label="Status" value={display.status} />
+        <DetailRow label="Submitted by" value={display.submittedBy} />
+        <DetailRow label="Inspection date" value={display.inspectionDate} />
+        <DetailRow label="Assigned to" value={display.assignedTo} />
+        <DetailRow label="Target completion date" value={display.targetCompletionDate} />
+        {display.repairNotes ? <DetailRow label="Notes/update" value={display.repairNotes} multiline /> : null}
         {action.inspection_id ? (
           <Link href={`/inspections/${encodeURIComponent(action.inspection_id)}`} style={{ color: '#1d4ed8', fontWeight: 600 }}>
             Open inspection report
@@ -476,7 +440,7 @@ function ActionDetail({ action, form, people, formatDate, setField, saveAction, 
           <Field label="Priority">
             <select value={form.priority || ''} onChange={(e) => setField('priority', e.target.value)} style={inputStyle}>
               {PRIORITY_OPTIONS.map((option) => (
-                <option key={option || 'none'} value={option}>{option ? displayStatus(option) : 'Not recorded'}</option>
+                <option key={option || 'none'} value={option}>{option ? displayActionStatus(option) : 'Not recorded'}</option>
               ))}
             </select>
           </Field>

@@ -10,28 +10,17 @@ import {
   rgb,
   safeText,
 } from '@/lib/pdf/pdfLibHelpers'
+import {
+  buildActionDisplay,
+  cleanActionDisplayText,
+  formatActionDate,
+} from '@/lib/action-display-formatter'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MARGIN = 48
 const PAGE_WIDTH = A4[0] - MARGIN * 2
-
-function formatDate(value) {
-  if (!value) return 'Not recorded'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Not recorded'
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-function displayStatus(value) {
-  const status = String(value || 'open').replace(/[_-]+/g, ' ')
-  return status.replace(/\b\w/g, (char) => char.toUpperCase())
-}
 
 function notRecorded(value) {
   const text = safeText(value)
@@ -66,7 +55,7 @@ async function buildActionPlanPdf({ inspection, actions }) {
   const ctx = { pdfDoc, fonts, page: null, y: 0 }
   addPage(ctx)
 
-  const inspectionTitle = inspection.title || inspection.location_label || inspection.id
+  const inspectionTitle = cleanActionDisplayText(inspection.title || inspection.location_label) || 'Inspection action plan'
   ctx.page.drawText('Action Plan', {
     x: MARGIN,
     y: ctx.y,
@@ -85,9 +74,8 @@ async function buildActionPlanPdf({ inspection, actions }) {
     lineHeight: 16,
     color: hexToRgb('#0f766e'),
   }) - 6
-  drawLabelValue(ctx, 'Inspection ID', inspection.id)
-  drawLabelValue(ctx, 'Inspection date', formatDate(inspection.submitted_at || inspection.created_at))
-  drawLabelValue(ctx, 'Generated', formatDate(new Date()))
+  drawLabelValue(ctx, 'Inspection date', formatActionDate(inspection.submitted_at || inspection.created_at))
+  drawLabelValue(ctx, 'Generated', formatActionDate(new Date()))
   ctx.y -= 12
 
   if (!actions.length) {
@@ -102,8 +90,9 @@ async function buildActionPlanPdf({ inspection, actions }) {
   }
 
   actions.forEach((action, index) => {
+    const display = buildActionDisplay(action)
     ensureSpace(ctx, 130)
-    ctx.page.drawText(`${index + 1}. ${notRecorded(action.title || action.description || action.comment).slice(0, 90)}`, {
+    ctx.page.drawText(`${index + 1}. ${notRecorded(display.issue || display.comment).slice(0, 90)}`, {
       x: MARGIN,
       y: ctx.y,
       size: 12,
@@ -112,18 +101,21 @@ async function buildActionPlanPdf({ inspection, actions }) {
     })
     ctx.y -= 18
 
-    drawLabelValue(ctx, 'Estate/block', action.estate_block_name)
-    drawLabelValue(ctx, 'Location', action.inspection_location_label || action.location)
-    drawLabelValue(ctx, 'Status', displayStatus(action.status))
-    drawLabelValue(ctx, 'Priority', action.priority)
-    drawLabelValue(ctx, 'Assigned to', action.assigned_to)
-    drawLabelValue(ctx, 'Target completion', formatDate(action.expected_completion_date || action.inspection_due_date))
-    drawLabelValue(ctx, 'Job number', action.job_number)
+    drawLabelValue(ctx, 'Section/category', display.section)
+    drawLabelValue(ctx, 'Block/location', [display.location, display.blockLocation].filter(Boolean).join(' - '))
+    if (display.rating) drawLabelValue(ctx, 'Rating', display.rating)
+    drawLabelValue(ctx, 'Status', display.status)
+    drawLabelValue(ctx, 'Priority', display.priority)
+    drawLabelValue(ctx, 'Submitted by', display.submittedBy)
+    drawLabelValue(ctx, 'Inspection date', display.inspectionDate)
+    drawLabelValue(ctx, 'Assigned to', display.assignedTo)
+    drawLabelValue(ctx, 'Target completion', display.targetCompletionDate)
+    drawLabelValue(ctx, 'Job number', display.jobNumber)
+    if (display.hasPhoto) drawLabelValue(ctx, 'Photo', 'Photo attached')
 
-    const description = [action.description, action.comment].filter(Boolean).join('\n\n')
-    if (description) {
+    if (display.comment) {
       ctx.y -= 2
-      ctx.y = drawWrappedText(ctx.page, `Issue: ${description}`, {
+      ctx.y = drawWrappedText(ctx.page, `Comment: ${display.comment}`, {
         x: MARGIN,
         y: ctx.y,
         width: PAGE_WIDTH,
@@ -135,8 +127,8 @@ async function buildActionPlanPdf({ inspection, actions }) {
       }) - 4
     }
 
-    if (action.repair_notes) {
-      ctx.y = drawWrappedText(ctx.page, `Notes/update: ${action.repair_notes}`, {
+    if (display.repairNotes) {
+      ctx.y = drawWrappedText(ctx.page, `Notes/update: ${display.repairNotes}`, {
         x: MARGIN,
         y: ctx.y,
         width: PAGE_WIDTH,
@@ -193,12 +185,15 @@ export async function POST(request) {
       ? await sql.query(
           `
             SELECT
-              a.id, a.inspection_id, a.category, a.priority, a.title, a.description,
+              a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority, a.title, a.description,
               a.location, a.status, a.comment, a.job_number, a.expected_completion_date,
-              a.repair_notes, a.created_at,
+              a.repair_notes, a.repair_photo_url, a.photo_urls, a.created_at,
+              COALESCE(i.inspector_name, i.inspector_id, 'Inspector') AS created_by,
               p.name AS assigned_to,
               i.location_label AS inspection_location_label,
               i.due_date AS inspection_due_date,
+              i.submitted_at AS inspection_submitted_at,
+              i.created_at AS inspection_created_at,
               COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
             FROM actions a
             LEFT JOIN inspections i ON i.id = a.inspection_id
@@ -220,7 +215,7 @@ export async function POST(request) {
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="action-plan-${inspectionId}.pdf"`,
+        'Content-Disposition': 'attachment; filename="action-plan.pdf"',
         'Cache-Control': 'no-store',
       },
     })
