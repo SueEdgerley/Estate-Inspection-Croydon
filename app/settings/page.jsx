@@ -385,7 +385,7 @@ export default function SettingsPage() {
       <p style={{ margin: '0 0 1.5rem 0', color: '#6b7280', fontSize: '0.9375rem' }}>
         <strong>Manage Users</strong> lists Clerk-linked app accounts (<code style={{ fontSize: '0.85em' }}>users</code>).{' '}
         <strong>Staff directory</strong> is for assignments (<code style={{ fontSize: '0.85em' }}>people</code>, staff rows — add before someone signs in if needed).{' '}
-        <strong>Issue Recipients</strong> are routing mailboxes only (<code style={{ fontSize: '0.85em' }}>people</code>, issue_recipient).
+        <strong>Issue Recipients</strong> can be routing mailboxes or existing active people records used by inspection recipient dropdowns.
       </p>
 
       {loadError && (
@@ -723,7 +723,7 @@ export default function SettingsPage() {
       <section id="issue-recipients" style={card}>
         <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Issue Recipients</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
-          Named mailboxes for inspection issue routing and recipient options on forms.
+          Named mailboxes and existing active people available for inspection issue routing and recipient options on forms.
         </p>
 
         <form onSubmit={addRecipient} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>
@@ -767,6 +767,7 @@ export default function SettingsPage() {
               <tr>
                 <th style={th}>Name</th>
                 <th style={th}>Email</th>
+                <th style={th}>Type</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
@@ -790,6 +791,7 @@ export default function SettingsPage() {
                           style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
                         />
                       </td>
+                      <td style={td}>{r.category_label || (r.category === 'issue_recipient' ? 'Issue recipient' : 'Person')}</td>
                       <td style={td}>
                         <button type="button" onClick={() => saveRecipientEdit(r.id)} disabled={saving} style={{ marginRight: 8 }}>
                           Save
@@ -803,24 +805,31 @@ export default function SettingsPage() {
                     <>
                       <td style={td}>{r.name}</td>
                       <td style={td}>{r.email}</td>
+                      <td style={td}>{r.category_label || (r.category === 'issue_recipient' ? 'Issue recipient' : 'Person')}</td>
                       <td style={td}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingRecipientId(r.id)
-                            setEditRecipient({ name: r.name || '', email: r.email || '' })
-                          }}
-                          style={{ marginRight: 8, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer' }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteRecipient(r.id)}
-                          style={{ color: '#b91c1c', background: 'none', border: 'none', cursor: 'pointer' }}
-                        >
-                          Delete
-                        </button>
+                        {r.category === 'issue_recipient' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRecipientId(r.id)
+                                setEditRecipient({ name: r.name || '', email: r.email || '' })
+                              }}
+                              style={{ marginRight: 8, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteRecipient(r.id)}
+                              style={{ color: '#b91c1c', background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : (
+                          <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>Manage in Staff directory</span>
+                        )}
                       </td>
                     </>
                   )}
