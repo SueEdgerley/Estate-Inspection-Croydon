@@ -484,6 +484,7 @@ function InspectionQuestion({
   errorPhotos,
   errorRecipient,
   errorAuthorisation,
+  errorAuthorisationName,
   errorCostCode,
   answerExtras,
   onAnswerExtras,
@@ -874,8 +875,11 @@ function InspectionQuestion({
           photo_urls: [],
           id_card_photo_urls: [],
           authorisation_text: '',
+          authorisation_name: '',
           cost_code: '',
         })
+      } else if (esmQ4AbandonedVehicle) {
+        return
       } else if (esmInspectionQuestion && qType === 'yes_no' && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
       } else if (question.esm_recipient_on_yes && (val === 'No' || val === 'NA')) {
@@ -1192,6 +1196,28 @@ function InspectionQuestion({
               }}
             />
             {errorAuthorisation && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisation}</p>}
+            <label htmlFor={`authorisation-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Name of person authorising/reporting <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
+            </label>
+            <input
+              id={`authorisation-name-${question.id}`}
+              type="text"
+              value={extras.authorisation_name || ''}
+              onChange={(e) => setExtras({ authorisation_name: e.target.value })}
+              placeholder="Enter your name"
+              style={{
+                width: '100%',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+                border: errorAuthorisationName ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 48 : undefined,
+                boxSizing: 'border-box',
+              }}
+            />
+            {errorAuthorisationName && <p style={{ marginTop: -8, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisationName}</p>}
             <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
               Comment/location
             </label>
@@ -2343,6 +2369,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       [`${questionId}_photos`]: undefined,
       [`${questionId}_recipient`]: undefined,
       [`${questionId}_authorisation`]: undefined,
+      [`${questionId}_authorisation_name`]: undefined,
       [`${questionId}_cost_code`]: undefined,
     }))
   }
@@ -2413,6 +2440,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             }
             if (!(extras.authorisation_text || '').trim()) {
               errs[`${q.id}_authorisation`] = 'Authorisation is required'
+            }
+            if (!(extras.authorisation_name || '').trim()) {
+              errs[`${q.id}_authorisation_name`] = 'Authorising/reporting name is required'
             }
             if (!(extras.comment || '').trim()) {
               errs[`${q.id}_comment`] = 'Comment/location is required'
@@ -3080,6 +3110,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       errorPhotos: validationErrors[`${q.id}_photos`],
                       errorRecipient: validationErrors[`${q.id}_recipient`],
                       errorAuthorisation: validationErrors[`${q.id}_authorisation`],
+                      errorAuthorisationName: validationErrors[`${q.id}_authorisation_name`],
                       errorCostCode: validationErrors[`${q.id}_cost_code`],
                       answerExtras: answerExtras[q.id],
                       onAnswerExtras: (questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras })),
