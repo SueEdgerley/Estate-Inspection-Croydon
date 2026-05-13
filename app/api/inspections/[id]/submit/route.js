@@ -196,31 +196,70 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
         if (dedupe.has(key)) continue
         dedupe.add(key)
         const allPhotoUrls = [...photoUrls, ...idCardPhotoUrls]
-        const questionText = q.question_text || q.label || q.id
+        const questionText = q.question_text || q.label || 'Inspection item'
+        const sectionTitle = section.title || section.name || ''
+        const answerText = answer == null ? '—' : String(answer)
+        const priorityText = extras.priority || q.action_priority || ''
+        const statusText = isYes || photoUrls.length > 0 || extras.comment ? 'Action required' : ''
         const photoList = allPhotoUrls.length
-          ? `<ul>${allPhotoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
+          ? `<ul>${allPhotoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo attached</a></li>`).join('')}</ul>`
           : '<p>No photo link recorded.</p>'
+        const photoText = allPhotoUrls.length
+          ? allPhotoUrls.map((url) => `Photo attached: ${url}`).join('\n')
+          : 'No photo link recorded.'
         const html = `
-          <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
-            <h1 style="font-size:18px;">ESM inspection notification</h1>
-            <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
-            ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
-            <p><strong>Section:</strong> ${escapeHtml(section.title || section.name || '')}</p>
-            <p><strong>Question:</strong> ${escapeHtml(questionText)}</p>
-            <p><strong>Answer:</strong> ${escapeHtml(answer == null ? '—' : String(answer))}</p>
-            ${extras.comment ? `<p><strong>Comment:</strong> ${escapeHtml(extras.comment)}</p>` : ''}
-            <p><strong>Photos:</strong></p>
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827;max-width:680px;">
+            <h1 style="font-size:20px;line-height:1.25;margin:0 0 16px 0;">ESM inspection notification</h1>
+
+            <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">Inspection context</h2>
+            <p style="margin:0 0 6px 0;"><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
+            ${locationLine ? `<p style="margin:0 0 6px 0;"><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
+
+            <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">Action required</h2>
+            <p style="margin:0 0 6px 0;">Please review this ESM inspection item and arrange any required follow-up.</p>
+            ${statusText ? `<p style="margin:0 0 6px 0;"><strong>Status:</strong> ${escapeHtml(statusText)}</p>` : ''}
+            ${priorityText ? `<p style="margin:0 0 6px 0;"><strong>Priority:</strong> ${escapeHtml(String(priorityText).replace(/_/g, ' '))}</p>` : ''}
+
+            <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">Actions/issues</h2>
+            <p style="margin:0 0 6px 0;"><strong>Section:</strong> ${escapeHtml(sectionTitle)}</p>
+            <p style="margin:0 0 6px 0;"><strong>Question:</strong> ${escapeHtml(questionText)}</p>
+            <p style="margin:0 0 6px 0;"><strong>Answer:</strong> ${escapeHtml(answerText)}</p>
+
+            <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">Comments</h2>
+            <p style="margin:0 0 6px 0;">${escapeHtml(extras.comment || 'No comment recorded.')}</p>
+
+            <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">Photos</h2>
             ${photoList}
+
+            <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">PDFs/links</h2>
+            <p style="margin:0 0 6px 0;">No PDF link is available in this notification.</p>
           </div>
         `
         const text = [
           'ESM inspection notification',
+          '',
+          'Inspection context',
+          `Inspection: ${inspectionTitle || 'ESM inspection'}`,
           locationLine ? `Location: ${locationLine}` : '',
-          section.title || section.name ? `Section: ${section.title || section.name}` : '',
+          '',
+          'Action required',
+          'Please review this ESM inspection item and arrange any required follow-up.',
+          statusText ? `Status: ${statusText}` : '',
+          priorityText ? `Priority: ${String(priorityText).replace(/_/g, ' ')}` : '',
+          '',
+          'Actions/issues',
+          sectionTitle ? `Section: ${sectionTitle}` : '',
           `Question: ${questionText}`,
-          answer == null ? '' : `Answer: ${String(answer)}`,
-          extras.comment ? `Comment: ${extras.comment}` : '',
-          ...allPhotoUrls,
+          `Answer: ${answerText}`,
+          '',
+          'Comments',
+          extras.comment || 'No comment recorded.',
+          '',
+          'Photos',
+          photoText,
+          '',
+          'PDFs/links',
+          'No PDF link is available in this notification.',
         ].filter(Boolean).join('\n')
         try {
           console.log('[sendEsmPhotoAndYesNotifications] final recipient email', {
@@ -1013,27 +1052,8 @@ export async function POST(request, { params }) {
         }
       }
 
-      if (emailVersion && isEsmInspectionFormTemplate(emailVersion)) {
-        try {
-          const esmEmails = await sendEsmPhotoAndYesNotifications({
-            inspectionId: id,
-            templateVersion: emailVersion,
-            answers,
-            answerRows: answersResult.rows,
-            inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'ESM inspection',
-            locationLine: estateBlockLine,
-          })
-          if (Array.isArray(esmEmails.sent)) {
-            emailResults.sent.push(...esmEmails.sent)
-          }
-          if (Array.isArray(esmEmails.failed)) {
-            emailResults.failed.push(...esmEmails.failed)
-          }
-        } catch (esmEmailErr) {
-          console.error('[inspections/submit] ESM notifications:', esmEmailErr)
-          actionCreationWarnings.push(`ESM notification error: ${esmEmailErr?.message || String(esmEmailErr)}`)
-        }
-      }
+      // ESM action recipients are already notified by sendEmails() using the consolidated
+      // "Action required" template, so do not send the older duplicate notification email.
     } else {
       console.log('[inspections/submit] skipping notification resend for already-submitted inspection', { inspectionId: id })
     }

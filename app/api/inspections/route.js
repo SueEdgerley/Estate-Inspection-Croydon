@@ -307,9 +307,62 @@ function collectEsmEmailNotifications({ template, answers, answerExtras, resolve
   return notifications
 }
 
+function buildEsmNotificationHtml({ inspectionTitle, locationLine, items }) {
+  const itemBlocks = (items || []).map((item) => {
+    const photoList = Array.isArray(item.photoUrls) && item.photoUrls.length
+      ? `<ul>${item.photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
+      : '<p>None supplied.</p>'
+    return `
+      <div style="margin:0 0 18px 0;padding:0 0 14px 0;border-bottom:1px solid #e5e7eb;">
+        <p><strong>Section:</strong> ${escapeHtml(item.sectionTitle || 'ESM form')}</p>
+        <p><strong>Question:</strong> ${escapeHtml(item.questionText || '')}</p>
+        <p><strong>Answer:</strong> ${escapeHtml(item.answer || '—')}</p>
+        ${item.comment ? `<p><strong>Comment:</strong> ${escapeHtml(item.comment)}</p>` : ''}
+        <p><strong>Photos:</strong></p>
+        ${photoList}
+      </div>
+    `
+  }).join('')
+
+  return `
+    <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+      <h1 style="font-size:18px;">ESM inspection notification</h1>
+      <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
+      ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
+      ${itemBlocks}
+    </div>
+  `
+}
+
+function buildEsmNotificationText({ inspectionTitle, locationLine, items }) {
+  const lines = [
+    'ESM inspection notification',
+    `Inspection: ${inspectionTitle || 'ESM inspection'}`,
+    locationLine ? `Location: ${locationLine}` : '',
+  ].filter(Boolean)
+
+  for (const item of items || []) {
+    lines.push(
+      '',
+      item.sectionTitle ? `Section: ${item.sectionTitle}` : 'Section: ESM form',
+      item.questionText ? `Question: ${item.questionText}` : '',
+      `Answer: ${item.answer || '—'}`
+    )
+    if (item.comment) lines.push(`Comment: ${item.comment}`)
+    lines.push('Photos:')
+    if (Array.isArray(item.photoUrls) && item.photoUrls.length) {
+      lines.push(...item.photoUrls.map(() => 'Photo: Photo attached'))
+    } else {
+      lines.push('None supplied.')
+    }
+  }
+
+  return lines.filter((line) => line !== '').join('\n')
+}
+
 async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle, locationLine, notifications }) {
   const result = { sent: 0, failed: [] }
-  const dedupe = new Set()
+  const grouped = new Map()
   for (const notification of notifications || []) {
     const to = String(notification.to || '').trim()
     if (!to) {
@@ -327,45 +380,55 @@ async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle,
       })
       continue
     }
-    const dedupeKey = `${to}|${notification.routing}|${notification.questionText}`
-    if (dedupe.has(dedupeKey)) continue
-    dedupe.add(dedupeKey)
-    const photos = Array.isArray(notification.photoUrls) && notification.photoUrls.length
-      ? `<ul>${notification.photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
-      : '<p>No photo link recorded.</p>'
-    const html = `
-      <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
-        <h1 style="font-size:18px;">ESM inspection notification</h1>
-        <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
-        ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
-        <p><strong>Section:</strong> ${escapeHtml(notification.sectionTitle || 'ESM form')}</p>
-        <p><strong>Question:</strong> ${escapeHtml(notification.questionText || '')}</p>
-        <p><strong>Answer:</strong> ${escapeHtml(notification.answer || '—')}</p>
-        ${notification.comment ? `<p><strong>Comment:</strong> ${escapeHtml(notification.comment)}</p>` : ''}
-        <p><strong>Photos:</strong></p>
-        ${photos}
-      </div>
-    `
-    const text = [
-      'ESM inspection notification',
-      locationLine ? `Location: ${locationLine}` : '',
-      notification.sectionTitle ? `Section: ${notification.sectionTitle}` : '',
-      notification.questionText ? `Question: ${notification.questionText}` : '',
-      notification.answer ? `Answer: ${notification.answer}` : '',
-      notification.comment ? `Comment: ${notification.comment}` : '',
+    const groupKey = to
+    const group = grouped.get(groupKey) || {
+      to,
+      routing: notification.routing || 'esm_notification',
+      recipientResolution: notification.recipientResolution || 'direct',
+      recipientPersonId: notification.recipientPersonId || '',
+      items: [],
+      itemKeys: new Set(),
+      routings: new Set(),
+    }
+    group.routings.add(notification.routing || 'esm_notification')
+    const itemKey = [
+      notification.sectionTitle || '',
+      notification.questionText || '',
+      notification.answer || '',
+      notification.comment || '',
       ...(notification.photoUrls || []),
-    ].filter(Boolean).join('\n')
+    ].join('|')
+    if (!group.itemKeys.has(itemKey)) {
+      group.itemKeys.add(itemKey)
+      group.items.push(notification)
+    }
+    grouped.set(groupKey, group)
+  }
+
+  for (const group of grouped.values()) {
+    const html = buildEsmNotificationHtml({
+      inspectionTitle,
+      locationLine,
+      items: group.items,
+    })
+    const text = buildEsmNotificationText({
+      inspectionTitle,
+      locationLine,
+      items: group.items,
+    })
     try {
       console.log('[sendEsmEmailNotifications] final recipient email', {
         inspectionId,
-        to,
-        routing: notification.routing || 'esm_notification',
-        resolution: notification.recipientResolution || 'direct',
-        personId: notification.recipientPersonId || undefined,
+        to: group.to,
+        routing: Array.from(group.routings).join(','),
+        resolution: group.recipientResolution,
+        personId: group.recipientPersonId || undefined,
+        itemCount: group.items.length,
       })
+      const firstItem = group.items[0] || {}
       const sendResult = await sendAppEmail({
-        to,
-        subject: `ESM inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
+        to: group.to,
+        subject: `ESM inspection: ${firstItem.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
         html,
         text,
       })
@@ -374,16 +437,16 @@ async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle,
         await insertOutboundEmailLog(sqlFn, {
           inspectionId,
           questionId: null,
-          emailTo: to,
-          emailRouting: notification.routing || 'esm_notification',
+          emailTo: group.to,
+          emailRouting: group.routings.size === 1 ? group.routing : `esm_notification:${Array.from(group.routings).join(',')}`,
           status: 'sent',
           sentAt: new Date(),
         })
       } else {
-        result.failed.push({ email: to, error: sendResult.error || 'send_failed' })
+        result.failed.push({ email: group.to, error: sendResult.error || 'send_failed' })
       }
     } catch (error) {
-      result.failed.push({ email: to, error: error?.message || String(error) })
+      result.failed.push({ email: group.to, error: error?.message || String(error) })
     }
   }
   return result
