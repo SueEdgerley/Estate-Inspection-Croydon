@@ -181,17 +181,26 @@ model Task {
 }
 
 model OutboundEmail {
-  id            String    @id @db.VarChar(255)
-  inspectionId  String    @map("inspection_id") @db.VarChar(255)
-  questionId    String?   @map("question_id") @db.VarChar(255)
-  emailTo       String    @map("email_to") @db.VarChar(500)
-  emailRouting  String?   @map("email_routing") @db.VarChar(255)
-  sentAt        DateTime? @map("sent_at") @db.Timestamptz
-  status        String    @default("pending") @db.VarChar(50)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id                String    @id @db.VarChar(255)
+  inspectionId      String    @map("inspection_id") @db.VarChar(255)
+  actionId          String?   @map("action_id") @db.VarChar(255)
+  questionId        String?   @map("question_id") @db.VarChar(255)
+  emailTo           String    @map("email_to") @db.VarChar(500)
+  recipientEmail    String?   @map("recipient_email") @db.VarChar(500)
+  subject           String?   @db.Text
+  provider          String?   @db.VarChar(100)
+  providerMessageId String?   @map("provider_message_id") @db.VarChar(255)
+  emailRouting      String?   @map("email_routing") @db.VarChar(255)
+  status            String    @default("pending") @db.VarChar(50)
+  errorMessage      String?   @map("error_message") @db.Text
+  sentAt            DateTime? @map("sent_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   inspection    Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 
+  @@index([inspectionId])
+  @@index([status])
+  @@index([createdAt])
   @@map("outbound_emails")
 }
 

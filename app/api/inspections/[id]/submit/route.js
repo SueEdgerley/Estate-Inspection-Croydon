@@ -965,72 +965,77 @@ export async function POST(request, { params }) {
       )
     }
 
-    // Send emails (must not fail the submit response)
+    // Send emails only on the first submit attempt. Retries for an already-submitted inspection
+    // should not resend notifications just because a best-effort logging/audit step failed.
     let emailResults = { sent: [], failed: [] }
-    try {
-      emailResults = await sendEmails({
-        sql,
-        inspectionId: id,
-        inspection: {
-          ...inspectionLive,
-          full_pdf_url: fullPdfUrl ?? inspectionLive.full_pdf_url ?? null,
-          poster_pdf_url: posterPdfUrl ?? inspectionLive.poster_pdf_url ?? null,
-        },
-        estateBlockLine,
-        fullPdfUrl,
-        posterPdfUrl,
-        recipients,
-        actionCategories: actionsResult.rows,
-        allActions,
-      })
-    } catch (emailErr) {
-      console.error('[inspections/submit] sendEmails threw:', emailErr)
-      actionCreationWarnings.push(`Email sending error: ${emailErr?.message || String(emailErr)}`)
-    }
-
-    if (emailVersion && isCaretakerTemplate(emailVersion)) {
+    if (wasDraft) {
       try {
-        const caretakerEmails = await sendCaretakerPhotoAndYesNotifications({
+        emailResults = await sendEmails({
+          sql,
           inspectionId: id,
-          templateVersion: emailVersion,
-          answers,
-          answerRows: answersResult.rows,
-          inspectorEmail,
-          inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'Caretaker inspection',
-          locationLine: estateBlockLine,
+          inspection: {
+            ...inspectionLive,
+            full_pdf_url: fullPdfUrl ?? inspectionLive.full_pdf_url ?? null,
+            poster_pdf_url: posterPdfUrl ?? inspectionLive.poster_pdf_url ?? null,
+          },
+          estateBlockLine,
+          fullPdfUrl,
+          posterPdfUrl,
+          recipients,
+          actionCategories: actionsResult.rows,
+          allActions,
         })
-        if (Array.isArray(caretakerEmails.sent)) {
-          emailResults.sent.push(...caretakerEmails.sent)
-        }
-        if (Array.isArray(caretakerEmails.failed)) {
-          emailResults.failed.push(...caretakerEmails.failed)
-        }
-      } catch (caretakerEmailErr) {
-        console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)
-        actionCreationWarnings.push(`Caretaker notification error: ${caretakerEmailErr?.message || String(caretakerEmailErr)}`)
+      } catch (emailErr) {
+        console.error('[inspections/submit] sendEmails threw:', emailErr)
+        actionCreationWarnings.push(`Email sending error: ${emailErr?.message || String(emailErr)}`)
       }
-    }
 
-    if (emailVersion && isEsmInspectionFormTemplate(emailVersion)) {
-      try {
-        const esmEmails = await sendEsmPhotoAndYesNotifications({
-          inspectionId: id,
-          templateVersion: emailVersion,
-          answers,
-          answerRows: answersResult.rows,
-          inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'ESM inspection',
-          locationLine: estateBlockLine,
-        })
-        if (Array.isArray(esmEmails.sent)) {
-          emailResults.sent.push(...esmEmails.sent)
+      if (emailVersion && isCaretakerTemplate(emailVersion)) {
+        try {
+          const caretakerEmails = await sendCaretakerPhotoAndYesNotifications({
+            inspectionId: id,
+            templateVersion: emailVersion,
+            answers,
+            answerRows: answersResult.rows,
+            inspectorEmail,
+            inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'Caretaker inspection',
+            locationLine: estateBlockLine,
+          })
+          if (Array.isArray(caretakerEmails.sent)) {
+            emailResults.sent.push(...caretakerEmails.sent)
+          }
+          if (Array.isArray(caretakerEmails.failed)) {
+            emailResults.failed.push(...caretakerEmails.failed)
+          }
+        } catch (caretakerEmailErr) {
+          console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)
+          actionCreationWarnings.push(`Caretaker notification error: ${caretakerEmailErr?.message || String(caretakerEmailErr)}`)
         }
-        if (Array.isArray(esmEmails.failed)) {
-          emailResults.failed.push(...esmEmails.failed)
-        }
-      } catch (esmEmailErr) {
-        console.error('[inspections/submit] ESM notifications:', esmEmailErr)
-        actionCreationWarnings.push(`ESM notification error: ${esmEmailErr?.message || String(esmEmailErr)}`)
       }
+
+      if (emailVersion && isEsmInspectionFormTemplate(emailVersion)) {
+        try {
+          const esmEmails = await sendEsmPhotoAndYesNotifications({
+            inspectionId: id,
+            templateVersion: emailVersion,
+            answers,
+            answerRows: answersResult.rows,
+            inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'ESM inspection',
+            locationLine: estateBlockLine,
+          })
+          if (Array.isArray(esmEmails.sent)) {
+            emailResults.sent.push(...esmEmails.sent)
+          }
+          if (Array.isArray(esmEmails.failed)) {
+            emailResults.failed.push(...esmEmails.failed)
+          }
+        } catch (esmEmailErr) {
+          console.error('[inspections/submit] ESM notifications:', esmEmailErr)
+          actionCreationWarnings.push(`ESM notification error: ${esmEmailErr?.message || String(esmEmailErr)}`)
+        }
+      }
+    } else {
+      console.log('[inspections/submit] skipping notification resend for already-submitted inspection', { inspectionId: id })
     }
 
     // Save recipient records (best-effort — inspection is already submitted)
