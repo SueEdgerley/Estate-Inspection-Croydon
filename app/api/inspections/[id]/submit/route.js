@@ -44,6 +44,7 @@ import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
+import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
@@ -728,20 +729,29 @@ export async function POST(request, { params }) {
               })
               const actionId = `action_${id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
               try {
-                await sql`
-                  INSERT INTO actions (
-                    id, inspection_id, section_id, section_name, question_id,
-                    category, priority, title, description, location, status,
-                    comment, recipient_person_id, auto_created, photo_urls,
-                    block_id, cost_code
-                  )
-                  VALUES (
-                    ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
-                    ${category}, ${priorityVal}, ${title}, ${description}, ${estateBlockLine || null}, 'open',
-                    ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(photoUrlsArr)},
-                    ${inspectionBlockId}, ${costCode}
-                  )
-                `
+                await insertActionWithOptionalColumns(sql, {
+                  fields: [
+                    ['id', actionId],
+                    ['inspection_id', id],
+                    ['section_id', sec.id],
+                    ['section_name', sec.title || sec.name],
+                    ['question_id', q.id],
+                    ['category', category],
+                    ['priority', priorityVal],
+                    ['title', title],
+                    ['description', description],
+                    ['location', estateBlockLine || null],
+                    ['status', 'open'],
+                    ['comment', comment || null],
+                    ['recipient_person_id', actionRecipient],
+                    ['auto_created', true],
+                    ['photo_urls', JSON.stringify(photoUrlsArr)],
+                  ],
+                  optionalFields: [
+                    ['block_id', inspectionBlockId],
+                    ['cost_code', costCode],
+                  ],
+                })
               } catch (insertErr) {
                 console.error('[inspections/submit] caretaker action insert failed:', insertErr)
                 actionCreationWarnings.push(
@@ -840,20 +850,29 @@ export async function POST(request, { params }) {
               })
               const actionId = `action_${id}_${q.id}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
               try {
-                await sql`
-                  INSERT INTO actions (
-                    id, inspection_id, section_id, section_name, question_id,
-                    category, priority, title, description, location, status,
-                    comment, recipient_person_id, auto_created, photo_urls,
-                    block_id, cost_code
-                  )
-                  VALUES (
-                    ${actionId}, ${id}, ${sec.id}, ${sec.title || sec.name}, ${q.id},
-                    ${category}, ${priorityVal}, ${title}, ${description}, ${estateBlockLine || null}, 'open',
-                    ${comment || null}, ${actionRecipient}, true, ${JSON.stringify(photoUrlsArr)},
-                    ${inspectionBlockId}, ${costCode}
-                  )
-                `
+                await insertActionWithOptionalColumns(sql, {
+                  fields: [
+                    ['id', actionId],
+                    ['inspection_id', id],
+                    ['section_id', sec.id],
+                    ['section_name', sec.title || sec.name],
+                    ['question_id', q.id],
+                    ['category', category],
+                    ['priority', priorityVal],
+                    ['title', title],
+                    ['description', description],
+                    ['location', estateBlockLine || null],
+                    ['status', 'open'],
+                    ['comment', comment || null],
+                    ['recipient_person_id', actionRecipient],
+                    ['auto_created', true],
+                    ['photo_urls', JSON.stringify(photoUrlsArr)],
+                  ],
+                  optionalFields: [
+                    ['block_id', inspectionBlockId],
+                    ['cost_code', costCode],
+                  ],
+                })
               } catch (insertErr) {
                 console.error('[inspections/submit] graded caretaker action insert failed:', insertErr)
                 actionCreationWarnings.push(

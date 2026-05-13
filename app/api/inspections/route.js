@@ -53,6 +53,7 @@ import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
+import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
@@ -1812,18 +1813,28 @@ export async function POST(request) {
             const actionLocation = isGroundsAction
               ? (String(location || '').trim() || displayTitle || null)
               : null
-            await sql`
-              INSERT INTO actions (
-                id, inspection_id, section_id, section_name, question_id,
-                category, priority, title, description, location, status,
-                comment, recipient_person_id, auto_created, photo_urls, cost_code
-              )
-              VALUES (
-                ${actionId}, ${inspectionId}, ${section.id}, ${section.title}, ${q.id},
-                ${category}, null, ${actionTitle}, ${actionDescription}, ${actionLocation}, 'open',
-              ${comment || null}, ${actionRecipient}, true, ${JSON.stringify([...allPhotoUrls, ...collectEsmIdCardPhotoUrls(extras)])}, null
-              )
-            `
+            await insertActionWithOptionalColumns(sql, {
+              fields: [
+                ['id', actionId],
+                ['inspection_id', inspectionId],
+                ['section_id', section.id],
+                ['section_name', section.title],
+                ['question_id', q.id],
+                ['category', category],
+                ['priority', null],
+                ['title', actionTitle],
+                ['description', actionDescription],
+                ['location', actionLocation],
+                ['status', 'open'],
+                ['comment', comment || null],
+                ['recipient_person_id', actionRecipient],
+                ['auto_created', true],
+                ['photo_urls', JSON.stringify([...allPhotoUrls, ...collectEsmIdCardPhotoUrls(extras)])],
+              ],
+              optionalFields: [
+                ['cost_code', null],
+              ],
+            })
             const actionForPoster = {
               id: actionId,
               category,

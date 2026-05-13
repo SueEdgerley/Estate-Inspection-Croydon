@@ -8,6 +8,7 @@ import {
   roleMayViewGlobalActionsList,
 } from '@/lib/app-role-access'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
 import { getRequestTrace, logAccessTrace, roleTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
@@ -460,52 +461,33 @@ export async function POST(request) {
       ? data.expected_completion_date
       : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-    const result = await sql`
-      INSERT INTO actions (
-        id,
-        inspection_id,
-        section_id,
-        section_name,
-        question_id,
-        category,
-        priority,
-        title,
-        description,
-        location,
-        status,
-        comment,
-        recipient_person_id,
-        block_id,
-        cost_code,
-        auto_created,
-        expected_completion_date,
-        repair_notes,
-        repair_photo_url,
-        repair_updated_at
-      ) VALUES (
-        ${id},
-        ${data.inspection_id || null},
-        ${data.section_id || null},
-        ${data.section_name || null},
-        ${data.question_id || null},
-        ${data.category || 'other'},
-        ${data.priority || null},
-        ${data.title},
-        ${data.description || null},
-        ${resolvedLocation},
-        ${data.status || 'open'},
-        ${data.comment || null},
-        ${data.recipient_person_id || null},
-        ${data.block_id || null},
-        ${data.cost_code || null},
-        ${data.auto_created || false},
-        ${expectedCompletionDate},
-        ${data.repair_notes || null},
-        ${data.repair_photo_url || null},
-        ${data.repair_notes || data.repair_photo_url ? new Date() : null}
-      )
-      RETURNING *
-    `
+    const result = await insertActionWithOptionalColumns(sql, {
+      fields: [
+        ['id', id],
+        ['inspection_id', data.inspection_id || null],
+        ['section_id', data.section_id || null],
+        ['section_name', data.section_name || null],
+        ['question_id', data.question_id || null],
+        ['category', data.category || 'other'],
+        ['priority', data.priority || null],
+        ['title', data.title],
+        ['description', data.description || null],
+        ['location', resolvedLocation],
+        ['status', data.status || 'open'],
+        ['comment', data.comment || null],
+        ['recipient_person_id', data.recipient_person_id || null],
+        ['auto_created', data.auto_created || false],
+        ['expected_completion_date', expectedCompletionDate],
+        ['repair_notes', data.repair_notes || null],
+        ['repair_photo_url', data.repair_photo_url || null],
+        ['repair_updated_at', data.repair_notes || data.repair_photo_url ? new Date() : null],
+      ],
+      optionalFields: [
+        ['block_id', data.block_id || null],
+        ['cost_code', data.cost_code || null],
+      ],
+      returning: true,
+    })
     
     return NextResponse.json(result.rows[0], { status: 201 })
   } catch (error) {
