@@ -42,6 +42,7 @@ import {
   ESTATE_WALKABOUT_TEMPLATE_ID,
   buildEstateWalkaboutTemplate,
 } from '@/lib/estate-walkabout-template'
+import LocationBlockSelector from '@/app/components/LocationBlockSelector'
 import EstateWalkaboutNewInspectionForm from '@/app/components/estate-walkabout/EstateWalkaboutNewInspectionForm'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
 import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@/lib/template-version-debug'
@@ -2936,15 +2937,19 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               ? 'If the exact location is not in the dropdown, users should select the closest option and provide full details in the notes/comments field.'
               : 'Optional: choose a location from the list, or leave blank and use the location note below.'}
           </p>
-          <select
+          <LocationBlockSelector
             id="postgres_block_id"
             name="postgres_block_id"
             value={postgresBlockId}
-            onChange={(e) => {
-              setPostgresBlockId(e.target.value)
+            onChange={(nextValue) => {
+              setPostgresBlockId(nextValue)
               setValidationErrors((prev) => ({ ...prev, block_id: undefined }))
             }}
+            locations={locationBlocks}
             required={locationRequiredForSelectedTemplate}
+            error={!!validationErrors.block_id}
+            selectLabel="— Select location —"
+            noneLabel="— None selected —"
             style={{
               width: '100%',
               padding: '0.75rem',
@@ -2954,14 +2959,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               backgroundColor: 'white',
               minHeight: 44,
             }}
-          >
-            <option value="">{locationRequiredForSelectedTemplate ? '— Select location —' : '— None selected —'}</option>
-            {locationBlocks.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
+          />
           {locationBlocks.length === 0 && (
             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
               No locations in the list yet. Contact your administrator if you expected to see blocks here.

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 import BestPracticeGuideButton from '@/app/components/BestPracticeGuideButton'
+import LocationBlockSelector from '@/app/components/LocationBlockSelector'
 import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
@@ -959,18 +960,16 @@ export default function EstateWalkaboutNewInspectionForm({
             </p>
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle}>Location</label>
-              <select
+              <LocationBlockSelector
+                id="estate_walkabout_postgres_block_id"
+                name="postgres_block_id"
                 value={postgresBlockId}
-                onChange={(e) => setPostgresBlockId(e.target.value)}
+                onChange={setPostgresBlockId}
+                locations={locationBlocks}
+                error={!!validationErrors.block_id}
+                noneLabel="— None selected —"
                 style={selectStyle(!!validationErrors.block_id)}
-              >
-                <option value="">— None selected —</option>
-                {locationBlocks.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+              />
               {locationBlocks.length === 0 && (
                 <p style={{ marginTop: 8, fontSize: 13, color: EW.muted }}>
                   No locations in the list yet. Contact your administrator if you expected to see blocks here.
