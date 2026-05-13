@@ -18,6 +18,11 @@ import {
   cleanActionDisplayText,
   formatActionDate,
 } from '@/lib/action-display-formatter'
+import {
+  CROYDON_HOUSING_LOGO_FILE,
+  PDF_LOGO_MAX_HEIGHT,
+  PDF_LOGO_MAX_WIDTH,
+} from '@/lib/logo-branding'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -69,7 +74,7 @@ function cleanCellText(value) {
 
 async function loadLogoImage(pdfDoc) {
   try {
-    const logoPath = path.join(process.cwd(), 'public', 'croydon-housing-logo.svg')
+    const logoPath = path.join(process.cwd(), 'public', CROYDON_HOUSING_LOGO_FILE)
     if (!fs.existsSync(logoPath)) return null
     const png = await sharp(fs.readFileSync(logoPath)).png().toBuffer()
     return await pdfDoc.embedPng(png)
@@ -110,19 +115,26 @@ function ensureSpace(ctx, needed) {
 }
 
 function drawPageHeader(ctx) {
-  const logoWidth = drawLogo(ctx, MARGIN, ctx.y, 148, 44)
+  ctx.page.drawRectangle({
+    x: MARGIN,
+    y: ctx.y - 50,
+    width: PAGE_WIDTH,
+    height: 50,
+    color: rgb(1, 1, 1),
+  })
+  const logoWidth = drawLogo(ctx, MARGIN, ctx.y - 4, PDF_LOGO_MAX_WIDTH, PDF_LOGO_MAX_HEIGHT)
   const titleX = MARGIN + logoWidth + 18
 
   ctx.page.drawText('ESM Action Plan', {
     x: titleX,
-    y: ctx.y - 18,
+    y: ctx.y - 20,
     size: 20,
     font: ctx.fonts.bold,
     color: hexToRgb(DARK),
   })
   ctx.page.drawText('Printable follow-up checklist', {
     x: titleX,
-    y: ctx.y - 36,
+    y: ctx.y - 38,
     size: 10,
     font: ctx.fonts.regular,
     color: hexToRgb(MUTED),

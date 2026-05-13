@@ -51,6 +51,7 @@ const REQUIRED_ENV_VARS = {
     'ASB_EMAIL',
     'HEALTH_SAFETY_EMAIL',
     'FIRE_SAFETY_EMAIL',
+    'PEST_CONTROL_EMAIL',
     'OTHER_EMAIL'
   ],
   

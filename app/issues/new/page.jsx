@@ -147,6 +147,9 @@ export default function NewIssue() {
             <option value={ISSUE_TYPES.CLEANING}>
               {ISSUE_TYPE_LABELS[ISSUE_TYPES.CLEANING]}
             </option>
+            <option value={ISSUE_TYPES.PEST_CONTROL}>
+              {ISSUE_TYPE_LABELS[ISSUE_TYPES.PEST_CONTROL]}
+            </option>
           </select>
         </div>
 
