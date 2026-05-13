@@ -434,6 +434,40 @@ function normalizeOptionObjects(rawOptions) {
     })
 }
 
+function normalizeCategoryToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function isPestControlPeopleOption(person) {
+  const categories = Array.isArray(person?.issue_categories) ? person.issue_categories : []
+  return [
+    ...categories,
+    person?.category,
+    person?.role,
+    person?.job_title,
+  ].some((value) => normalizeCategoryToken(value) === 'pest_control')
+}
+
+function getCaretakerRecipientOptions(question, peopleOptions) {
+  const staticOptions = normalizeOptionObjects(
+    Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
+      ? question.caretaker_recipient_options
+      : []
+  )
+  const category = String(question?.action_category || question?.category || '').trim().toLowerCase()
+  if (category !== 'pest_control') {
+    return staticOptions.length ? staticOptions : normalizeOptionObjects(peopleOptions)
+  }
+  const pestPeopleOptions = normalizeOptionObjects(
+    (Array.isArray(peopleOptions) ? peopleOptions : []).filter(isPestControlPeopleOption)
+  )
+  return normalizeOptionObjects([...pestPeopleOptions, ...staticOptions])
+}
+
 function getCaretakerFixedEmailDestination(question) {
   const category = String(question?.action_category || question?.category || '').toLowerCase()
   if (category === 'asb') return 'Tenancy.Service@croydon.gov.uk'
@@ -688,11 +722,7 @@ function InspectionQuestion({
     caretakerShowCommentWithPhotoUpload ||
     (caretakerShowCommentFromPhoto && !caretakerShowCommentOnYes) ||
     (caretakerShowCommentOnYes && caretakerShowPhotoOnYes)
-  const caretakerRecipientOptions = normalizeOptionObjects(
-    Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
-      ? question.caretaker_recipient_options
-      : peopleOptions
-  )
+  const caretakerRecipientOptions = getCaretakerRecipientOptions(question, peopleOptions)
   const showComment =
     !esmInspectionQuestion &&
     ((commentWhen === 'on_no' && isNo) ||
@@ -2027,6 +2057,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             .map((p) => ({
               value: p.id != null ? String(p.id) : '',
               label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
+              issue_categories: Array.isArray(p.issue_categories) ? p.issue_categories : [],
+              category: p.category || '',
+              role: p.role || '',
+              job_title: p.job_title || '',
             }))
             .filter((x) => x.value && x.label)
         )
