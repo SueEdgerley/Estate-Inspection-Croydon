@@ -92,6 +92,9 @@ const COMMENT_TEXTAREA_SURFACE = {
   minWidth: 0,
 }
 
+const ESM_ABANDONED_VEHICLE_AUTHORISATION_STATEMENT =
+  'I hereby give authorisation to AVS for the removal of the following vehicle(s) from this estate/block. I confirm that the vehicle details recorded below are accurate to the best of my knowledge.'
+
 function shouldShowQuestion(question, answers) {
   if (!question.depends_on_question_id) return true
   const depAnswer = answers[question.depends_on_question_id]
@@ -874,7 +877,9 @@ function InspectionQuestion({
           comment: '',
           photo_urls: [],
           id_card_photo_urls: [],
-          authorisation_text: '',
+          vehicle_colour: '',
+          vehicle_make_model: '',
+          vehicle_registration: '',
           authorisation_name: '',
           cost_code: '',
         })
@@ -1172,30 +1177,85 @@ function InspectionQuestion({
             </p>
             {esmAbandonedVehiclePhotoBlock}
             {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
-            <label htmlFor={`authorisation-${question.id}`} style={{ display: 'block', marginTop: '0.75rem', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              I hereby give authorisation…
-            </label>
-            <textarea
-              className={commentTextareaClassName}
-              id={`authorisation-${question.id}`}
-              value={extras.authorisation_text || ''}
-              onChange={(e) => setExtras({ authorisation_text: e.target.value })}
-              rows={3}
-              placeholder="I hereby give authorisation to AVS for the removal of the following vehicle(s): colour, make/model, registration"
+            <div
               style={{
-                ...textareaSurface,
+                marginTop: '0.75rem',
+                marginBottom: '0.75rem',
+                padding: mobileStackedForm ? '0.75rem' : '0.65rem 0.75rem',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '0.375rem',
+                color: '#1f2937',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+                lineHeight: 1.5,
+              }}
+            >
+              {ESM_ABANDONED_VEHICLE_AUTHORISATION_STATEMENT}
+            </div>
+            {errorAuthorisation && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisation}</p>}
+            <label htmlFor={`vehicle-colour-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Colour
+            </label>
+            <input
+              id={`vehicle-colour-${question.id}`}
+              type="text"
+              value={extras.vehicle_colour || ''}
+              onChange={(e) => setExtras({ vehicle_colour: e.target.value })}
+              placeholder="Enter vehicle colour"
+              style={{
                 width: '100%',
                 padding: mobileStackedForm ? '0.75rem' : '0.5rem',
-                border: errorAuthorisation ? '1px solid #ef4444' : '1px solid #d1d5db',
+                border: '1px solid #d1d5db',
                 borderRadius: '0.375rem',
                 fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                 fontFamily: 'inherit',
                 marginBottom: '0.75rem',
-                minHeight: mobileStackedForm ? 96 : undefined,
+                minHeight: mobileStackedForm ? 48 : undefined,
                 boxSizing: 'border-box',
               }}
             />
-            {errorAuthorisation && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisation}</p>}
+            <label htmlFor={`vehicle-make-model-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Make/model
+            </label>
+            <input
+              id={`vehicle-make-model-${question.id}`}
+              type="text"
+              value={extras.vehicle_make_model || ''}
+              onChange={(e) => setExtras({ vehicle_make_model: e.target.value })}
+              placeholder="Enter vehicle make/model"
+              style={{
+                width: '100%',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 48 : undefined,
+                boxSizing: 'border-box',
+              }}
+            />
+            <label htmlFor={`vehicle-registration-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Registration
+            </label>
+            <input
+              id={`vehicle-registration-${question.id}`}
+              type="text"
+              value={extras.vehicle_registration || ''}
+              onChange={(e) => setExtras({ vehicle_registration: e.target.value })}
+              placeholder="Enter registration"
+              style={{
+                width: '100%',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 48 : undefined,
+                boxSizing: 'border-box',
+              }}
+            />
             <label htmlFor={`authorisation-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
               Name of person authorising/reporting <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
             </label>
@@ -2370,6 +2430,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       [`${questionId}_recipient`]: undefined,
       [`${questionId}_authorisation`]: undefined,
       [`${questionId}_authorisation_name`]: undefined,
+      [`${questionId}_vehicle_colour`]: undefined,
+      [`${questionId}_vehicle_make_model`]: undefined,
+      [`${questionId}_vehicle_registration`]: undefined,
       [`${questionId}_cost_code`]: undefined,
     }))
   }
@@ -2437,9 +2500,6 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               : []
             if (idCardPhotos.length === 0) {
               errs[`${q.id}_photos`] = 'Vehicle/issue photo and ID card photo are required'
-            }
-            if (!(extras.authorisation_text || '').trim()) {
-              errs[`${q.id}_authorisation`] = 'Authorisation is required'
             }
             if (!(extras.authorisation_name || '').trim()) {
               errs[`${q.id}_authorisation_name`] = 'Authorising/reporting name is required'
