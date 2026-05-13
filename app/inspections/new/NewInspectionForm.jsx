@@ -443,6 +443,7 @@ function normalizeCategoryToken(value) {
 }
 
 function isPestControlPeopleOption(person) {
+  if (person?.issue_recipient !== true) return false
   const categories = Array.isArray(person?.issue_categories) ? person.issue_categories : []
   return [
     ...categories,
@@ -743,6 +744,17 @@ function InspectionQuestion({
       (question.caretaker_recipient_always && Array.isArray(question.caretaker_recipient_options)))
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
+  useEffect(() => {
+    const category = String(question?.action_category || question?.category || '').trim().toLowerCase()
+    if (category !== 'pest_control') return
+    console.log('[caretaker-recipient-options:pest_control]', {
+      questionId: question?.id,
+      total: caretakerRecipientOptions.length,
+      labels: caretakerRecipientOptions.map((opt) => opt.label),
+      peopleMatches: (Array.isArray(peopleOptions) ? peopleOptions : []).filter(isPestControlPeopleOption).length,
+      staticOptions: normalizeOptionObjects(question?.caretaker_recipient_options).length,
+    })
+  }, [question, caretakerRecipientOptions, peopleOptions])
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
   const esmYesNoIssueQuestion =
     esmInspectionQuestion &&
@@ -2058,6 +2070,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               value: p.id != null ? String(p.id) : '',
               label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
               issue_categories: Array.isArray(p.issue_categories) ? p.issue_categories : [],
+              issue_recipient: p.issue_recipient === true,
+              recipient_source: p.recipient_source || '',
               category: p.category || '',
               role: p.role || '',
               job_title: p.job_title || '',
