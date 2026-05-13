@@ -43,6 +43,7 @@ import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } fr
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
+import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
@@ -209,6 +210,7 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
           : 'No photo link recorded.'
         const html = `
           <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827;max-width:680px;">
+            ${croydonLogoEmailHeaderHtml()}
             <h1 style="font-size:20px;line-height:1.25;margin:0 0 16px 0;">ESM inspection notification</h1>
 
             <h2 style="font-size:16px;line-height:1.3;margin:20px 0 8px 0;">Inspection context</h2>
@@ -353,6 +355,7 @@ async function sendCaretakerPhotoAndYesNotifications({ inspectionId, templateVer
           : '<p>No photo link recorded.</p>'
         const html = `
           <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+            ${croydonLogoEmailHeaderHtml()}
             <h1 style="font-size:18px;">Caretaker inspection notification</h1>
             <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'Caretaker inspection')}</p>
             ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}

@@ -49,6 +49,7 @@ import {
 import { getActionTriggerOn } from '@/lib/template-rules'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
+import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
@@ -187,6 +188,7 @@ function buildCaretakerNotificationHtml({ inspectionTitle, locationLine, section
     : '<p>No photo link recorded.</p>'
   return `
     <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+      ${croydonLogoEmailHeaderHtml()}
       <h1 style="font-size:18px;">Caretaker inspection notification</h1>
       <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'Caretaker inspection')}</p>
       ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
@@ -326,6 +328,7 @@ function buildEsmNotificationHtml({ inspectionTitle, locationLine, items }) {
 
   return `
     <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+      ${croydonLogoEmailHeaderHtml()}
       <h1 style="font-size:18px;">ESM inspection notification</h1>
       <p><strong>Inspection:</strong> ${escapeHtml(inspectionTitle || 'ESM inspection')}</p>
       ${locationLine ? `<p><strong>Location:</strong> ${escapeHtml(locationLine)}</p>` : ''}
@@ -860,6 +863,7 @@ async function sendBulkRefuseWalkaboutEmail(sqlFn, {
     : '<li>Action plan / poster: Not generated</li>'
   const html = `
     <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
+      ${croydonLogoEmailHeaderHtml()}
       <p>Hello,</p>
       <p>A bulk refuse removal has been identified during an Estate Walkabout.</p>
       <h2 style="font-size:16px">Inspection details</h2>
