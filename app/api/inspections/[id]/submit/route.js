@@ -541,11 +541,14 @@ export async function POST(request, { params }) {
         allowed: true,
       })
     }
+    const isGroundsMaintenanceSubmission = Boolean(
+      templateForRoleCheck && isGroundsMaintenanceTemplate(templateForRoleCheck)
+    )
     if (
       templateForRoleCheck &&
       (isCaretakerTemplate(templateForRoleCheck) ||
         isEsmInspectionFormTemplate(templateForRoleCheck) ||
-        isGroundsMaintenanceTemplate(templateForRoleCheck)) &&
+        isGroundsMaintenanceSubmission) &&
       !String(inspection.block_id || '').trim()
     ) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })
@@ -699,7 +702,7 @@ export async function POST(request, { params }) {
                 (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
                 (recipientId != null ? String(recipientId).trim() : '') ||
                 null
-              if (!actionRecipient) {
+              if (!actionRecipient && !isGroundsMaintenanceSubmission) {
                 const routed = await resolveIssueRoutingRecipient(sql, {
                   issueCategory: category,
                   issueType: q.issue_type ? String(q.issue_type) : null,
@@ -811,7 +814,7 @@ export async function POST(request, { params }) {
                 (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
                 (recipientId != null ? String(recipientId).trim() : '') ||
                 null
-              if (!actionRecipient) {
+              if (!actionRecipient && !isGroundsMaintenanceSubmission) {
                 const routed = await resolveIssueRoutingRecipient(sql, {
                   issueCategory: category,
                   issueType: q.issue_type ? String(q.issue_type) : null,
@@ -1010,7 +1013,7 @@ export async function POST(request, { params }) {
     // Send emails only on the first submit attempt. Retries for an already-submitted inspection
     // should not resend notifications just because a best-effort logging/audit step failed.
     let emailResults = { sent: [], failed: [] }
-    if (wasDraft) {
+    if (wasDraft && !isGroundsMaintenanceSubmission) {
       try {
         emailResults = await sendEmails({
           sql,
