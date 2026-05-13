@@ -93,6 +93,48 @@ function safeActionText(value, fallback, maxLength) {
   return maxLength && safe.length > maxLength ? safe.slice(0, maxLength) : safe
 }
 
+const EMAIL_RE = /^[^\s@()<>]+@[^\s@()<>]+\.[^\s@()<>]+$/
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim()
+  return EMAIL_RE.test(email) ? email : ''
+}
+
+function extractEmailFromLegacyLabel(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const parenMatch = text.match(/\(([^()\s]+@[^()\s]+)\)\s*$/)
+  if (parenMatch) return normalizeEmail(parenMatch[1])
+  const emailMatch = text.match(/[^\s()<>]+@[^\s()<>]+\.[^\s()<>]+/)
+  return emailMatch ? normalizeEmail(emailMatch[0]) : ''
+}
+
+async function resolveRecipientEmail(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return { email: '', source: 'empty', personId: '' }
+
+  const directEmail = normalizeEmail(raw)
+  if (directEmail) return { email: directEmail, source: 'raw_email', personId: '' }
+
+  try {
+    const personRes = await sql`
+      SELECT id, email FROM people
+      WHERE id = ${raw} AND COALESCE(active, true) = true
+      LIMIT 1
+    `
+    const person = personRes.rows[0]
+    const personEmail = normalizeEmail(person?.email)
+    if (personEmail) return { email: personEmail, source: 'person_id', personId: String(person.id || raw) }
+  } catch (error) {
+    console.warn('[inspections/submit] recipient person lookup failed:', { error: error?.message || String(error) })
+  }
+
+  const legacyEmail = extractEmailFromLegacyLabel(raw)
+  if (legacyEmail) return { email: legacyEmail, source: 'legacy_label', personId: '' }
+
+  return { email: '', source: 'unresolved', personId: '' }
+}
+
 async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectionTitle, locationLine }) {
   if (!isEsmInspectionFormTemplate(templateVersion)) return { sent: [], failed: [] }
   const sent = []
@@ -137,8 +179,19 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
       }
 
       for (const target of targets) {
-        const to = String(target.to || '').trim()
-        if (!to) continue
+        const resolved = await resolveRecipientEmail(target.to)
+        const to = resolved.email
+        if (!to) {
+          failed.push({ questionId: q.id, routing: target.routing, error: 'recipient_email_unresolved' })
+          console.warn('[sendEsmPhotoAndYesNotifications] recipient unresolved', {
+            inspectionId,
+            questionId: q.id,
+            routing: target.routing,
+            resolution: resolved.source,
+            personId: resolved.personId || undefined,
+          })
+          continue
+        }
         const key = `${to}|${target.routing}|${q.id}`
         if (dedupe.has(key)) continue
         dedupe.add(key)
@@ -170,6 +223,14 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
           ...allPhotoUrls,
         ].filter(Boolean).join('\n')
         try {
+          console.log('[sendEsmPhotoAndYesNotifications] final recipient email', {
+            inspectionId,
+            questionId: q.id,
+            to,
+            routing: target.routing,
+            resolution: resolved.source,
+            personId: resolved.personId || undefined,
+          })
           const sendResult = await sendAppEmail({
             to,
             subject: `ESM inspection: ${section.title || locationLine || inspectionTitle || 'notification'}`,

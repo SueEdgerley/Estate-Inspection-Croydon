@@ -100,6 +100,59 @@ function collectEsmIdCardPhotoUrls(extras) {
     : []
 }
 
+const EMAIL_RE = /^[^\s@()<>]+@[^\s@()<>]+\.[^\s@()<>]+$/
+
+function normalizeEmail(value) {
+  const email = String(value || '').trim()
+  return EMAIL_RE.test(email) ? email : ''
+}
+
+function extractEmailFromLegacyLabel(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const parenMatch = text.match(/\(([^()\s]+@[^()\s]+)\)\s*$/)
+  if (parenMatch) return normalizeEmail(parenMatch[1])
+  const emailMatch = text.match(/[^\s()<>]+@[^\s()<>]+\.[^\s()<>]+/)
+  return emailMatch ? normalizeEmail(emailMatch[0]) : ''
+}
+
+function buildRecipientResolver(peopleRows = []) {
+  const byId = new Map()
+  const byEmail = new Map()
+  const byNameEmailLabel = new Map()
+
+  for (const person of peopleRows || []) {
+    const id = String(person?.id || '').trim()
+    const email = normalizeEmail(person?.email)
+    const name = String(person?.name || '').trim()
+    if (id && email) byId.set(id, { id, email, name })
+    if (email) byEmail.set(email.toLowerCase(), { id, email, name })
+    if (name && email) byNameEmailLabel.set(`${name} (${email})`.toLowerCase(), { id, email, name })
+  }
+
+  return function resolveRecipientEmail(value) {
+    const raw = String(value || '').trim()
+    if (!raw) return { email: '', source: 'empty', personId: '' }
+
+    const person = byId.get(raw)
+    if (person) return { email: person.email, source: 'person_id', personId: person.id }
+
+    const directEmail = normalizeEmail(raw)
+    if (directEmail) {
+      const known = byEmail.get(directEmail.toLowerCase())
+      return { email: directEmail, source: known ? 'known_email' : 'raw_email', personId: known?.id || '' }
+    }
+
+    const legacyEmail = extractEmailFromLegacyLabel(raw)
+    if (legacyEmail) {
+      const known = byEmail.get(legacyEmail.toLowerCase()) || byNameEmailLabel.get(raw.toLowerCase())
+      return { email: legacyEmail, source: 'legacy_label', personId: known?.id || '' }
+    }
+
+    return { email: '', source: 'unresolved', personId: '' }
+  }
+}
+
 function parseInspectionTimeInput(value) {
   if (value == null || value === '') return null
   const date = new Date(value)
@@ -196,7 +249,7 @@ function collectCaretakerEmailNotifications({ template, answers, answerExtras, i
   return notifications
 }
 
-function collectEsmEmailNotifications({ template, answers, answerExtras }) {
+function collectEsmEmailNotifications({ template, answers, answerExtras, resolveRecipientEmail }) {
   if (!isEsmInspectionFormTemplate(template)) return []
   const notifications = []
   for (const section of template.sections || []) {
@@ -218,10 +271,24 @@ function collectEsmEmailNotifications({ template, answers, answerExtras }) {
       }
 
       if (q.esm_recipient_on_yes === true && isYes && selectedRecipient) {
-        notifications.push({ ...base, to: selectedRecipient, routing: 'esm_graffiti_selected_recipient' })
+        const resolved = resolveRecipientEmail?.(selectedRecipient) || { email: selectedRecipient, source: 'unresolved' }
+        notifications.push({
+          ...base,
+          to: resolved.email,
+          routing: 'esm_graffiti_selected_recipient',
+          recipientResolution: resolved.source,
+          recipientPersonId: resolved.personId || (resolved.source === 'person_id' ? selectedRecipient : ''),
+        })
       }
       if (q.esm_email_on_photo_to_selected_recipient === true && photoUrls.length > 0 && selectedRecipient) {
-        notifications.push({ ...base, to: selectedRecipient, routing: `esm_${q.esm_behavior || 'photo'}_selected_recipient_photo` })
+        const resolved = resolveRecipientEmail?.(selectedRecipient) || { email: selectedRecipient, source: 'unresolved' }
+        notifications.push({
+          ...base,
+          to: resolved.email,
+          routing: `esm_${q.esm_behavior || 'photo'}_selected_recipient_photo`,
+          recipientResolution: resolved.source,
+          recipientPersonId: resolved.personId || (resolved.source === 'person_id' ? selectedRecipient : ''),
+        })
       }
       if (q.esm_email_on_yes && isYes) {
         notifications.push({ ...base, to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` })
@@ -245,7 +312,21 @@ async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle,
   const dedupe = new Set()
   for (const notification of notifications || []) {
     const to = String(notification.to || '').trim()
-    if (!to) continue
+    if (!to) {
+      result.failed.push({
+        question: notification.questionText || '',
+        routing: notification.routing || 'esm_notification',
+        error: 'recipient_email_unresolved',
+      })
+      console.warn('[sendEsmEmailNotifications] recipient unresolved', {
+        inspectionId,
+        routing: notification.routing || 'esm_notification',
+        question: notification.questionText || '',
+        resolution: notification.recipientResolution || 'unresolved',
+        personId: notification.recipientPersonId || undefined,
+      })
+      continue
+    }
     const dedupeKey = `${to}|${notification.routing}|${notification.questionText}`
     if (dedupe.has(dedupeKey)) continue
     dedupe.add(dedupeKey)
@@ -275,6 +356,13 @@ async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle,
       ...(notification.photoUrls || []),
     ].filter(Boolean).join('\n')
     try {
+      console.log('[sendEsmEmailNotifications] final recipient email', {
+        inspectionId,
+        to,
+        routing: notification.routing || 'esm_notification',
+        resolution: notification.recipientResolution || 'direct',
+        personId: notification.recipientPersonId || undefined,
+      })
       const sendResult = await sendAppEmail({
         to,
         subject: `ESM inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
@@ -331,6 +419,11 @@ async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspection
       ...(notification.photoUrls || []),
     ].filter(Boolean).join('\n')
     try {
+      console.log('[sendCaretakerEmailNotifications] final recipient email', {
+        inspectionId,
+        to,
+        routing: notification.routing || 'caretaker_notification',
+      })
       const sendResult = await sendAppEmail({
         to,
         subject: `Caretaker inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
@@ -1317,6 +1410,12 @@ export async function POST(request) {
 
     await ensureDatabase()
     await ensureInspectionTimingFields()
+    const peopleResult = await sql`
+      SELECT id, name, email
+      FROM people
+      WHERE COALESCE(active, true) = true
+    `
+    const resolveRecipientEmail = buildRecipientResolver(peopleResult.rows || [])
     const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
     if (!loc.ok) {
       return NextResponse.json({ error: loc.message }, { status: loc.status })
@@ -1879,6 +1978,7 @@ export async function POST(request) {
           template,
           answers,
           answerExtras: answer_extras,
+          resolveRecipientEmail,
         })
         const sent = await sendEsmEmailNotifications(sql, {
           inspectionId,
