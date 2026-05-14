@@ -18,6 +18,7 @@ export const metadata = {
   title: 'Estate Inspection - Croydon',
   description: 'Estate Inspection Management System for Croydon Council',
   applicationName: 'Estate Inspection Croydon',
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     title: 'Estate Inspection',

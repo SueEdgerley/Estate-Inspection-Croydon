@@ -32,31 +32,6 @@ function dateInputValue(value) {
   return date.toISOString().slice(0, 10)
 }
 
-function actionSearchText(action) {
-  const display = buildActionDisplay(action)
-  return [
-    display.section,
-    display.issue,
-    display.rating,
-    display.comment,
-    display.location,
-    display.blockLocation,
-    display.inspectionTemplateName,
-    display.completedBy,
-    display.contextLocation,
-    display.status,
-    display.priority,
-    display.assignedTo,
-    display.jobNumber,
-    display.submittedBy,
-    display.inspectionDate,
-    cleanActionDisplayText(action.assigned_to_email),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-}
-
 export default function ActionsPage() {
   const [actions, setActions] = useState([])
   const [people, setPeople] = useState([])
@@ -68,14 +43,53 @@ export default function ActionsPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [inspectionId, setInspectionId] = useState(null)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    location: '',
+    person: '',
+  })
 
   const selectedAction = actions.find((action) => action.id === selectedId) || null
+  
   const filteredActions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return actions
-    return actions.filter((action) => actionSearchText(action).includes(query))
-  }, [actions, searchQuery])
+    return actions.filter((action) => {
+      // Date filter
+      if (filters.dateFrom || filters.dateTo) {
+        const actionDate = new Date(action.inspection_submitted_at || action.inspection_created_at || action.created_at)
+        if (Number.isNaN(actionDate.getTime())) return false
+        
+        if (filters.dateFrom) {
+          const fromDate = new Date(filters.dateFrom)
+          if (actionDate < fromDate) return false
+        }
+        
+        if (filters.dateTo) {
+          const toDate = new Date(filters.dateTo)
+          toDate.setHours(23, 59, 59, 999) // End of day
+          if (actionDate > toDate) return false
+        }
+      }
+      
+      // Location filter
+      if (filters.location) {
+        const locationMatch = action.estate_block_name?.toLowerCase().includes(filters.location.toLowerCase()) ||
+                             action.estate_name?.toLowerCase().includes(filters.location.toLowerCase()) ||
+                             action.block_name?.toLowerCase().includes(filters.location.toLowerCase())
+        if (!locationMatch) return false
+      }
+      
+      // Person filter (assigned or completed by)
+      if (filters.person) {
+        const personMatch = action.assigned_to?.toLowerCase().includes(filters.person.toLowerCase()) ||
+                           action.created_by?.toLowerCase().includes(filters.person.toLowerCase())
+        if (!personMatch) return false
+      }
+      
+      return true
+    })
+  }, [actions, filters])
+  
   const selectedActionVisible = selectedAction && filteredActions.some((action) => action.id === selectedAction.id)
 
   useEffect(() => {
@@ -267,19 +281,85 @@ export default function ActionsPage() {
         </div>
       ) : null}
 
-      <div style={searchWrapStyle}>
-        <label htmlFor="action-search" style={{ display: 'block', fontWeight: 700, color: '#111827', marginBottom: '0.35rem' }}>
-          Search issues
-        </label>
-        <input
-          id="action-search"
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search by block, location, issue, status, assignee, job number..."
-          style={inputStyle}
-        />
-        <p style={{ margin: '0.5rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>
+      <div style={filtersWrapStyle}>
+        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: 'bold', color: '#111827' }}>
+          Filter Issues
+        </h3>
+        
+        <div style={filtersGridStyle}>
+          <div style={filterGroupStyle}>
+            <label htmlFor="date-from" style={filterLabelStyle}>
+              Inspection Date From
+            </label>
+            <input
+              id="date-from"
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+              style={filterInputStyle}
+            />
+          </div>
+          
+          <div style={filterGroupStyle}>
+            <label htmlFor="date-to" style={filterLabelStyle}>
+              Inspection Date To
+            </label>
+            <input
+              id="date-to"
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+              style={filterInputStyle}
+            />
+          </div>
+          
+          <div style={filterGroupStyle}>
+            <label htmlFor="location-filter" style={filterLabelStyle}>
+              Estate/Block/Location
+            </label>
+            <input
+              id="location-filter"
+              type="text"
+              value={filters.location}
+              onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+              placeholder="Type to filter locations..."
+              style={filterInputStyle}
+            />
+          </div>
+          
+          <div style={filterGroupStyle}>
+            <label htmlFor="person-filter" style={filterLabelStyle}>
+              Assigned/Completed By
+            </label>
+            <input
+              id="person-filter"
+              type="text"
+              value={filters.person}
+              onChange={(e) => setFilters(prev => ({ ...prev, person: e.target.value }))}
+              placeholder="Type to filter people..."
+              style={filterInputStyle}
+            />
+          </div>
+        </div>
+        
+        {(filters.dateFrom || filters.dateTo || filters.location || filters.person) && (
+          <div style={activeFiltersStyle}>
+            <span style={{ fontWeight: 600, color: '#374151' }}>Active filters:</span>
+            {filters.dateFrom && <span style={filterTagStyle}>From: {new Date(filters.dateFrom).toLocaleDateString()}</span>}
+            {filters.dateTo && <span style={filterTagStyle}>To: {new Date(filters.dateTo).toLocaleDateString()}</span>}
+            {filters.location && <span style={filterTagStyle}>Location: {filters.location}</span>}
+            {filters.person && <span style={filterTagStyle}>Person: {filters.person}</span>}
+            <button
+              type="button"
+              onClick={() => setFilters({ dateFrom: '', dateTo: '', location: '', person: '' })}
+              style={clearFiltersButtonStyle}
+            >
+              Clear all
+            </button>
+          </div>
+        )}
+        
+        <p style={{ margin: '1rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>
           Showing {filteredActions.length} of {actions.length} issues
         </p>
       </div>
@@ -303,11 +383,9 @@ export default function ActionsPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '1rem', alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {filteredActions.length === 0 ? (
               <div style={emptySearchStyle}>
-                No issues match your search.
+                No issues match your filters.
               </div>
-            ) : null}
             {filteredActions.map((a) => {
               const display = buildActionDisplay(a)
               return (
@@ -723,4 +801,87 @@ const closeButtonStyle = {
   padding: '0.45rem 0.7rem',
   fontWeight: 600,
   cursor: 'pointer',
+}
+
+const filtersWrapStyle = {
+  marginBottom: '1rem',
+  background: '#fff',
+  border: '1px solid #e5e7eb',
+  borderRadius: '0.75rem',
+  padding: '1rem',
+  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.08)',
+}
+
+const filtersGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+  gap: '1rem',
+  marginBottom: '1rem',
+}
+
+const filterGroupStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+}
+
+const filterLabelStyle = {
+  display: 'block',
+  fontWeight: 600,
+  color: '#374151',
+  marginBottom: '0.5rem',
+  fontSize: '0.875rem',
+}
+
+const filterInputStyle = {
+  border: '1px solid #d1d5db',
+  borderRadius: '0.375rem',
+  padding: '0.5rem 0.75rem',
+  fontSize: '0.875rem',
+  color: '#374151',
+  backgroundColor: '#fff',
+}
+
+const filterSelectStyle = {
+  border: '1px solid #d1d5db',
+  borderRadius: '0.375rem',
+  padding: '0.5rem 0.75rem',
+  fontSize: '0.875rem',
+  color: '#374151',
+  backgroundColor: '#fff',
+  cursor: 'pointer',
+}
+
+const activeFiltersStyle = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '0.5rem',
+  alignItems: 'center',
+  marginBottom: '0.5rem',
+  padding: '0.75rem',
+  backgroundColor: '#f8fafc',
+  borderRadius: '0.5rem',
+  border: '1px solid #e2e8f0',
+}
+
+const filterTagStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  backgroundColor: '#dbeafe',
+  color: '#1e40af',
+  padding: '0.25rem 0.5rem',
+  borderRadius: '0.25rem',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+}
+
+const clearFiltersButtonStyle = {
+  border: '1px solid #d1d5db',
+  borderRadius: '0.375rem',
+  backgroundColor: '#fff',
+  color: '#374151',
+  padding: '0.25rem 0.5rem',
+  fontSize: '0.75rem',
+  fontWeight: 600,
+  cursor: 'pointer',
+  marginLeft: 'auto',
 }
