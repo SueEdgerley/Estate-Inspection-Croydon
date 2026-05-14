@@ -104,6 +104,34 @@ export async function DELETE(request, { params }) {
 
   try {
     await ensureDatabase()
+    const current = (
+      await sql`
+        SELECT id, email
+        FROM people
+        WHERE id = ${id} AND category IS DISTINCT FROM 'issue_recipient'
+        LIMIT 1
+      `
+    ).rows[0]
+    if (!current) return NextResponse.json({ error: 'Staff row not found' }, { status: 404 })
+
+    const appUser = current.email
+      ? (
+          await sql`
+            SELECT id
+            FROM users
+            WHERE lower(trim(email)) = lower(trim(${current.email}))
+            LIMIT 1
+          `
+        ).rows[0]
+      : null
+
+    if (appUser) {
+      return NextResponse.json(
+        { error: 'This staff row matches a current app user. Archive legacy Photobook records only.' },
+        { status: 409 }
+      )
+    }
+
     const updated = await sql`
       UPDATE people
       SET active = false, updated_at = CURRENT_TIMESTAMP

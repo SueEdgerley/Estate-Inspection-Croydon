@@ -58,6 +58,8 @@ const btnDeletePermanent = {
   cursor: 'pointer',
 }
 
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase()
+
 export default function SettingsPage() {
   const [allowed, setAllowed] = useState(null)
   const [loadError, setLoadError] = useState(null)
@@ -76,12 +78,56 @@ export default function SettingsPage() {
   const [editRecipient, setEditRecipient] = useState({ name: '', email: '' })
   const [saving, setSaving] = useState(false)
   const [accountFilter, setAccountFilter] = useState('all')
+  const [showLegacyPhotobookStaff, setShowLegacyPhotobookStaff] = useState(false)
 
   const filteredUsers = useMemo(() => {
     if (accountFilter === 'active') return users.filter((u) => u.account_active !== false)
     if (accountFilter === 'inactive') return users.filter((u) => u.account_active === false)
     return users
   }, [users, accountFilter])
+
+  const appUserEmailSet = useMemo(() => {
+    return new Set(users.map((u) => normalizeEmail(u.email)).filter(Boolean))
+  }, [users])
+
+  const staffEmailCounts = useMemo(() => {
+    return staffDirectory.reduce((counts, staff) => {
+      const email = normalizeEmail(staff.email)
+      if (!email) return counts
+      counts[email] = (counts[email] || 0) + 1
+      return counts
+    }, {})
+  }, [staffDirectory])
+
+  const decoratedStaffDirectory = useMemo(() => {
+    return staffDirectory.map((staff) => {
+      const email = normalizeEmail(staff.email)
+      const isAppUser = Boolean(email && appUserEmailSet.has(email))
+      const isDuplicateEmail = Boolean(email && staffEmailCounts[email] > 1)
+      return {
+        ...staff,
+        isAppUser,
+        isDuplicateEmail,
+        isLegacyPhotobookRecord: !isAppUser,
+      }
+    })
+  }, [appUserEmailSet, staffDirectory, staffEmailCounts])
+
+  const visibleStaffDirectory = useMemo(() => {
+    return decoratedStaffDirectory.filter((staff) => {
+      if (staff.active === false) return false
+      if (staff.isAppUser) return true
+      return showLegacyPhotobookStaff
+    })
+  }, [decoratedStaffDirectory, showLegacyPhotobookStaff])
+
+  const legacyStaffCount = useMemo(() => {
+    return decoratedStaffDirectory.filter((staff) => staff.active !== false && staff.isLegacyPhotobookRecord).length
+  }, [decoratedStaffDirectory])
+
+  const duplicateEmailCount = useMemo(() => {
+    return decoratedStaffDirectory.filter((staff) => staff.isDuplicateEmail).length
+  }, [decoratedStaffDirectory])
 
   const refreshUsers = useCallback(async () => {
     const res = await fetch('/api/admin/users', { credentials: 'include' })
@@ -202,9 +248,13 @@ export default function SettingsPage() {
     }
   }
 
-  const deactivateStaffMember = async (staff) => {
+  const archiveLegacyStaffMember = async (staff) => {
+    if (staff.isAppUser) {
+      setLoadError('This staff row matches a current app user. Edit their job title/role instead of archiving from the legacy view.')
+      return
+    }
     const label = staff.name || staff.email || staff.id
-    if (!window.confirm(`Deactivate ${label}? Historical assignments and records will be preserved.`)) return
+    if (!window.confirm(`Archive legacy Photobook staff record for ${label}? Historical assignments and records will be preserved.`)) return
     setSaving(true)
     setLoadError(null)
     try {
@@ -218,7 +268,7 @@ export default function SettingsPage() {
       setStaffDirectory((prev) => prev.map((row) => (row.id === staff.id ? { ...row, active: false } : row)))
       await refreshStaffDirectory()
     } catch (err) {
-      setLoadError(err.message || 'Could not deactivate staff member')
+      setLoadError(err.message || 'Could not archive staff member')
     } finally {
       setSaving(false)
     }
@@ -555,8 +605,46 @@ export default function SettingsPage() {
         <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Staff directory (assignments)</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
           Staff job titles for estate/block assignments: {STAFF_JOB_TITLES.join(', ')}. Rows live in <code style={{ fontSize: '0.85em' }}>people.job_title</code> — not app access roles.
-          When someone later signs in with Clerk using the same email, the app may link their account to this row (see provisioning in code).
+          By default this view shows active staff rows whose email matches a current app user; legacy Photobook imports can be shown when needed.
         </p>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.75rem',
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: '#f9fafb',
+            border: '1px solid #e5e7eb',
+            borderRadius: 8,
+          }}
+        >
+          <div style={{ fontSize: '0.8125rem', color: '#4b5563', lineHeight: 1.45 }}>
+            Showing {visibleStaffDirectory.length} active staff row(s). Hidden legacy Photobook records: {showLegacyPhotobookStaff ? 0 : legacyStaffCount}.
+            {duplicateEmailCount > 0 && (
+              <span style={{ display: 'block', color: '#92400e', fontWeight: 600 }}>
+                {duplicateEmailCount} row(s) share an email. Review duplicate labels and merge into one staff record where possible.
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowLegacyPhotobookStaff((value) => !value)}
+            style={{
+              padding: '0.45rem 0.75rem',
+              borderRadius: 6,
+              border: '1px solid #d1d5db',
+              backgroundColor: showLegacyPhotobookStaff ? '#eef2ff' : '#fff',
+              color: '#1f2937',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {showLegacyPhotobookStaff ? 'Hide legacy Photobook staff' : 'Show legacy Photobook staff'}
+          </button>
+        </div>
 
         <form onSubmit={addStaffMember} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem', alignItems: 'flex-end' }}>
           <div>
@@ -614,13 +702,14 @@ export default function SettingsPage() {
               <tr>
                 <th style={th}>Name</th>
                 <th style={th}>Email</th>
+                <th style={th}>Status</th>
                 <th style={th}>Job title</th>
                 <th style={th}>Active</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {staffDirectory.map((s) => (
+              {visibleStaffDirectory.map((s) => (
                 <tr key={s.id}>
                   {editingStaffId === s.id ? (
                     <>
@@ -638,6 +727,10 @@ export default function SettingsPage() {
                           onChange={(e) => setEditStaff((prev) => ({ ...prev, email: e.target.value }))}
                           style={{ width: '100%', padding: '0.35rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db' }}
                         />
+                      </td>
+                      <td style={td}>
+                        {s.isAppUser ? 'App user' : 'Legacy Photobook record'}
+                        {s.isDuplicateEmail ? '; Duplicate email' : ''}
                       </td>
                       <td style={td}>
                         <select
@@ -676,6 +769,43 @@ export default function SettingsPage() {
                     <>
                       <td style={td}>{s.name || '—'}</td>
                       <td style={td}>{s.email || '—'}</td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 'fit-content',
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: 999,
+                              backgroundColor: s.isDuplicateEmail ? '#fef3c7' : s.isAppUser ? '#dcfce7' : '#f3f4f6',
+                              color: s.isDuplicateEmail ? '#92400e' : s.isAppUser ? '#166534' : '#4b5563',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {s.isAppUser ? 'App user' : 'Legacy Photobook record'}
+                          </span>
+                          {s.isDuplicateEmail && (
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                width: 'fit-content',
+                                padding: '0.15rem 0.45rem',
+                                borderRadius: 999,
+                                backgroundColor: '#fef3c7',
+                                color: '#92400e',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              Duplicate email
+                            </span>
+                          )}
+                          {s.isDuplicateEmail && (
+                            <span style={{ color: '#92400e', fontSize: '0.75rem' }}>Recommend merging into one staff record.</span>
+                          )}
+                        </div>
+                      </td>
                       <td style={td}>{s.job_title || '—'}</td>
                       <td style={td}>{s.active === false ? 'No' : 'Yes'}</td>
                       <td style={td}>
@@ -694,19 +824,21 @@ export default function SettingsPage() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => deactivateStaffMember(s)}
-                          disabled={saving || s.active === false}
-                          style={{
-                            color: s.active === false ? '#9ca3af' : '#b91c1c',
-                            background: 'none',
-                            border: 'none',
-                            cursor: saving || s.active === false ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          Deactivate
-                        </button>
+                        {!s.isAppUser && (
+                          <button
+                            type="button"
+                            onClick={() => archiveLegacyStaffMember(s)}
+                            disabled={saving || s.active === false}
+                            style={{
+                              color: s.active === false ? '#9ca3af' : '#b91c1c',
+                              background: 'none',
+                              border: 'none',
+                              cursor: saving || s.active === false ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            Archive
+                          </button>
+                        )}
                       </td>
                     </>
                   )}
@@ -716,6 +848,11 @@ export default function SettingsPage() {
           </table>
           {staffDirectory.length === 0 && (
             <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.5rem' }}>No staff rows yet. Use Add staff above (same flow as before Phase 1 split).</p>
+          )}
+          {visibleStaffDirectory.length === 0 && staffDirectory.length > 0 && (
+            <p style={{ fontSize: '0.875rem', color: '#9ca3af', marginTop: '0.5rem' }}>
+              No active staff rows match current app users. Use &quot;Show legacy Photobook staff&quot; to review old imported records.
+            </p>
           )}
         </div>
       </section>
