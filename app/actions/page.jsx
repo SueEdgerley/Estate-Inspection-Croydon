@@ -32,6 +32,25 @@ function dateInputValue(value) {
   return date.toISOString().slice(0, 10)
 }
 
+function includesFilter(values, filter) {
+  const needle = filter.trim().toLowerCase()
+  if (!needle) return true
+  return values.some((value) => String(value || '').toLowerCase().includes(needle))
+}
+
+function uniqueDisplayOptions(values) {
+  const options = []
+  const seen = new Set()
+  values.forEach((value) => {
+    const label = cleanActionDisplayText(value)
+    const key = label.toLowerCase()
+    if (!label || seen.has(key)) return
+    seen.add(key)
+    options.push(label)
+  })
+  return options.sort((a, b) => a.localeCompare(b))
+}
+
 export default function ActionsPage() {
   const [actions, setActions] = useState([])
   const [people, setPeople] = useState([])
@@ -50,10 +69,10 @@ export default function ActionsPage() {
     person: '',
   })
 
-  const selectedAction = actions.find((action) => action.id === selectedId) || null
-  
   const filteredActions = useMemo(() => {
     return actions.filter((action) => {
+      const display = buildActionDisplay(action)
+
       // Date filter
       if (filters.dateFrom || filters.dateTo) {
         const actionDate = new Date(action.inspection_submitted_at || action.inspection_created_at || action.created_at)
@@ -73,24 +92,87 @@ export default function ActionsPage() {
       
       // Location filter
       if (filters.location) {
-        const locationMatch = action.estate_block_name?.toLowerCase().includes(filters.location.toLowerCase()) ||
-                             action.estate_name?.toLowerCase().includes(filters.location.toLowerCase()) ||
-                             action.block_name?.toLowerCase().includes(filters.location.toLowerCase())
+        const locationMatch = includesFilter([
+          display.contextLocation,
+          display.location,
+          display.blockLocation,
+          action.estate_block_name,
+          action.estate_name,
+          action.block_name,
+          action.location,
+          action.inspection_location_label,
+          action.inspection_address,
+          action.inspection_location,
+        ], filters.location)
         if (!locationMatch) return false
       }
       
       // Person filter (assigned or completed by)
       if (filters.person) {
-        const personMatch = action.assigned_to?.toLowerCase().includes(filters.person.toLowerCase()) ||
-                           action.created_by?.toLowerCase().includes(filters.person.toLowerCase())
+        const personMatch = includesFilter([
+          display.assignedTo,
+          display.completedBy,
+          display.submittedBy,
+          action.assigned_to,
+          action.assigned_to_email,
+          action.created_by,
+          action.inspection_created_by_name,
+          action.inspection_completed_by_name,
+          action.inspection_inspector_name,
+          action.completed_by,
+          action.submitted_by,
+        ], filters.person)
         if (!personMatch) return false
       }
       
       return true
     })
   }, [actions, filters])
-  
-  const selectedActionVisible = selectedAction && filteredActions.some((action) => action.id === selectedAction.id)
+
+  const locationFilterOptions = useMemo(() => {
+    return uniqueDisplayOptions(actions.flatMap((action) => {
+      const display = buildActionDisplay(action)
+      return [
+        display.contextLocation,
+        display.location,
+        display.blockLocation,
+        action.estate_block_name,
+        action.estate_name,
+        action.block_name,
+        action.location,
+        action.inspection_location_label,
+        action.inspection_address,
+        action.inspection_location,
+      ]
+    }))
+  }, [actions])
+
+  const personFilterOptions = useMemo(() => {
+    return uniqueDisplayOptions(actions.flatMap((action) => {
+      const display = buildActionDisplay(action)
+      return [
+        display.assignedTo,
+        display.completedBy,
+        display.submittedBy,
+        action.assigned_to,
+        action.assigned_to_email,
+        action.created_by,
+        action.inspection_created_by_name,
+        action.inspection_completed_by_name,
+        action.inspection_inspector_name,
+        action.completed_by,
+        action.submitted_by,
+      ]
+    }))
+  }, [actions])
+
+  const selectedAction = filteredActions.find((action) => action.id === selectedId) || null
+
+  useEffect(() => {
+    if (!selectedId) return
+    if (filteredActions.some((action) => action.id === selectedId)) return
+    setSelectedId(filteredActions[0]?.id || '')
+  }, [filteredActions, selectedId])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -320,11 +402,17 @@ export default function ActionsPage() {
             <input
               id="location-filter"
               type="text"
+              list="location-filter-options"
               value={filters.location}
               onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
               placeholder="Type to filter locations..."
               style={filterInputStyle}
             />
+            <datalist id="location-filter-options">
+              {locationFilterOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
           </div>
           
           <div style={filterGroupStyle}>
@@ -334,11 +422,17 @@ export default function ActionsPage() {
             <input
               id="person-filter"
               type="text"
+              list="person-filter-options"
               value={filters.person}
               onChange={(e) => setFilters(prev => ({ ...prev, person: e.target.value }))}
               placeholder="Type to filter people..."
               style={filterInputStyle}
             />
+            <datalist id="person-filter-options">
+              {personFilterOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
           </div>
         </div>
         
@@ -383,9 +477,11 @@ export default function ActionsPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '1rem', alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {filteredActions.length === 0 ? (
               <div style={emptySearchStyle}>
                 No issues match your filters.
               </div>
+            ) : null}
             {filteredActions.map((a) => {
               const display = buildActionDisplay(a)
               return (
@@ -427,7 +523,7 @@ export default function ActionsPage() {
             })}
           </div>
 
-          {selectedAction && selectedActionVisible ? (
+          {selectedAction ? (
             <ActionDetail
               action={selectedAction}
               form={form}

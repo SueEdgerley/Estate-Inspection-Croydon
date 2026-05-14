@@ -47,7 +47,8 @@ export default function AnalyticsPage() {
   const [year, setYear] = useState(defQy.y)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
-  const [caretaker, setCaretaker] = useState('all')
+  const [personRole, setPersonRole] = useState('all')
+  const [person, setPerson] = useState('all')
   const [issueCategory, setIssueCategory] = useState('all')
   const [issueDateFrom, setIssueDateFrom] = useState('')
   const [issueDateTo, setIssueDateTo] = useState('')
@@ -67,7 +68,8 @@ export default function AnalyticsPage() {
       if (customFrom) p.set('dateFrom', customFrom)
       if (customTo) p.set('dateTo', customTo)
     }
-    if (caretaker !== 'all') p.set('caretaker', caretaker)
+    if (personRole !== 'all') p.set('personRole', personRole)
+    if (person !== 'all') p.set('person', person)
     if (issueCategory !== 'all') p.set('issueCategory', issueCategory)
     if (issueDateFrom) p.set('issueDateFrom', issueDateFrom)
     if (issueDateTo) p.set('issueDateTo', issueDateTo)
@@ -82,7 +84,8 @@ export default function AnalyticsPage() {
     year,
     customFrom,
     customTo,
-    caretaker,
+    personRole,
+    person,
     issueCategory,
     issueDateFrom,
     issueDateTo,
@@ -139,6 +142,15 @@ export default function AnalyticsPage() {
   const gradeRisk = payload?.gradeRisk
   const filterOptions = payload?.filterOptions
   const applied = payload?.applied
+  const peopleOptions = useMemo(() => {
+    const rows = filterOptions?.people || []
+    return personRole === 'all' ? rows : rows.filter((p) => p.role === personRole)
+  }, [filterOptions, personRole])
+
+  useEffect(() => {
+    if (person === 'all') return
+    if (!peopleOptions.some((p) => p.value === person)) setPerson('all')
+  }, [peopleOptions, person])
 
   const exportAnalyticsCsv = () => {
     if (!payload) return
@@ -148,8 +160,8 @@ export default function AnalyticsPage() {
       lines.push(['Overview', 'completed_inspections', overview.completedInspections].map(escapeCsvCell).join(','))
       lines.push(['Overview', 'overall_score', overview.overallScore ?? ''].map(escapeCsvCell).join(','))
     }
-    ;(performance?.caretakerCompleted || []).forEach((r) => {
-      lines.push(['Caretaker completed', r.caretakerLabel, r.completedCount].map(escapeCsvCell).join(','))
+    ;(performance?.personCompleted || []).forEach((r) => {
+      lines.push(['Person completed', r.personLabel, r.completedCount].map(escapeCsvCell).join(','))
     })
     ;(issues?.hotBlocks || []).forEach((r) => {
       lines.push(['Hot block', `${r.estate_name} / ${r.block_name}`, r.issue_count].map(escapeCsvCell).join(','))
@@ -176,8 +188,8 @@ export default function AnalyticsPage() {
     return Math.max(1, ...v.map((m) => Number(m.inspection_count) || 0))
   }, [trends])
 
-  const maxCaretaker = useMemo(() => {
-    const v = performance?.caretakerCompleted ?? []
+  const maxPersonCompleted = useMemo(() => {
+    const v = performance?.personCompleted ?? performance?.caretakerCompleted ?? []
     return Math.max(1, ...v.map((r) => Number(r.completedCount) || 0))
   }, [performance])
 
@@ -376,12 +388,30 @@ export default function AnalyticsPage() {
               </>
             )}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>Caretaker (inspector)</span>
-              <select value={caretaker} onChange={(e) => setCaretaker(e.target.value)} style={{ padding: '0.4rem' }}>
-                <option value="all">All caretakers</option>
-                {(filterOptions?.caretakers || []).map((c) => (
-                  <option key={c.caretaker_id || c.caretaker_label} value={c.caretaker_id || c.caretaker_label}>
-                    {c.caretaker_label}
+              <span style={{ fontWeight: 600 }}>Role / type</span>
+              <select
+                value={personRole}
+                onChange={(e) => {
+                  setPersonRole(e.target.value)
+                  setPerson('all')
+                }}
+                style={{ padding: '0.4rem' }}
+              >
+                <option value="all">All roles</option>
+                {(filterOptions?.roles || []).map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
+              <span style={{ fontWeight: 600 }}>Inspector / person</span>
+              <select value={person} onChange={(e) => setPerson(e.target.value)} style={{ padding: '0.4rem' }}>
+                <option value="all">{personRole === 'all' ? 'All people' : 'All in selected role'}</option>
+                {peopleOptions.map((p) => (
+                  <option key={p.personId || p.value} value={p.value}>
+                    {p.label}
                   </option>
                 ))}
               </select>
@@ -480,7 +510,8 @@ export default function AnalyticsPage() {
               {applied.dateFrom || applied.dateTo
                 ? ` (${applied.dateFrom || '…'} → ${applied.dateTo || '…'})`
                 : ''}
-              {applied.caretaker ? ` · Caretaker filter` : ''}
+              {applied.personRoleLabel ? ` · Role: ${applied.personRoleLabel}` : ''}
+              {applied.person ? ` · Person filter` : ''}
               {applied.issueCategory ? ` · Issues: ${applied.issueCategory}` : ''}
             </p>
           )}
@@ -863,18 +894,23 @@ export default function AnalyticsPage() {
                       <strong>Completed in period</strong> counts submitted inspections in the selected date window. Below: draft vs submitted
                       totals per name.
                     </p>
-                    <h2 style={{ margin: '0 0 0.65rem', fontSize: '1.05rem', color: photobook.heading }}>Caretaker completions (submitted)</h2>
+                    <h2 style={{ margin: '0 0 0.65rem', fontSize: '1.05rem', color: photobook.heading }}>Completions by person (submitted)</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginBottom: '1.25rem' }}>
-                      {(performance.caretakerCompleted || []).length === 0 && (
+                      {(performance.personCompleted || performance.caretakerCompleted || []).length === 0 && (
                         <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>No rows for this filter.</p>
                       )}
-                      {(performance.caretakerCompleted || []).map((r) => {
+                      {(performance.personCompleted || performance.caretakerCompleted || []).map((r) => {
                         const n = Number(r.completedCount) || 0
-                        const pct = Math.round((n / maxCaretaker) * 100)
+                        const pct = Math.round((n / maxPersonCompleted) * 100)
+                        const label = r.personLabel || r.caretakerLabel
+                        const id = r.personId || r.caretakerId || ''
                         return (
-                          <div key={r.caretakerLabel + (r.caretakerId || '')}>
+                          <div key={label + id}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '0.2rem' }}>
-                              <span style={{ color: '#374151', fontWeight: 600 }}>{r.caretakerLabel}</span>
+                              <span style={{ color: '#374151', fontWeight: 600 }}>
+                                {label}
+                                {r.roleLabel ? <span style={{ color: '#6b7280', fontWeight: 400 }}> · {r.roleLabel}</span> : null}
+                              </span>
                               <span style={{ fontWeight: 600, color: photobook.primary }}>{n}</span>
                             </div>
                             <div
@@ -898,12 +934,13 @@ export default function AnalyticsPage() {
                         )
                       })}
                     </div>
-                    <h2 style={{ margin: '0 0 0.65rem', fontSize: '1.05rem', color: photobook.heading }}>Draft vs submitted (all)</h2>
+                    <h2 style={{ margin: '0 0 0.65rem', fontSize: '1.05rem', color: photobook.heading }}>Draft vs submitted (filtered)</h2>
                     <div style={{ overflowX: 'auto', border: `1px solid ${photobook.softBorder}`, borderRadius: '0.5rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                         <thead>
                           <tr style={{ backgroundColor: photobook.soft, textAlign: 'left' }}>
-                            <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Inspector</th>
+                            <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Person</th>
+                            <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Role</th>
                             <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Submitted</th>
                             <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Total</th>
                             <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Completion</th>
@@ -912,7 +949,7 @@ export default function AnalyticsPage() {
                         <tbody>
                           {(performance.byInspector || []).length === 0 ? (
                             <tr>
-                              <td colSpan={4} style={{ padding: '1rem', color: '#6b7280' }}>
+                              <td colSpan={5} style={{ padding: '1rem', color: '#6b7280' }}>
                                 No rows.
                               </td>
                             </tr>
@@ -920,6 +957,7 @@ export default function AnalyticsPage() {
                             performance.byInspector.map((row) => (
                               <tr key={row.inspectorName} style={{ borderTop: '1px solid #e5e7eb' }}>
                                 <td style={{ padding: '0.6rem 0.75rem' }}>{row.inspectorName}</td>
+                                <td style={{ padding: '0.6rem 0.75rem' }}>{row.roleLabel || '—'}</td>
                                 <td style={{ padding: '0.6rem 0.75rem' }}>{row.submitted}</td>
                                 <td style={{ padding: '0.6rem 0.75rem' }}>{row.total}</td>
                                 <td style={{ padding: '0.6rem 0.75rem' }}>{row.completionPct}%</td>
