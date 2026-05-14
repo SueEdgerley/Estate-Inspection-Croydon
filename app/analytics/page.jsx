@@ -52,7 +52,6 @@ export default function AnalyticsPage() {
   const [issueCategory, setIssueCategory] = useState('all')
   const [issueDateFrom, setIssueDateFrom] = useState('')
   const [issueDateTo, setIssueDateTo] = useState('')
-  const [gradeCategory, setGradeCategory] = useState('all')
   const [gradeBlockId, setGradeBlockId] = useState('all')
   const [gradeArea, setGradeArea] = useState('all')
   const [gradeTemplateName, setGradeTemplateName] = useState('all')
@@ -73,7 +72,6 @@ export default function AnalyticsPage() {
     if (issueCategory !== 'all') p.set('issueCategory', issueCategory)
     if (issueDateFrom) p.set('issueDateFrom', issueDateFrom)
     if (issueDateTo) p.set('issueDateTo', issueDateTo)
-    if (gradeCategory !== 'all') p.set('gradeCategory', gradeCategory)
     if (gradeBlockId !== 'all') p.set('gradeBlockId', gradeBlockId)
     if (gradeArea !== 'all') p.set('gradeArea', gradeArea)
     if (gradeTemplateName !== 'all') p.set('gradeTemplateName', gradeTemplateName)
@@ -89,7 +87,6 @@ export default function AnalyticsPage() {
     issueCategory,
     issueDateFrom,
     issueDateTo,
-    gradeCategory,
     gradeBlockId,
     gradeArea,
     gradeTemplateName,
@@ -434,17 +431,6 @@ export default function AnalyticsPage() {
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
               <span style={{ fontWeight: 600 }}>Issue to</span>
               <input type="date" value={issueDateTo} onChange={(e) => setIssueDateTo(e.target.value)} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>Grading scheme</span>
-              <select value={gradeCategory} onChange={(e) => setGradeCategory(e.target.value)} style={{ padding: '0.4rem' }}>
-                <option value="all">All schemes</option>
-                {(filterOptions?.gradingSchemes || []).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
               <span style={{ fontWeight: 600 }}>Block</span>

@@ -51,6 +51,41 @@ function uniqueDisplayOptions(values) {
   return options.sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * Remove duplicate actions from the same inspection + question
+ * Keeps only the most recent action for each unique inspection + question combination
+ */
+function deduplicateActions(actions) {
+  const seen = new Map() // Key: "inspection_id::question_id", Value: action
+  
+  // Sort by created_at DESC so we keep the most recent one
+  const sorted = [...actions].sort((a, b) => {
+    const aTime = new Date(a.created_at).getTime()
+    const bTime = new Date(b.created_at).getTime()
+    return bTime - aTime
+  })
+  
+  for (const action of sorted) {
+    if (!action.inspection_id || !action.question_id) {
+      // If missing identifiers, include it anyway
+      if (!action.id || !seen.has(action.id)) {
+        const key = action.id || `${Math.random()}`
+        if (!seen.has(key)) {
+          seen.set(key, action)
+        }
+      }
+      continue
+    }
+    
+    const key = `${action.inspection_id}::${action.question_id}`
+    if (!seen.has(key)) {
+      seen.set(key, action)
+    }
+  }
+  
+  return Array.from(seen.values())
+}
+
 export default function ActionsPage() {
   const [actions, setActions] = useState([])
   const [people, setPeople] = useState([])
@@ -69,8 +104,11 @@ export default function ActionsPage() {
     person: '',
   })
 
+  // Deduplicate actions first
+  const uniqueActions = useMemo(() => deduplicateActions(actions), [actions])
+
   const filteredActions = useMemo(() => {
-    return actions.filter((action) => {
+    return uniqueActions.filter((action) => {
       const display = buildActionDisplay(action)
 
       // Date filter
@@ -127,10 +165,10 @@ export default function ActionsPage() {
       
       return true
     })
-  }, [actions, filters])
+  }, [uniqueActions, filters])
 
   const locationFilterOptions = useMemo(() => {
-    return uniqueDisplayOptions(actions.flatMap((action) => {
+    return uniqueDisplayOptions(uniqueActions.flatMap((action) => {
       const display = buildActionDisplay(action)
       return [
         display.contextLocation,
@@ -145,10 +183,10 @@ export default function ActionsPage() {
         action.inspection_location,
       ]
     }))
-  }, [actions])
+  }, [uniqueActions])
 
   const personFilterOptions = useMemo(() => {
-    return uniqueDisplayOptions(actions.flatMap((action) => {
+    return uniqueDisplayOptions(uniqueActions.flatMap((action) => {
       const display = buildActionDisplay(action)
       return [
         display.assignedTo,
@@ -164,7 +202,7 @@ export default function ActionsPage() {
         action.submitted_by,
       ]
     }))
-  }, [actions])
+  }, [uniqueActions])
 
   const selectedAction = filteredActions.find((action) => action.id === selectedId) || null
 
@@ -186,9 +224,10 @@ export default function ActionsPage() {
         const url = inspectionId ? `/api/actions?inspection_id=${encodeURIComponent(inspectionId)}` : '/api/actions'
         const res = await fetch(url, { cache: 'no-store', credentials: 'include' })
         const data = await res.json().catch(() => [])
-        setActions(Array.isArray(data) ? data : [])
-        if (Array.isArray(data) && data.length > 0 && window.innerWidth >= 900) {
-          setSelectedId(data[0].id)
+        const deduped = deduplicateActions(Array.isArray(data) ? data : [])
+        setActions(deduped)
+        if (deduped.length > 0 && window.innerWidth >= 900) {
+          setSelectedId(deduped[0].id)
         }
       } catch (error) {
         console.error('Error loading actions:', error)
@@ -454,7 +493,7 @@ export default function ActionsPage() {
         )}
         
         <p style={{ margin: '1rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>
-          Showing {filteredActions.length} of {actions.length} issues
+          Showing {filteredActions.length} of {uniqueActions.length} issues
         </p>
       </div>
 
@@ -462,7 +501,7 @@ export default function ActionsPage() {
         <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
           Loading issues…
         </div>
-      ) : actions.length === 0 ? (
+      ) : uniqueActions.length === 0 ? (
         <div style={{
           backgroundColor: 'white',
           padding: '3rem',

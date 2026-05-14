@@ -45,9 +45,9 @@ export default function SectionQuestions({
   // Estate staff form shows every checklist row; other forms use their Airtable visibility rules.
   const visibleQuestions = useMemo(() => {
     if (estateInspectionForm) {
-      return questions.filter((q) => !q.nv_hidden)
+      return questions.filter((q) => !q.nv_hidden && !q.esm_hidden)
     }
-    return getVisibleQuestions(questions, localAnswers)
+    return getVisibleQuestions(questions, localAnswers).filter((q) => !q.esm_hidden)
   }, [estateInspectionForm, questions, localAnswers])
 
   if (questions.length === 0) {

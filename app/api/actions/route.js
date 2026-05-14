@@ -442,6 +442,33 @@ export async function POST(request) {
     const data = await request.json()
     await ensureRepairActionFields(sql)
     
+    // DEDUPLICATION SAFEGUARD: Prevent duplicate actions for the same question
+    // Check if an action already exists for this inspection + question + category combination
+    if (data.inspection_id && data.question_id) {
+      const existingCheck = await sql`
+        SELECT id FROM actions
+        WHERE inspection_id = ${data.inspection_id}
+          AND question_id = ${data.question_id}
+          AND (category = ${data.category || 'other'} OR category IS NULL)
+        LIMIT 1
+      `
+      if (existingCheck.rows.length > 0) {
+        console.warn(
+          `[Actions API] Duplicate action blocked for inspection=${data.inspection_id}, question=${data.question_id}, category=${data.category}. Returning existing action.`
+        )
+        // Return existing action instead of creating duplicate
+        const existing = await sql`
+          SELECT a.* FROM actions a
+          WHERE inspection_id = ${data.inspection_id}
+            AND question_id = ${data.question_id}
+          LIMIT 1
+        `
+        if (existing.rows.length > 0) {
+          return NextResponse.json(existing.rows[0], { status: 200 })
+        }
+      }
+    }
+    
     // Generate ID if not provided
     const id = data.id || `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     let resolvedLocation = data.location || null
