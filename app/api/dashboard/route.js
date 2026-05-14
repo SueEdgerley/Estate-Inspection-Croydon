@@ -8,7 +8,7 @@ import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-fil
 import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 
 // Permissions come from users.system_role; operational grouping comes from people.job_title.
-const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'esm']
+const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'housing_team_manager', 'esm']
 // Set to true to show all inspections regardless of inspector/estate (for debugging access)
 const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 

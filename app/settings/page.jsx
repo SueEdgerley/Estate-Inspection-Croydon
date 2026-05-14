@@ -3,17 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { APP_ACCESS_ROLES } from '@/lib/app-access-roles'
-
-const STAFF_JOB_TITLES = [
-  'Estate Services Manager',
-  'Housing Officer',
-  'Caretaker',
-  'Resident Representative',
-  'Ward Councillor',
-  'Repairs Officer',
-  'Concierge',
-  'Other',
-]
+import { STAFF_JOB_TITLES } from '@/lib/staff-job-titles'
 
 const card = {
   backgroundColor: '#fff',
@@ -63,6 +53,7 @@ const normalizeEmail = (value) => String(value || '').trim().toLowerCase()
 export default function SettingsPage() {
   const [allowed, setAllowed] = useState(null)
   const [loadError, setLoadError] = useState(null)
+  const [notice, setNotice] = useState(null)
 
   const [users, setUsers] = useState([])
   const [staffDirectory, setStaffDirectory] = useState([])
@@ -173,6 +164,7 @@ export default function SettingsPage() {
   const saveUserEdit = async (id) => {
     setSaving(true)
     setLoadError(null)
+    setNotice(null)
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         method: 'PATCH',
@@ -199,6 +191,7 @@ export default function SettingsPage() {
     if (!staffForm.name.trim() || !staffForm.email.trim()) return
     setSaving(true)
     setLoadError(null)
+    setNotice(null)
     try {
       const res = await fetch('/api/admin/staff-people', {
         method: 'POST',
@@ -213,7 +206,11 @@ export default function SettingsPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
       setStaffForm({ name: '', email: '', job_title: '' })
+      if (data?.restored || data?.app_user?.restored || data?.app_user?.created) {
+        setNotice('Restored existing staff record and re-linked the matching app account.')
+      }
       await refreshStaffDirectory()
+      await refreshUsers()
     } catch (err) {
       setLoadError(err.message)
     } finally {
@@ -224,6 +221,7 @@ export default function SettingsPage() {
   const saveStaffEdit = async (id) => {
     setSaving(true)
     setLoadError(null)
+    setNotice(null)
     try {
       const res = await fetch(`/api/admin/staff-people/${id}`, {
         method: 'PATCH',
@@ -257,6 +255,7 @@ export default function SettingsPage() {
     if (!window.confirm(`Archive legacy Photobook staff record for ${label}? Historical assignments and records will be preserved.`)) return
     setSaving(true)
     setLoadError(null)
+    setNotice(null)
     try {
       const res = await fetch(`/api/admin/staff-people/${staff.id}`, {
         method: 'DELETE',
@@ -451,6 +450,22 @@ export default function SettingsPage() {
           }}
         >
           {loadError}
+        </div>
+      )}
+
+      {notice && (
+        <div
+          style={{
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: 8,
+            color: '#166534',
+            fontSize: '0.875rem',
+          }}
+        >
+          {notice}
         </div>
       )}
 

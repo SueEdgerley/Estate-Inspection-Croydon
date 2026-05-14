@@ -2,26 +2,10 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getAppAdminAccess } from '@/lib/app-admin-access'
+import { normalizeStaffJobTitle } from '@/lib/staff-job-titles'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const STAFF_JOB_TITLES = [
-  'Estate Services Manager',
-  'Housing Officer',
-  'Caretaker',
-  'Resident Representative',
-  'Ward Councillor',
-  'Repairs Officer',
-  'Concierge',
-  'Other',
-]
-
-function normalizeStaffJobTitle(raw) {
-  const value = raw != null ? String(raw).trim() : ''
-  if (!value) return null
-  return STAFF_JOB_TITLES.find((title) => title.toLowerCase() === value.toLowerCase()) || null
-}
 
 async function requireAdmin() {
   const access = await getAppAdminAccess()
