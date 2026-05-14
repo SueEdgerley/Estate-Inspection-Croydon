@@ -31,6 +31,237 @@ function escapeCsvCell(val) {
   return `"${String(val ?? '').replace(/"/g, '""')}"`
 }
 
+function chartCardStyle() {
+  return {
+    padding: '1rem',
+    border: `1px solid ${photobook.softBorder}`,
+    borderRadius: '0.75rem',
+    backgroundColor: '#fff',
+  }
+}
+
+function EmptyChart({ children = 'No chart data for this filter.' }) {
+  return <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9rem' }}>{children}</p>
+}
+
+function chartNumber(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function HorizontalBarChart({ title, description, data, valueKey, labelKey, color = photobook.primary, maxItems = 8 }) {
+  const rows = (data || [])
+    .map((row) => ({
+      ...row,
+      chartLabel: typeof labelKey === 'function' ? labelKey(row) : row[labelKey],
+      chartValue: chartNumber(typeof valueKey === 'function' ? valueKey(row) : row[valueKey]),
+    }))
+    .filter((row) => row.chartLabel && row.chartValue > 0)
+    .slice(0, maxItems)
+  const max = Math.max(1, ...rows.map((row) => row.chartValue))
+
+  return (
+    <div style={chartCardStyle()}>
+      <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.05rem', color: photobook.heading }}>{title}</h2>
+      {description ? <p style={{ margin: '0 0 0.85rem', fontSize: '0.82rem', color: '#6b7280' }}>{description}</p> : null}
+      {rows.length === 0 ? (
+        <EmptyChart />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+          {rows.map((row) => {
+            const pct = Math.max(4, Math.round((row.chartValue / max) * 100))
+            return (
+              <div key={`${row.chartLabel}-${row.chartValue}`}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', fontSize: '0.8rem', marginBottom: '0.22rem' }}>
+                  <span style={{ color: '#374151', fontWeight: 600, overflowWrap: 'anywhere' }}>{row.chartLabel}</span>
+                  <span style={{ color, fontWeight: 700 }}>{row.chartValue}</span>
+                </div>
+                <div style={{ height: 10, backgroundColor: photobook.soft, borderRadius: 999, overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 999 }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GroupedBarChart({ title, description, data, labelKey, series, maxItems = 8 }) {
+  const rows = (data || []).slice(0, maxItems)
+  const max = Math.max(
+    1,
+    ...rows.flatMap((row) => series.map((s) => chartNumber(typeof s.valueKey === 'function' ? s.valueKey(row) : row[s.valueKey])))
+  )
+
+  return (
+    <div style={chartCardStyle()}>
+      <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.05rem', color: photobook.heading }}>{title}</h2>
+      {description ? <p style={{ margin: '0 0 0.85rem', fontSize: '0.82rem', color: '#6b7280' }}>{description}</p> : null}
+      {rows.length === 0 ? (
+        <EmptyChart />
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.78rem' }}>
+            {series.map((s) => (
+              <span key={s.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#4b5563' }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: s.color, display: 'inline-block' }} />
+                {s.label}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {rows.map((row) => {
+              const label = typeof labelKey === 'function' ? labelKey(row) : row[labelKey]
+              return (
+                <div key={label}>
+                  <div style={{ marginBottom: '0.3rem', fontSize: '0.8rem', fontWeight: 600, color: '#374151', overflowWrap: 'anywhere' }}>
+                    {label}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    {series.map((s) => {
+                      const value = chartNumber(typeof s.valueKey === 'function' ? s.valueKey(row) : row[s.valueKey])
+                      const pct = value > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0
+                      return (
+                        <div key={s.label} style={{ display: 'grid', gridTemplateColumns: '4.25rem 1fr 2.5rem', gap: '0.4rem', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>{s.label}</span>
+                          <div style={{ height: 9, backgroundColor: photobook.soft, borderRadius: 999, overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', backgroundColor: s.color, borderRadius: 999 }} />
+                          </div>
+                          <span style={{ textAlign: 'right', fontSize: '0.78rem', fontWeight: 700, color: '#374151' }}>{value}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function LineChart({ title, description, data, valueKey, labelFormatter, color = photobook.primary }) {
+  const width = 620
+  const height = 220
+  const padLeft = 42
+  const padRight = 16
+  const padTop = 18
+  const padBottom = 42
+  const innerWidth = width - padLeft - padRight
+  const innerHeight = height - padTop - padBottom
+  const rows = data || []
+  const max = Math.max(1, ...rows.map((row) => chartNumber(row[valueKey])))
+  const points = rows.map((row, index) => {
+    const x = padLeft + (rows.length <= 1 ? innerWidth / 2 : (index / (rows.length - 1)) * innerWidth)
+    const y = padTop + innerHeight - (chartNumber(row[valueKey]) / max) * innerHeight
+    return { x, y, row }
+  })
+  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+
+  return (
+    <div style={chartCardStyle()}>
+      <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.05rem', color: photobook.heading }}>{title}</h2>
+      {description ? <p style={{ margin: '0 0 0.85rem', fontSize: '0.82rem', color: '#6b7280' }}>{description}</p> : null}
+      {rows.length === 0 ? (
+        <EmptyChart />
+      ) : (
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={title} style={{ minWidth: rows.length > 8 ? 560 : 0 }}>
+            <rect x={0} y={0} width={width} height={height} fill="#fafafa" rx={10} />
+            {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+              const y = padTop + innerHeight * (1 - tick)
+              return (
+                <g key={tick}>
+                  <line x1={padLeft} x2={width - padRight} y1={y} y2={y} stroke="#e5e7eb" strokeWidth={1} />
+                  <text x={10} y={y + 4} fontSize={10} fill="#6b7280">
+                    {Math.round(max * tick)}
+                  </text>
+                </g>
+              )
+            })}
+            {points.length > 1 ? <path d={path} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" /> : null}
+            {points.map((point, index) => (
+              <g key={index}>
+                <circle cx={point.x} cy={point.y} r={4} fill={color} stroke="#fff" strokeWidth={1.5} />
+                <text x={point.x} y={height - 12} fontSize={10} fill="#6b7280" textAnchor="middle" transform={points.length > 7 ? `rotate(-35 ${point.x} ${height - 12})` : undefined}>
+                  {labelFormatter(point.row)}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DonutChart({ title, description, segments }) {
+  const size = 180
+  const radius = 62
+  const circumference = 2 * Math.PI * radius
+  const total = segments.reduce((sum, segment) => sum + chartNumber(segment.value), 0)
+  let offset = 0
+
+  return (
+    <div style={chartCardStyle()}>
+      <h2 style={{ margin: '0 0 0.35rem', fontSize: '1.05rem', color: photobook.heading }}>{title}</h2>
+      {description ? <p style={{ margin: '0 0 0.85rem', fontSize: '0.82rem', color: '#6b7280' }}>{description}</p> : null}
+      {total <= 0 ? (
+        <EmptyChart>No C/D grade split available for this filter.</EmptyChart>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 180px) minmax(0, 1fr)', gap: '1rem', alignItems: 'center' }}>
+          <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={title} style={{ width: '100%', maxWidth: size }}>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={photobook.soft} strokeWidth={26} />
+            {segments.map((segment) => {
+              const value = chartNumber(segment.value)
+              const dash = total > 0 ? (value / total) * circumference : 0
+              const strokeDasharray = `${dash} ${circumference - dash}`
+              const strokeDashoffset = -offset
+              offset += dash
+              return (
+                <circle
+                  key={segment.label}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={segment.color}
+                  strokeWidth={26}
+                  strokeDasharray={strokeDasharray}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="butt"
+                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                />
+              )
+            })}
+            <text x="50%" y="48%" textAnchor="middle" fontSize="24" fontWeight="700" fill={photobook.heading}>
+              {total}
+            </text>
+            <text x="50%" y="61%" textAnchor="middle" fontSize="11" fill="#6b7280">
+              C/D total
+            </text>
+          </svg>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+            {segments.map((segment) => (
+              <div key={segment.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', fontSize: '0.88rem' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#374151' }}>
+                  <span style={{ width: 11, height: 11, borderRadius: 999, backgroundColor: segment.color, display: 'inline-block' }} />
+                  {segment.label}
+                </span>
+                <strong>{chartNumber(segment.value)}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnalyticsPage() {
   const { isSignedIn } = useAuth()
   const defQy = useMemo(() => defaultQuarterYear(), [])
@@ -193,6 +424,17 @@ export default function AnalyticsPage() {
   const maxCdMonth = useMemo(() => {
     const v = gradeRisk?.byMonth ?? []
     return Math.max(1, ...v.map((m) => Number(m.cd_count) || 0))
+  }, [gradeRisk])
+
+  const completedByPersonRows = performance?.personCompleted ?? performance?.caretakerCompleted ?? []
+  const cdGradeSegments = useMemo(() => {
+    const rows = gradeRisk && !gradeRisk.error ? gradeRisk.topBlocks || [] : []
+    const cTotal = rows.reduce((sum, row) => sum + chartNumber(row.c_count), 0)
+    const dTotal = rows.reduce((sum, row) => sum + chartNumber(row.d_count), 0)
+    return [
+      { label: 'C grades', value: cTotal, color: '#f59e0b' },
+      { label: 'D grades', value: dTotal, color: '#dc2626' },
+    ]
   }, [gradeRisk])
 
   return (
@@ -772,6 +1014,14 @@ export default function AnalyticsPage() {
                             )}
                           </ul>
                         </div>
+                        <HorizontalBarChart
+                          title="Issues by estate / block"
+                          description="Top block-level action counts using the current Analytics filters."
+                          data={issues.hotBlocks || []}
+                          labelKey={(row) => `${row.block_name}${row.estate_name ? ` (${row.estate_name})` : ''}`}
+                          valueKey="issue_count"
+                          color="#dc2626"
+                        />
                         <div>
                           <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Locations with most issues</h2>
                           <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#374151', fontSize: '0.9375rem', lineHeight: 1.6 }}>
@@ -809,6 +1059,13 @@ export default function AnalyticsPage() {
 
                 {tab === 'trends' && trends && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <LineChart
+                      title="Completed inspections over time"
+                      description="Monthly submitted inspection counts from the filtered analytics data."
+                      data={trends.volumeByMonth || []}
+                      valueKey="inspection_count"
+                      labelFormatter={(row) => formatMonthLabel(row.month_start)}
+                    />
                     <div>
                       <h2 style={{ margin: '0 0 0.75rem', fontSize: '1.05rem', color: photobook.heading }}>Average score by month</h2>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -881,11 +1138,19 @@ export default function AnalyticsPage() {
                       totals per name.
                     </p>
                     <h2 style={{ margin: '0 0 0.65rem', fontSize: '1.05rem', color: photobook.heading }}>Completions by person (submitted)</h2>
+                    <HorizontalBarChart
+                      title="Completed inspections by person"
+                      description="Submitted inspection totals using the selected date, role, and person filters."
+                      data={completedByPersonRows}
+                      labelKey={(row) => row.personLabel || row.caretakerLabel}
+                      valueKey="completedCount"
+                      color="#16a34a"
+                    />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginBottom: '1.25rem' }}>
-                      {(performance.personCompleted || performance.caretakerCompleted || []).length === 0 && (
+                      {completedByPersonRows.length === 0 && (
                         <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>No rows for this filter.</p>
                       )}
-                      {(performance.personCompleted || performance.caretakerCompleted || []).map((r) => {
+                      {completedByPersonRows.map((r) => {
                         const n = Number(r.completedCount) || 0
                         const pct = Math.round((n / maxPersonCompleted) * 100)
                         const label = r.personLabel || r.caretakerLabel
@@ -920,6 +1185,16 @@ export default function AnalyticsPage() {
                         )
                       })}
                     </div>
+                    <GroupedBarChart
+                      title="Submitted vs total by person"
+                      description="Performance totals from the existing draft vs submitted table."
+                      data={performance.byInspector || []}
+                      labelKey="inspectorName"
+                      series={[
+                        { label: 'Submitted', valueKey: 'submitted', color: photobook.primary },
+                        { label: 'Total', valueKey: 'total', color: '#6366f1' },
+                      ]}
+                    />
                     <h2 style={{ margin: '0 0 0.65rem', fontSize: '1.05rem', color: photobook.heading }}>Draft vs submitted (filtered)</h2>
                     <div style={{ overflowX: 'auto', border: `1px solid ${photobook.softBorder}`, borderRadius: '0.5rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
@@ -985,6 +1260,21 @@ export default function AnalyticsPage() {
                               <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>{x.v}</div>
                             </div>
                           ))}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 18rem), 1fr))', gap: '1rem' }}>
+                          <DonutChart
+                            title="C vs D grade split"
+                            description="Uses the existing filtered C and D counts shown in the location table."
+                            segments={cdGradeSegments}
+                          />
+                          <HorizontalBarChart
+                            title="C/D grades by location"
+                            description="Locations with the highest filtered C/D totals."
+                            data={gradeRisk.topBlocks || []}
+                            labelKey="location_label"
+                            valueKey="total_cd"
+                            color="#d97706"
+                          />
                         </div>
                         <div>
                           <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>C/D trend by month</h2>
@@ -1070,6 +1360,16 @@ export default function AnalyticsPage() {
                         </div>
                         <div>
                           <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>C/D grades by location and category</h2>
+                          <GroupedBarChart
+                            title="C and D counts by category / location"
+                            description="Top filtered category and location rows, split into C and D counts."
+                            data={gradeRisk.byLocationCategory || []}
+                            labelKey={(row) => `${row.location_label} · ${row.category}`}
+                            series={[
+                              { label: 'C grades', valueKey: 'c_count', color: '#f59e0b' },
+                              { label: 'D grades', valueKey: 'd_count', color: '#dc2626' },
+                            ]}
+                          />
                           <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                               <thead>
