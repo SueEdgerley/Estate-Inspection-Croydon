@@ -58,30 +58,11 @@ import {
   removeOfflineInspectionDraft,
   upsertOfflineInspectionDraft,
 } from '@/lib/offline-inspection-drafts'
+import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
 import { packNvWizardExtras } from '@/lib/nv-notes-pack'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
 const NV_INLINE = buildInspectionFormNvTokens()
-
-const offlinePanelStyle = {
-  maxWidth: 800,
-  margin: '0 0 1rem',
-  padding: '0.9rem 1rem',
-  border: '1px solid #f59e0b',
-  borderRadius: '0.5rem',
-  background: '#fffbeb',
-  color: '#92400e',
-}
-
-const smallButtonStyle = {
-  padding: '0.45rem 0.7rem',
-  border: '1px solid #cbd5e1',
-  borderRadius: '0.375rem',
-  background: '#fff',
-  color: '#1d4ed8',
-  fontWeight: 600,
-  cursor: 'pointer',
-}
 
 const COMMENT_TEXTAREA_SURFACE = {
   backgroundColor: '#F5F0E6',
@@ -2354,7 +2335,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         payload: currentDraftPayload,
       })
     )
-    setOfflineNotice('You are offline. Your progress is saved on this device and will submit when you are back online.')
+    setOfflineNotice('Inspection saved on this phone. Waiting for internet connection.')
   }, [isOnline, offlineDraftId, currentDraftPayload])
 
   const saveCurrentOfflineDraft = () => {
@@ -2366,7 +2347,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       payload: currentDraftPayload,
     })
     setOfflineDrafts(next)
-    setOfflineNotice('You are offline. Your progress is saved on this device and will submit when you are back online.')
+    setOfflineNotice('Inspection saved on this phone. Waiting for internet connection.')
     return id
   }
 
@@ -2383,7 +2364,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setAnswers(body.answers || {})
     setAnswerExtras(body.answer_extras || {})
     setSubmitError(null)
-    setOfflineNotice('Offline draft loaded. Review it, then submit when you are online.')
+    setOfflineNotice('Inspection reopened from this phone. Review your answers, then submit when you are back online.')
   }
 
   const submitPendingInspection = async (inspectionId) => {
@@ -2406,7 +2387,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const submitOfflineDraft = async (draft) => {
     if (!isOnline) {
-      setOfflineNotice('You are offline. Reconnect before submitting saved drafts.')
+      setOfflineNotice('Waiting for internet connection. Reconnect to submit this inspection.')
       return
     }
     const body = draft?.payload?.submitBody
@@ -2814,34 +2795,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       ) : null}
 
       {(!isOnline || offlineDrafts.length > 0 || offlineNotice) && (
-        <div style={offlinePanelStyle}>
-          <strong>
-            {!isOnline
-              ? 'You are offline. Your progress is saved on this device and will submit when you are back online.'
-              : 'Offline drafts'}
-          </strong>
-          <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
-            Photos need a connection in this first offline stage. Saved drafts are only stored on this device.
-          </p>
-          {offlineNotice && isOnline ? (
-            <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>{offlineNotice}</p>
-          ) : null}
-          {offlineDrafts.length > 0 ? (
-            <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }}>
-              {offlineDrafts.map((draft) => (
-                <div key={draft.id} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ flex: '1 1 220px', fontSize: '0.875rem' }}>
-                    {draft.label || draft.payload?.templateName || 'Inspection draft'} · {new Date(draft.updatedAt || draft.createdAt).toLocaleString('en-GB')}
-                  </span>
-                  <button type="button" onClick={() => restoreOfflineDraft(draft)} style={smallButtonStyle}>Reopen draft</button>
-                  <button type="button" disabled={!isOnline || isSubmitting} onClick={() => submitOfflineDraft(draft)} style={smallButtonStyle}>
-                    Submit saved draft
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <OfflineInspectionStatusPanel
+          isOnline={isOnline}
+          isSubmitting={isSubmitting}
+          offlineNotice={offlineNotice}
+          offlineDrafts={offlineDrafts}
+          activeDraftId={offlineDraftId}
+          activeDraftPayload={currentDraftPayload}
+          onReopenDraft={restoreOfflineDraft}
+          onSubmitDraft={submitOfflineDraft}
+        />
       )}
 
       <form
