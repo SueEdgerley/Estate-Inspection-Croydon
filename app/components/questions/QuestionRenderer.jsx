@@ -5,6 +5,7 @@ import { QUESTION_TYPES } from '@/lib/airtable'
 import { getEffectiveQuestionKind } from '../../../lib/question-types'
 import { isEstateInspectionInstructionalQuestion } from '@/lib/estate-standard-inspection-template-patch'
 import { isRecipientQuestion as isRecipientSelectorQuestion } from '../../../lib/template-rules'
+import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
 import { getGradeButtonStyle } from '@/lib/grading-button-styles'
 import {
@@ -125,28 +126,8 @@ export default function QuestionRenderer({
 
     async function loadPeople() {
       try {
-        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        if (!res.ok) {
-          console.warn('[QuestionRenderer] GET /api/people failed:', res.status, await res.text().catch(() => ''))
-          return
-        }
-        const rows = await res.json()
-        if (cancelled || !Array.isArray(rows)) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[QuestionRenderer] /api/people response not an array:', rows)
-          }
-          return
-        }
-        const mapped = rows
-          .map((p) => ({
-            value: p.id != null ? String(p.id) : '',
-            label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
-          }))
-          .filter((x) => x.value && x.label)
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('[QuestionRenderer] recipient dropdown options:', mapped.length, mapped.slice(0, 5))
-        }
-        setRecipientOptions(mapped)
+        const mapped = await loadIssueRecipientPeople(fetch)
+        if (!cancelled) setRecipientOptions(mapped)
       } catch (e) {
         if (process.env.NODE_ENV === 'development') {
           console.warn('[QuestionRenderer] loadPeople error:', e)

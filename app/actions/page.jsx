@@ -9,6 +9,7 @@ import {
   displayActionStatus,
   formatActionDate,
 } from '@/lib/action-display-formatter'
+import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -243,9 +244,8 @@ export default function ActionsPage() {
     let cancelled = false
     async function loadPeople() {
       try {
-        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        const data = await res.json().catch(() => [])
-        if (!cancelled && Array.isArray(data)) setPeople(data)
+        const options = await loadIssueRecipientPeople(fetch)
+        if (!cancelled) setPeople(options)
       } catch (err) {
         console.warn('Could not load people for action assignment:', err)
       }
@@ -652,8 +652,8 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
           <select value={form.recipient_person_id || ''} onChange={(e) => setField('recipient_person_id', e.target.value)} style={inputStyle}>
             <option value="">Not recorded</option>
             {people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {[person.name, person.email].filter(Boolean).join(' - ')}
+              <option key={person.value} value={person.value}>
+                {person.label}
               </option>
             ))}
           </select>

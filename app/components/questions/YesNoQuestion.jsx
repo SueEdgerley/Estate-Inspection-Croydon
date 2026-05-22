@@ -10,6 +10,7 @@ import {
 } from '@/lib/caretaker-yesno-display'
 import { getActionTriggerOn } from '@/lib/template-rules'
 import { findRecipientQuestion } from '@/lib/caretaker-template'
+import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 
 export default function YesNoQuestion({
   question,
@@ -86,18 +87,8 @@ export default function YesNoQuestion({
     }
     async function load() {
       try {
-        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        if (!res.ok) return
-        const rows = await res.json()
-        if (cancelled || !Array.isArray(rows)) return
-        setRecipientOptions(
-          rows
-            .map((p) => ({
-              value: p.id != null ? String(p.id) : '',
-              label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
-            }))
-            .filter((x) => x.value && x.label)
-        )
+        const mapped = await loadIssueRecipientPeople(fetch)
+        if (!cancelled) setRecipientOptions(mapped)
       } catch {
         /* keep empty */
       }

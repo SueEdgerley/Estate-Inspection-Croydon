@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import {
+  ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
+  isRecipientPersonFkError,
+  validateActionRecipientForInsert,
+} from '@/lib/validate-issue-recipient'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -180,6 +185,14 @@ export async function PUT(request, { params }) {
         ? { expected_completion_date: normalizeDateOnly(data.expected_completion_date) }
         : {}),
     }
+
+    if (normalizedData.recipient_person_id !== undefined && normalizedData.recipient_person_id) {
+      const recipientValidation = await validateActionRecipientForInsert(sql, normalizedData.recipient_person_id)
+      if (recipientValidation.warning) {
+        return NextResponse.json({ error: recipientValidation.warning }, { status: 400 })
+      }
+      normalizedData.recipient_person_id = recipientValidation.personId
+    }
     debugPayload = {
       action_id: id,
       fields: Object.keys(data || {}),
@@ -248,6 +261,9 @@ export async function PUT(request, { params }) {
     return NextResponse.json(result.rows[0])
   } catch (error) {
     const message = error?.message || String(error)
+    if (isRecipientPersonFkError(error)) {
+      return NextResponse.json({ error: ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE }, { status: 400 })
+    }
     console.error('Error updating action:', { error: message, action_id: id, payload: debugPayload })
     return NextResponse.json(
       { error: message, details: message },

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
+import { isIssueRecipientCategory } from '@/lib/validate-issue-recipient'
+import { isIssueRecipientPeopleRequest } from '@/lib/issue-recipient-people'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,18 +21,6 @@ function normalizeRoutingCategories(rows) {
   return byPersonId
 }
 
-const ISSUE_RECIPIENT_TYPES = new Set(['issue_recipient', 'issue recipient', 'routing_mailbox', 'routing mailbox'])
-
-function isIssueRecipient(row) {
-  return ISSUE_RECIPIENT_TYPES.has(String(row?.category || '').trim().toLowerCase()) ||
-    ISSUE_RECIPIENT_TYPES.has(String(row?.role || '').trim().toLowerCase())
-}
-
-function normalizeEmail(value) {
-  const email = String(value || '').trim()
-  return /^[^\s@()<>]+@[^\s@()<>]+\.[^\s@()<>]+$/.test(email) ? email : ''
-}
-
 function normalizeCategoryToken(value) {
   return String(value || '')
     .trim()
@@ -39,36 +29,24 @@ function normalizeCategoryToken(value) {
     .replace(/^_+|_+$/g, '')
 }
 
-function isPestControlIssueRecipient(row) {
-  if (row?.issue_recipient !== true) return false
+function rowMatchesIssueCategory(row, issueCategory) {
+  if (!issueCategory) return true
+  const token = normalizeCategoryToken(issueCategory)
   const categories = Array.isArray(row?.issue_categories) ? row.issue_categories : []
   return [
     ...categories,
     row?.category,
     row?.role,
     row?.job_title,
-  ].some((value) => normalizeCategoryToken(value) === 'pest_control')
+  ].some((value) => normalizeCategoryToken(value) === token)
 }
 
-function buildPestControlEnvRecipient(existingRows) {
-  if ((existingRows || []).some(isPestControlIssueRecipient)) return null
-  const email = normalizeEmail(process.env.PEST_CONTROL_EMAIL)
-  if (!email) return null
-  return {
-    id: email,
-    name: 'Pest Control',
-    email,
-    category: 'issue_recipient',
-    role: 'routing_mailbox',
-    job_title: null,
-    issue_categories: ['pest_control'],
-    issue_recipient: true,
-    recipient_source: 'env',
-  }
+function isIssueRecipient(row) {
+  return isIssueRecipientCategory(row)
 }
 
-// GET - active people for inspection recipient dropdowns (Neon)
-export async function GET() {
+// GET - people for dropdowns; filter to issue recipients only when requested via query params
+export async function GET(request) {
   const { userId } = await auth()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -84,15 +62,32 @@ export async function GET() {
       )
     }
 
-    const result = await sql`
-      SELECT id, name, email, category, role, job_title
-      FROM people
-      WHERE COALESCE(active, true) = true
-      ORDER BY
-        CASE WHEN category = 'issue_recipient' THEN 0 ELSE 1 END,
-        name ASC,
-        email ASC
-    `
+    const { searchParams } = new URL(request.url)
+    const issueRecipientOnly = isIssueRecipientPeopleRequest(searchParams)
+    const scope = String(searchParams.get('scope') || (issueRecipientOnly ? 'issue_recipients' : 'all'))
+      .trim()
+      .toLowerCase()
+    const issueCategory = String(searchParams.get('issue_category') || '').trim()
+
+    const result =
+      scope === 'all' && !issueRecipientOnly
+        ? await sql`
+            SELECT id, name, email, category, role, job_title, active
+            FROM people
+            WHERE COALESCE(active, true) = true
+            ORDER BY
+              CASE WHEN lower(trim(COALESCE(category, ''))) IN ('issue_recipient', 'issue recipient') THEN 0 ELSE 1 END,
+              name ASC,
+              email ASC
+          `
+        : await sql`
+            SELECT id, name, email, category, role, job_title, active
+            FROM people
+            WHERE COALESCE(active, true) = true
+              AND lower(trim(COALESCE(category, ''))) IN ('issue_recipient', 'issue recipient')
+            ORDER BY name ASC, email ASC
+          `
+
     let routingCategoriesByPersonId = new Map()
     try {
       const routingResult = await sql`
@@ -115,8 +110,8 @@ export async function GET() {
       }
       console.warn('[GET /api/people] issue_routing_rules table missing; returning people without routing categories')
     }
-    console.log('[GET /api/people] active rows:', result.rows.length)
-    const rows = result.rows.map((row) => {
+
+    let rows = result.rows.map((row) => {
       const issueCategories = routingCategoriesByPersonId.get(String(row.id)) || []
       return {
         ...row,
@@ -125,8 +120,26 @@ export async function GET() {
         recipient_source: 'people',
       }
     })
-    const pestControlFallback = buildPestControlEnvRecipient(rows)
-    return NextResponse.json(pestControlFallback ? [...rows, pestControlFallback] : rows)
+
+    if (issueRecipientOnly || scope !== 'all') {
+      rows = rows.filter((row) => {
+        const category = String(row.category || '')
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, '_')
+        return category === 'issue_recipient' && row.active !== false
+      })
+    }
+    if (issueCategory) {
+      rows = rows.filter((row) => rowMatchesIssueCategory(row, issueCategory))
+    }
+
+    console.log('[GET /api/people] active rows:', rows.length, {
+      scope,
+      issueRecipientOnly,
+      issueCategory: issueCategory || null,
+    })
+    return NextResponse.json(rows)
   } catch (error) {
     console.error('Error fetching people list:', error)
     return NextResponse.json(

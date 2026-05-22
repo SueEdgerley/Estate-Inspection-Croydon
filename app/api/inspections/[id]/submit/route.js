@@ -22,7 +22,6 @@ import {
   resolveCaretakerInspectionScope,
 } from '@/lib/caretaker-specific-task-inspection'
 import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
-import { resolveIssueRoutingRecipient } from '@/lib/resolve-issue-routing'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { generatePosterPdfBuffer } from '../../../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '../../../../../lib/blob/uploadPdf'
@@ -50,6 +49,11 @@ import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
 import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
+import {
+  ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
+  isRecipientPersonFkError,
+  resolveIssueRecipientForAction,
+} from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
@@ -722,15 +726,19 @@ export async function POST(request, { params }) {
                 (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
                 (recipientId != null ? String(recipientId).trim() : '') ||
                 null
-              if (!actionRecipient && !isGroundsMaintenanceSubmission) {
-                const routed = await resolveIssueRoutingRecipient(sql, {
-                  issueCategory: category,
-                  issueType: q.issue_type ? String(q.issue_type) : null,
-                  estateId: inspectionLive.estate_id || inspection.estate_id || null,
-                  assignToRoleFallback: null,
-                })
-                actionRecipient = routed?.personId || null
+              const recipientResolution = await resolveIssueRecipientForAction(sql, {
+                recipientPersonId: actionRecipient,
+                issueCategory: category,
+                issueType: q.issue_type ? String(q.issue_type) : null,
+                estateId: inspectionLive.estate_id || inspection.estate_id || null,
+                assignToRoleFallback: null,
+                allowRoutingFallback: !isGroundsMaintenanceSubmission,
+              })
+              if (recipientResolution.warning) {
+                actionCreationWarnings.push(recipientResolution.warning)
+                continue
               }
+              actionRecipient = recipientResolution.personId || null
               const priorityVal = extras.priority || q.action_priority || null
               const title = safeActionText(`${sec.title || sec.name || 'Section'} – ${qText}`, qText, 500)
               const description = buildCaretakerActionDescription({
@@ -774,7 +782,9 @@ export async function POST(request, { params }) {
               } catch (insertErr) {
                 console.error('[inspections/submit] caretaker action insert failed:', insertErr)
                 actionCreationWarnings.push(
-                  `Could not create action for question ${q.id}: ${insertErr?.message || insertErr}`
+                  isRecipientPersonFkError(insertErr)
+                    ? ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE
+                    : `Could not create action for this question. Please review the action list and assign a recipient manually if needed.`
                 )
                 continue
               }
@@ -843,15 +853,19 @@ export async function POST(request, { params }) {
                 (extras.recipient_person_id && String(extras.recipient_person_id).trim()) ||
                 (recipientId != null ? String(recipientId).trim() : '') ||
                 null
-              if (!actionRecipient && !isGroundsMaintenanceSubmission) {
-                const routed = await resolveIssueRoutingRecipient(sql, {
-                  issueCategory: category,
-                  issueType: q.issue_type ? String(q.issue_type) : null,
-                  estateId: inspectionLive.estate_id || inspection.estate_id || null,
-                  assignToRoleFallback: null,
-                })
-                actionRecipient = routed?.personId || null
+              const recipientResolution = await resolveIssueRecipientForAction(sql, {
+                recipientPersonId: actionRecipient,
+                issueCategory: category,
+                issueType: q.issue_type ? String(q.issue_type) : null,
+                estateId: inspectionLive.estate_id || inspection.estate_id || null,
+                assignToRoleFallback: null,
+                allowRoutingFallback: !isGroundsMaintenanceSubmission,
+              })
+              if (recipientResolution.warning) {
+                actionCreationWarnings.push(recipientResolution.warning)
+                continue
               }
+              actionRecipient = recipientResolution.personId || null
               const priorityVal = extras.priority || q.action_priority || null
               const title = `${sec.title || sec.name || 'Section'} – ${qText} (grade ${answerLabel})`
               const description = buildCaretakerActionDescription({
@@ -895,7 +909,9 @@ export async function POST(request, { params }) {
               } catch (insertErr) {
                 console.error('[inspections/submit] graded caretaker action insert failed:', insertErr)
                 actionCreationWarnings.push(
-                  `Could not create graded action for question ${q.id}: ${insertErr?.message || insertErr}`
+                  isRecipientPersonFkError(insertErr)
+                    ? ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE
+                    : `Could not create action for this question. Please review the action list and assign a recipient manually if needed.`
                 )
                 continue
               }

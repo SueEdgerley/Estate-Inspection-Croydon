@@ -237,7 +237,7 @@ export default function EstateWalkaboutNewInspectionForm({
     async function loadPeople() {
       if (!isBrowserOnline()) return
       try {
-        const res = await safeFetch('/api/people', { cache: 'no-store', credentials: 'include' })
+        const res = await safeFetch('/api/people?scope=all', { cache: 'no-store', credentials: 'include' })
         if (!res?.ok || cancelled) return
         const rows = await res.json()
         if (cancelled || !Array.isArray(rows)) return

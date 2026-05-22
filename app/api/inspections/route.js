@@ -58,6 +58,11 @@ import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
 import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
+import {
+  ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
+  isRecipientPersonFkError,
+  resolveIssueRecipientForAction,
+} from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 
 export const runtime = 'nodejs'
@@ -1810,12 +1815,25 @@ export async function POST(request) {
               isGroundsMaintenanceTemplate(template) &&
               (q.action_category === 'grounds' || q.category === 'grounds')
             const qText = q.question_text || q.label || q.id
-            const actionRecipient =
+            const selectedRecipient =
               (isCaretakerAction || q.action_recipient_required_when) &&
               extras.recipient_person_id &&
               String(extras.recipient_person_id).trim()
                 ? String(extras.recipient_person_id).trim()
                 : null
+            const recipientResolution = await resolveIssueRecipientForAction(sql, {
+              recipientPersonId: selectedRecipient,
+              issueCategory: category,
+              issueType: q.issue_type ? String(q.issue_type) : null,
+              estateId: estateId || null,
+              assignToRoleFallback: null,
+              allowRoutingFallback: isCaretakerAction || Boolean(q.action_recipient_required_when),
+            })
+            if (recipientResolution.warning) {
+              actionCreationWarnings.push(recipientResolution.warning)
+              continue
+            }
+            const actionRecipient = recipientResolution.personId || null
             const actionTitleRaw = isCaretakerAction
               ? `${section.title || section.name || 'Section'} - ${qText}`
               : isGroundsAction
@@ -1921,6 +1939,11 @@ export async function POST(request) {
             }
           } catch (pgErr) {
             console.warn('[Inspections] Could not create Postgres action for poster:', pgErr.message)
+            actionCreationWarnings.push(
+              isRecipientPersonFkError(pgErr)
+                ? ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE
+                : 'Could not create action for this question. Please review the action list and assign a recipient manually if needed.'
+            )
           }
         }
 

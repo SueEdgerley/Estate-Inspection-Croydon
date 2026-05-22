@@ -25,7 +25,6 @@ import {
   isEstateInspectionFormV2Template,
 } from '@/lib/standard-inspection-form'
 import {
-  ESM_GRAFFITI_RECIPIENT_OPTIONS,
   getEsmQuestionRole,
   isEsmInspectionFormTemplate,
 } from '@/lib/esm-inspection-form'
@@ -68,6 +67,7 @@ import {
   writeCachedTemplatesPayload,
 } from '@/lib/offline-browser'
 import { packNvWizardExtras } from '@/lib/nv-notes-pack'
+import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 import CaretakerInspectionModeSelector from '@/app/components/caretaker/CaretakerInspectionModeSelector'
 import {
   CARETAKER_INSPECTION_MODE_FULL,
@@ -432,39 +432,13 @@ function normalizeOptionObjects(rawOptions) {
     })
 }
 
-function normalizeCategoryToken(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-}
-
-function isPestControlPeopleOption(person) {
-  if (person?.issue_recipient !== true) return false
-  const categories = Array.isArray(person?.issue_categories) ? person.issue_categories : []
-  return [
-    ...categories,
-    person?.category,
-    person?.role,
-    person?.job_title,
-  ].some((value) => normalizeCategoryToken(value) === 'pest_control')
+function isIssueRecipientPeopleOption(person) {
+  return person?.issue_recipient === true
 }
 
 function getCaretakerRecipientOptions(question, peopleOptions) {
-  const staticOptions = normalizeOptionObjects(
-    Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
-      ? question.caretaker_recipient_options
-      : []
-  )
-  const category = String(question?.action_category || question?.category || '').trim().toLowerCase()
-  if (category !== 'pest_control') {
-    return staticOptions.length ? staticOptions : normalizeOptionObjects(peopleOptions)
-  }
-  const pestPeopleOptions = normalizeOptionObjects(
-    (Array.isArray(peopleOptions) ? peopleOptions : []).filter(isPestControlPeopleOption)
-  )
-  return normalizeOptionObjects([...pestPeopleOptions, ...staticOptions])
+  const issueRecipientPeople = (Array.isArray(peopleOptions) ? peopleOptions : []).filter(isIssueRecipientPeopleOption)
+  return normalizeOptionObjects(issueRecipientPeople)
 }
 
 function getCaretakerFixedEmailDestination(question) {
@@ -693,15 +667,13 @@ function InspectionQuestion({
     (esmCommentAlways || esmCommentOnPhoto || esmLiftPhotoComment)
   const esmPhotosAdded = hasQuestionPhotos(extras)
   const esmRecipientOptions = normalizeOptionObjects(
-    Array.isArray(question.esm_recipient_options) && question.esm_recipient_options.length
-      ? question.esm_recipient_options
-      : Array.isArray(question.caretaker_recipient_options) && question.caretaker_recipient_options.length
-        ? question.caretaker_recipient_options
-        : question.esm_use_people_recipients === true
-          ? peopleOptions
-        : esmRole === 'graffiti_removal'
-          ? ESM_GRAFFITI_RECIPIENT_OPTIONS
-          : []
+    question.esm_use_people_recipients === true ||
+      question.esm_recipient_on_yes === true ||
+      question.esm_recipient_on_photo === true ||
+      question.caretaker_recipient_on_yes === true ||
+      question.caretaker_recipient_always === true
+      ? peopleOptions
+      : []
   )
   const esmSection11Or13PeopleRecipient =
     isEsmSection11Or13IssueQuestion &&
@@ -739,20 +711,9 @@ function InspectionQuestion({
     ((actionRecipientWhen === 'on_yes' && isYes) ||
       (actionRecipientWhen === 'on_no' && isNo) ||
       actionRecipientWhen === 'always' ||
-      (question.caretaker_recipient_always && Array.isArray(question.caretaker_recipient_options)))
+      question.caretaker_recipient_always === true)
   const showCaretakerRecipientDropdown =
     ((question.caretaker_recipient_on_yes && isYes) || showActionRecipient) && caretakerRecipientOptions.length > 0
-  useEffect(() => {
-    const category = String(question?.action_category || question?.category || '').trim().toLowerCase()
-    if (category !== 'pest_control') return
-    console.log('[caretaker-recipient-options:pest_control]', {
-      questionId: question?.id,
-      total: caretakerRecipientOptions.length,
-      labels: caretakerRecipientOptions.map((opt) => opt.label),
-      peopleMatches: (Array.isArray(peopleOptions) ? peopleOptions : []).filter(isPestControlPeopleOption).length,
-      staticOptions: normalizeOptionObjects(question?.caretaker_recipient_options).length,
-    })
-  }, [question, caretakerRecipientOptions, peopleOptions])
   const esmQ4AbandonedVehicle = esmInspectionQuestion && question.esm_q4_abandoned_vehicle === true
   const esmYesNoIssueQuestion =
     esmInspectionQuestion &&
@@ -2065,24 +2026,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     async function loadPeople() {
       if (!isBrowserOnline()) return
       try {
-        const res = await safeFetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        if (!res?.ok || cancelled) return
-        const rows = await res.json()
-        if (cancelled || !Array.isArray(rows)) return
-        setPeopleOptions(
-          rows
-            .map((p) => ({
-              value: p.id != null ? String(p.id) : '',
-              label: p.name ? `${p.name}${p.email ? ` (${p.email})` : ''}` : p.email || String(p.id ?? ''),
-              issue_categories: Array.isArray(p.issue_categories) ? p.issue_categories : [],
-              issue_recipient: p.issue_recipient === true,
-              recipient_source: p.recipient_source || '',
-              category: p.category || '',
-              role: p.role || '',
-              job_title: p.job_title || '',
-            }))
-            .filter((x) => x.value && x.label)
-        )
+        const options = await loadIssueRecipientPeople(safeFetch)
+        if (!cancelled) setPeopleOptions(options)
       } catch {
         /* ignore */
       }
