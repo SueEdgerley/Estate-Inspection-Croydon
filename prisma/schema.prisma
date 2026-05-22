@@ -57,8 +57,24 @@ model Inspection {
   inspectionRecipients  InspectionRecipient[]
   tasks                Task[]
   outboundEmails       OutboundEmail[]
+  inspectionUpdates    InspectionUpdate[]
 
   @@map("inspections")
+}
+
+/// Append-only follow-up notes on submitted inspections (evidence stays locked).
+model InspectionUpdate {
+  id           String   @id @db.VarChar(255)
+  inspectionId String   @map("inspection_id") @db.VarChar(255)
+  authorEmail  String   @map("author_email") @db.VarChar(255)
+  authorName   String?  @map("author_name") @db.VarChar(255)
+  body         String   @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId, createdAt(sort: Asc)])
+  @@map("inspection_updates")
 }
 
 model TemplateVersion {

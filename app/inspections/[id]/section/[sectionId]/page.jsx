@@ -14,6 +14,7 @@ import {
 } from '../../../../../lib/caretaker-template'
 import { getActionTriggerOn, isSpecialSection, validateCaretakerQuestion } from '../../../../../lib/template-rules'
 import { applyTemplateDisplayPatches } from '../../../../../lib/caretaker-fire-template-patch'
+import { inspectionIsSubmitted } from '../../../../../lib/inspection-follow-up-updates'
 import {
   buildCaretakerActionDescription,
   shouldAutocreateCaretakerAction,
@@ -229,6 +230,9 @@ export default function InspectionSection() {
   }
 
   const saveAnswers = async () => {
+    if (inspectionIsSubmitted(inspection)) {
+      throw new Error('This inspection is locked after submission.')
+    }
     if (!id || !sectionId || Object.keys(answers).length === 0) return
     try {
 await fetch(`/api/inspections/${id}/answers`, {
@@ -326,6 +330,7 @@ await fetch(`/api/inspections/${id}/answers`, {
 
   const urlSectionNum = parseInt(String(sectionId), 10)
   const isCaretakerInspection = inspectionIsCaretaker(inspection)
+  const isLocked = inspectionIsSubmitted(inspection)
   const caretakerSections12Structured =
     isCaretakerInspection &&
     !Number.isNaN(urlSectionNum) &&
@@ -394,6 +399,27 @@ await fetch(`/api/inspections/${id}/answers`, {
           {[inspection.id?.slice(0, 8), inspection.template_name, inspection.location_label || inspection.location, inspection.submitted_at || inspection.created_at ? new Date(inspection.submitted_at || inspection.created_at).toLocaleDateString('en-GB') : null].filter(Boolean).join(' · ')}
         </p>
       </div>
+
+      {isLocked ? (
+        <div
+          style={{
+            marginBottom: '1.5rem',
+            padding: '0.85rem 1rem',
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '0.5rem',
+            color: '#92400e',
+            fontSize: '0.875rem',
+            lineHeight: 1.5,
+          }}
+        >
+          This inspection has been submitted and is locked. Answers and photos cannot be changed.{' '}
+          <Link href={`/inspections/${id}?addUpdate=1#follow-up-updates`} style={{ color: '#b45309', fontWeight: 600 }}>
+            Add a follow-up note
+          </Link>{' '}
+          instead.
+        </div>
+      ) : null}
 
       <div style={{
         backgroundColor: 'white',
@@ -495,6 +521,23 @@ await fetch(`/api/inspections/${id}/answers`, {
         gap: '1rem',
         justifyContent: 'flex-end'
       }}>
+        {isLocked ? (
+          <Link
+            href={`/inspections/${id}`}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#0f766e',
+              color: '#fff',
+              borderRadius: '0.5rem',
+              fontSize: '1rem',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            View locked inspection
+          </Link>
+        ) : (
+          <>
         <button
           onClick={handleSave}
           style={{
@@ -542,6 +585,8 @@ await fetch(`/api/inspections/${id}/answers`, {
           >
             Review & Submit →
           </button>
+        )}
+          </>
         )}
       </div>
     </div>

@@ -1,13 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import GenerateRepairsUpdatePdfButton from '@/app/components/GenerateRepairsUpdatePdfButton'
 import GenerateWalkaboutActionPlanPdfButton from '@/app/components/GenerateWalkaboutActionPlanPdfButton'
 import GenerateWalkaboutResidentPosterPdfButton from '@/app/components/GenerateWalkaboutResidentPosterPdfButton'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
+import InspectionFollowUpUpdates from '@/app/components/inspection/InspectionFollowUpUpdates'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
+import { inspectionIsCaretaker } from '@/lib/caretaker-template'
+import {
+  canAddInspectionFollowUpUpdate,
+  inspectionIsSubmitted,
+} from '@/lib/inspection-follow-up-updates'
 
 const ACTION_STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -37,6 +43,8 @@ function isEsmInspectionRecord(inspection) {
 
 export default function InspectionDetail() {
   const params = useParams()
+  const searchParams = useSearchParams()
+  const autoFocusFollowUp = searchParams?.get('addUpdate') === '1'
   // Match wizard: dynamic [id] can be string | string[]; never await useParams() (sync hook).
   const id =
     typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : undefined
@@ -54,6 +62,8 @@ export default function InspectionDetail() {
   const [actionSaving, setActionSaving] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
   const [actionSaveError, setActionSaveError] = useState('')
+  const [roleUi, setRoleUi] = useState(null)
+  const [viewerEmail, setViewerEmail] = useState('')
 
   useEffect(() => {
     if (!id) {
@@ -94,6 +104,26 @@ export default function InspectionDetail() {
       cancelled = true
     }
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data) => {
+        if (cancelled) return
+        setRoleUi(data?.roleUi && typeof data.roleUi === 'object' ? data.roleUi : null)
+        setViewerEmail(typeof data?.email === 'string' ? data.email : '')
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRoleUi(null)
+          setViewerEmail('')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const loadActions = useCallback(async ({ quiet = false } = {}) => {
     if (!id) {
@@ -224,6 +254,24 @@ export default function InspectionDetail() {
     String(inspection?.template_name || '').toLowerCase().includes('walkabout') ||
     String(inspection?.template_key || '').toLowerCase() === 'estate_walkabout'
   const isEsmInspection = isEsmInspectionRecord(inspection)
+  const isSubmitted = inspectionIsSubmitted(inspection)
+  const isCaretakerInspection = inspectionIsCaretaker(inspection)
+  const isCaretakerViewer = roleUi?.normalizedRole === 'caretaker'
+  const canEditActions = !isCaretakerViewer
+  const canAddFollowUp =
+    inspection &&
+    canAddInspectionFollowUpUpdate({
+      roleCtx: {
+        jobTitle: roleUi?.jobTitle,
+        normalized: roleUi?.normalizedRole,
+        systemRole: roleUi?.systemRole,
+        clerkIsAdmin: roleUi?.clerkIsAdmin,
+      },
+      userEmail: viewerEmail,
+      inspection,
+    })
+  const backHref = isCaretakerViewer ? '/caretaker/my-inspections' : '/dashboard'
+  const backLabel = isCaretakerViewer ? 'My inspections' : 'Dashboard'
 
   if (loading) {
     return <div style={{ padding: '2rem' }}>Loading inspection...</div>
@@ -246,7 +294,7 @@ export default function InspectionDetail() {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <Link
-          href="/dashboard"
+          href={backHref}
           style={{
             color: '#3b82f6',
             textDecoration: 'none',
@@ -255,7 +303,7 @@ export default function InspectionDetail() {
             marginBottom: '1rem',
           }}
         >
-          ← Back to Dashboard
+          ← Back to {backLabel}
         </Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>
           Inspection Details
@@ -326,6 +374,31 @@ export default function InspectionDetail() {
         </div>
       </div>
 
+      {isSubmitted && isCaretakerInspection ? (
+        <div
+          style={{
+            marginBottom: '1.5rem',
+            padding: '0.85rem 1rem',
+            backgroundColor: '#eff6ff',
+            border: '1px solid #93c5fd',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            color: '#1e3a8a',
+            lineHeight: 1.5,
+          }}
+        >
+          This inspection is locked as an evidential record. Answers, photos, grades, and submission time cannot be
+          changed. Add follow-up notes below if repairs or work progress need recording.
+        </div>
+      ) : null}
+
+      <InspectionFollowUpUpdates
+        inspectionId={id}
+        isSubmitted={isSubmitted}
+        canAdd={canAddFollowUp}
+        autoFocusForm={autoFocusFollowUp}
+      />
+
       <div style={{
         backgroundColor: 'white',
         padding: '2rem',
@@ -371,13 +444,13 @@ export default function InspectionDetail() {
             {actions.map((action) => (
               <div
                 key={action.id}
-                onClick={() => startEditAction(action)}
+                onClick={canEditActions ? () => startEditAction(action) : undefined}
                 style={{
                   padding: '1rem',
                   borderRadius: '0.5rem',
                   backgroundColor: '#f8fafc',
                   border: editingActionId === action.id ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                  cursor: 'pointer',
+                  cursor: canEditActions ? 'pointer' : 'default',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
@@ -398,26 +471,28 @@ export default function InspectionDetail() {
                     Location: {action.location}
                   </div>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    startEditAction(action)
-                  }}
-                  style={{
-                    marginTop: '0.9rem',
-                    padding: '0.5rem 0.85rem',
-                    borderRadius: '0.375rem',
-                    border: '1px solid #2563eb',
-                    background: '#fff',
-                    color: '#1d4ed8',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Edit
-                </button>
-                {editingActionId === action.id ? (
+                {canEditActions ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      startEditAction(action)
+                    }}
+                    style={{
+                      marginTop: '0.9rem',
+                      padding: '0.5rem 0.85rem',
+                      borderRadius: '0.375rem',
+                      border: '1px solid #2563eb',
+                      background: '#fff',
+                      color: '#1d4ed8',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                {canEditActions && editingActionId === action.id ? (
                   <div
                     onClick={(event) => event.stopPropagation()}
                     style={{

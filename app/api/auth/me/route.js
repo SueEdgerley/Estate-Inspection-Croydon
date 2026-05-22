@@ -81,6 +81,10 @@ export async function GET() {
 
   return Response.json({
     userId,
+    email:
+      clerkUser?.primaryEmailAddress?.emailAddress ??
+      clerkUser?.emailAddresses?.[0]?.emailAddress ??
+      null,
     role: systemRole,
     systemRole,
     jobTitle,

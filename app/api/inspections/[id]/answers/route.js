@@ -70,6 +70,21 @@ export async function POST(request, { params }) {
     const answers = answersRaw && typeof answersRaw === 'object' ? answersRaw : {}
     const extras = extrasRaw && typeof extrasRaw === 'object' ? extrasRaw : {}
 
+    const inspStatusRow = await sql`
+      SELECT status, submitted_at FROM inspections WHERE id = ${id} LIMIT 1
+    `
+    const inspMeta = inspStatusRow.rows[0]
+    if (!inspMeta) {
+      return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+    }
+    const status = String(inspMeta.status || '').toLowerCase().trim()
+    if (inspMeta.submitted_at || status === 'submitted' || status === 'completed' || status === 'complete') {
+      return NextResponse.json(
+        { error: 'This inspection is locked after submission. Answers and photos cannot be changed.' },
+        { status: 403 }
+      )
+    }
+
     const inspRow = await sql`
       SELECT template_version FROM inspections WHERE id = ${id} LIMIT 1
     `

@@ -109,7 +109,7 @@ export default function FormsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
-  const [viewer, setViewer] = useState({ appRole: null, clerkIsAdmin: false })
+  const [viewer, setViewer] = useState({ normalizedRole: null, clerkIsAdmin: false })
 
   useEffect(() => {
     let cancelled = false
@@ -136,7 +136,7 @@ export default function FormsPage() {
           templates: Array.isArray(base.templates) ? base.templates : [],
         })
         setViewer({
-          appRole: typeof me?.role === 'string' ? me.role : null,
+          normalizedRole: me?.roleUi?.normalizedRole || null,
           clerkIsAdmin: me?.clerkIsAdmin === true,
         })
       })
@@ -157,8 +157,8 @@ export default function FormsPage() {
   }, [])
 
   const isAdminViewer = useMemo(
-    () => isTemplateAdminViewer({ appRole: viewer.appRole, clerkIsAdmin: viewer.clerkIsAdmin }),
-    [viewer.appRole, viewer.clerkIsAdmin]
+    () => isTemplateAdminViewer({ appRole: viewer.normalizedRole, clerkIsAdmin: viewer.clerkIsAdmin }),
+    [viewer.normalizedRole, viewer.clerkIsAdmin]
   )
 
   const templates = Array.isArray(data?.templates) ? data.templates : []
@@ -172,6 +172,13 @@ export default function FormsPage() {
         </h1>
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', lineHeight: 1.5 }}>
           Tap a form to start a new inspection — no second step.
+          {viewer.normalizedRole === 'caretaker' ? (
+            <span style={{ display: 'block', marginTop: '0.5rem' }}>
+              <Link href="/caretaker/my-inspections" style={{ color: photobook.link, fontWeight: 600, textDecoration: 'none' }}>
+                My submitted inspections & follow-up notes →
+              </Link>
+            </span>
+          ) : null}
           {isAdminViewer && (
             <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.875rem' }}>
               Admins can open <strong>Structure</strong> to preview questions without starting.
