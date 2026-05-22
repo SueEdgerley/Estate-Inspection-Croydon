@@ -1,0 +1,74 @@
+﻿=== 1. git status (before commit) ===
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   app/components/OfflineInspectionStatusPanel.jsx
+	modified:   app/components/estate-walkabout/EstateWalkaboutNewInspectionForm.jsx
+	modified:   app/components/questions/PhotoUploadControl.jsx
+	modified:   app/inspections/new/NewInspectionForm.jsx
+	modified:   lib/offline-inspection-drafts.js
+	modified:   lib/offline-photo-upload.js
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	lib/offline-browser.js
+
+no changes added to commit (use "git add" and/or "git commit -a")
+
+=== 2. git diff --stat ===
+warning: in the working copy of 'app/components/OfflineInspectionStatusPanel.jsx', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'lib/offline-photo-upload.js', CRLF will be replaced by LF the next time Git touches it
+ app/components/OfflineInspectionStatusPanel.jsx    | 273 +++++++++--------
+ .../EstateWalkaboutNewInspectionForm.jsx           | 184 ++++++-----
+ app/components/questions/PhotoUploadControl.jsx    |  76 +++--
+ app/inspections/new/NewInspectionForm.jsx          | 338 ++++++++++++++-------
+ lib/offline-inspection-drafts.js                   |  44 ++-
+ lib/offline-photo-upload.js                        |   9 +
+ 6 files changed, 559 insertions(+), 365 deletions(-)
+
+=== 3. git log -3 --oneline (before commit) ===
+33c681f Photo upload
+b1f347c offline usage
+547eab1 Create email.txt
+
+=== 4. git add + git status (staged) ===
+warning: in the working copy of 'app/components/OfflineInspectionStatusPanel.jsx', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'lib/offline-photo-upload.js', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'lib/offline-browser.js', CRLF will be replaced by LF the next time Git touches it
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   app/components/OfflineInspectionStatusPanel.jsx
+	modified:   app/components/estate-walkabout/EstateWalkaboutNewInspectionForm.jsx
+	modified:   app/components/questions/PhotoUploadControl.jsx
+	modified:   app/inspections/new/NewInspectionForm.jsx
+	new file:   lib/offline-browser.js
+	modified:   lib/offline-inspection-drafts.js
+	modified:   lib/offline-photo-upload.js
+
+=== 5. git commit ===
+[main c0e84d1] Improve offline draft UX with storage-full warning and graceful offline handling.
+ 7 files changed, 594 insertions(+), 365 deletions(-)
+ create mode 100644 lib/offline-browser.js
+
+=== 6. git push -u origin HEAD ===
+branch 'main' set up to track 'origin/main'.
+To https://github.com/SueEdgerley/Estate-Inspection-Croydon.git
+   33c681f..c0e84d1  HEAD -> main
+
+=== SUMMARY ===
+Branch: main
+Commit hash (full): c0e84d124a792f51959b95832342574b44a9b830
+Commit hash (short): c0e84d1
+Push remote URL: https://github.com/SueEdgerley/Estate-Inspection-Croydon.git
+Push range: 33c681f..c0e84d1  HEAD -> main
+
+=== git log -3 --oneline (after commit) ===
+c0e84d1 Improve offline draft UX with storage-full warning and graceful offline handling.
+33c681f Photo upload
+b1f347c offline usage
