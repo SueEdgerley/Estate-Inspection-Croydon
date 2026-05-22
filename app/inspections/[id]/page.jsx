@@ -10,7 +10,6 @@ import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControl
 import InspectionFollowUpUpdates from '@/app/components/inspection/InspectionFollowUpUpdates'
 import InspectionActionCard from '@/app/components/actions/InspectionActionCard'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
-import { inspectionIsCaretaker } from '@/lib/caretaker-template'
 import {
   canAddInspectionFollowUpUpdate,
   inspectionIsSubmitted,
@@ -248,7 +247,6 @@ export default function InspectionDetail() {
     String(inspection?.template_key || '').toLowerCase() === 'estate_walkabout'
   const isEsmInspection = isEsmInspectionRecord(inspection)
   const isSubmitted = inspectionIsSubmitted(inspection)
-  const isCaretakerInspection = inspectionIsCaretaker(inspection)
   const isCaretakerViewer = roleUi?.normalizedRole === 'caretaker'
   const canEditActions = !isCaretakerViewer
   const canAddFollowUp =
@@ -366,24 +364,6 @@ export default function InspectionDetail() {
           </div>
         </div>
       </div>
-
-      {isSubmitted && isCaretakerInspection ? (
-        <div
-          style={{
-            marginBottom: '1.5rem',
-            padding: '0.85rem 1rem',
-            backgroundColor: '#eff6ff',
-            border: '1px solid #93c5fd',
-            borderRadius: '0.5rem',
-            fontSize: '0.875rem',
-            color: '#1e3a8a',
-            lineHeight: 1.5,
-          }}
-        >
-          This inspection is locked as an evidential record. Answers, photos, grades, and submission time cannot be
-          changed. Add follow-up notes below if repairs or work progress need recording.
-        </div>
-      ) : null}
 
       <InspectionFollowUpUpdates
         inspectionId={id}
