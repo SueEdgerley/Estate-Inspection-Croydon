@@ -45,6 +45,7 @@ import {
 } from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
+import { sendCaretakerSubmissionConfirmationEmail } from '@/lib/caretaker-submission-confirmation-email'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
@@ -1094,6 +1095,34 @@ export async function POST(request, { params }) {
         } catch (caretakerEmailErr) {
           console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)
           actionCreationWarnings.push(`Caretaker notification error: ${caretakerEmailErr?.message || String(caretakerEmailErr)}`)
+        }
+
+        try {
+          const confirmationResult = await sendCaretakerSubmissionConfirmationEmail({
+            sql,
+            inspectionId: id,
+            inspection: inspectionLive,
+            inspectorEmail: inspectorEmail || inspectionLive.inspector_id,
+            inspectorName: inspectionLive.inspector_name || inspectorName,
+            estateBlockLine,
+            fullPdfUrl: fullPdfUrl ?? getInspectionFullReportPdfUrl(inspectionLive) ?? null,
+          })
+          if (confirmationResult.ok && !confirmationResult.skipped) {
+            emailResults.sent.push({
+              email: confirmationResult.to,
+              type: 'caretaker_submission_confirmation',
+            })
+          } else if (!confirmationResult.ok && !confirmationResult.skipped) {
+            emailResults.failed.push({
+              email: confirmationResult.to || inspectorEmail,
+              error: confirmationResult.error || 'caretaker_submission_confirmation_failed',
+            })
+          }
+        } catch (confirmationErr) {
+          console.error('[inspections/submit] caretaker submission confirmation:', confirmationErr)
+          actionCreationWarnings.push(
+            `Caretaker submission confirmation: ${confirmationErr?.message || String(confirmationErr)}`
+          )
         }
       }
 

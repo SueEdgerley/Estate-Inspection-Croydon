@@ -26,6 +26,7 @@ export default function InspectionFollowUpUpdates({
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState('')
   const [showForm, setShowForm] = useState(autoFocusForm)
   const textareaRef = useRef(null)
 
@@ -72,6 +73,7 @@ export default function InspectionFollowUpUpdates({
     if (!text || saving) return
     setSaving(true)
     setSaveError('')
+    setSaveSuccess('')
     try {
       const res = await fetch(`/api/inspections/${encodeURIComponent(inspectionId)}/updates`, {
         method: 'POST',
@@ -84,13 +86,10 @@ export default function InspectionFollowUpUpdates({
         setSaveError(data?.error || data?.details || `Could not save update (${res.status})`)
         return
       }
-      if (data.update) {
-        setUpdates((prev) => [...prev, data.update])
-      } else {
-        await loadUpdates()
-      }
+      await loadUpdates()
       setDraft('')
       setShowForm(false)
+      setSaveSuccess('Follow-up note added.')
     } catch (error) {
       setSaveError(error?.message || 'Could not save update')
     } finally {
@@ -150,12 +149,19 @@ export default function InspectionFollowUpUpdates({
         </ul>
       )}
 
+      {saveSuccess ? (
+        <p style={{ margin: '0 0 1rem', color: '#166534', fontSize: '0.875rem', fontWeight: 600 }}>{saveSuccess}</p>
+      ) : null}
+
       {canAdd ? (
         <div>
           {!showForm ? (
             <button
               type="button"
-              onClick={() => setShowForm(true)}
+              onClick={() => {
+                setSaveSuccess('')
+                setShowForm(true)
+              }}
               style={{
                 width: '100%',
                 minHeight: 48,
@@ -169,7 +175,7 @@ export default function InspectionFollowUpUpdates({
                 cursor: 'pointer',
               }}
             >
-              Add update
+              Add follow-up note
             </button>
           ) : (
             <div style={{ display: 'grid', gap: '0.75rem' }}>
@@ -215,7 +221,7 @@ export default function InspectionFollowUpUpdates({
                     cursor: saving ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {saving ? 'Saving…' : 'Save update'}
+                  {saving ? 'Saving…' : 'Save note'}
                 </button>
                 <button
                   type="button"

@@ -54,7 +54,7 @@ export default function CaretakerMyInspectionsPage() {
           My inspections
         </h1>
         <p style={{ margin: '0.5rem 0 0', color: '#6b7280', lineHeight: 1.5, fontSize: '0.9375rem' }}>
-          Submitted inspections are locked as evidence. Use <strong>Add update</strong> to append follow-up notes only.
+          Submitted inspections are locked as evidence. Use <strong>Add follow-up note</strong> to append follow-up notes only.
         </p>
       </div>
 
@@ -107,7 +107,7 @@ export default function CaretakerMyInspectionsPage() {
         <div style={{ display: 'grid', gap: '0.85rem' }}>
           {inspections.map((row) => {
             const locationLine = [row.estate_name, row.block_name, row.location_label].filter(Boolean).join(' · ')
-            const detailHref = `/inspections/${encodeURIComponent(row.id)}`
+            const detailHref = `/caretaker/inspections/${encodeURIComponent(row.id)}`
             const addUpdateHref = `${detailHref}?addUpdate=1#follow-up-updates`
             return (
               <div
@@ -166,7 +166,7 @@ export default function CaretakerMyInspectionsPage() {
                       fontSize: '1rem',
                     }}
                   >
-                    Add update
+                    Add follow-up note
                   </Link>
                 </div>
               </div>

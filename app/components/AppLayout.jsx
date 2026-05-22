@@ -82,15 +82,20 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     if (!isSignedIn || roleUi?.normalizedRole !== 'caretaker' || !pathname) return
-    const inspectionDetailPath =
-      pathname.startsWith('/inspections/') &&
+    const legacyInspectionDetailMatch =
+      pathname.match(/^\/inspections\/([^/]+)$/) &&
       !pathname.startsWith('/inspections/new')
+    if (legacyInspectionDetailMatch) {
+      const suffix = typeof window !== 'undefined' ? window.location.search + window.location.hash : ''
+      router.replace(`/caretaker/inspections/${legacyInspectionDetailMatch[1]}${suffix}`)
+      return
+    }
     const allowed =
       pathname === '/templates' ||
       pathname.startsWith('/caretaker/my-inspections') ||
+      pathname.startsWith('/caretaker/inspections') ||
       pathname.startsWith('/guides') ||
-      pathname.startsWith('/inspections/new') ||
-      inspectionDetailPath
+      pathname.startsWith('/inspections/new')
     if (!allowed) router.replace('/templates')
   }, [isSignedIn, pathname, roleUi, router])
 
@@ -116,7 +121,12 @@ export default function AppLayout({ children }) {
       return pathname.startsWith('/inspections/')
     }
     if (href === '/reports/inspections') return pathname?.startsWith('/reports/inspections')
-    if (href === '/caretaker/my-inspections') return pathname?.startsWith('/caretaker/my-inspections')
+    if (href === '/caretaker/my-inspections') {
+      return (
+        pathname?.startsWith('/caretaker/my-inspections') ||
+        pathname?.startsWith('/caretaker/inspections')
+      )
+    }
     if (href === '/repairs-inspector') return pathname === '/repairs-inspector'
     return pathname?.startsWith(href)
   }
