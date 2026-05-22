@@ -11,6 +11,10 @@ import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { isCaretakerTemplate } from '@/lib/caretaker-template'
+import {
+  caretakerSectionInScope,
+  resolveCaretakerInspectionScope,
+} from '@/lib/caretaker-specific-task-inspection'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
   isEstateWalkaboutTemplate,
@@ -204,10 +208,11 @@ function buildCaretakerNotificationHtml({ inspectionTitle, locationLine, section
   `
 }
 
-function collectCaretakerEmailNotifications({ template, answers, answerExtras, inspectorEmail }) {
+function collectCaretakerEmailNotifications({ template, answers, answerExtras, inspectorEmail, scope }) {
   if (!isCaretakerTemplate(template)) return []
   const notifications = []
   for (const section of template.sections || []) {
+    if (!caretakerSectionInScope(section, scope)) continue
     const sectionNo = getCaretakerSectionNumber(section)
     const questions = section.questions || []
     questions.forEach((q, index) => {
@@ -1278,6 +1283,9 @@ export async function POST(request) {
     draft: createDraft,
     inspection_start_time,
     inspection_end_time,
+    caretaker_inspection_mode,
+    caretaker_specific_section_id,
+    caretaker_specific_section_title,
   } = body
 
   const dueDateParsed = parseDueDateInput(due_date)
@@ -1733,8 +1741,17 @@ export async function POST(request) {
     }
 
     let emailGroupsByTeam = null
+    const caretakerScope = isCaretakerTemplate(template)
+      ? resolveCaretakerInspectionScope({
+          description,
+          caretaker_inspection_mode,
+          caretaker_specific_section_id,
+          caretaker_specific_section_title,
+        })
+      : null
 
     for (const section of template.sections || []) {
+      if (!caretakerSectionInScope(section, caretakerScope)) continue
       for (const q of section.questions || []) {
         const answer = answers[q.id]
         if (answer === undefined || answer === null) continue
@@ -2035,6 +2052,7 @@ export async function POST(request) {
           answers,
           answerExtras: answer_extras,
           inspectorEmail,
+          scope: caretakerScope,
         })
         const sent = await sendCaretakerEmailNotifications(sql, {
           inspectionId,

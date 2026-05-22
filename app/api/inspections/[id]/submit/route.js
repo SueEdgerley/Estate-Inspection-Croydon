@@ -17,6 +17,10 @@ import {
 } from '@/lib/caretaker-action-details'
 import { parseCaretakerAnswerNotes } from '@/lib/caretaker-answer-extras'
 import { findSectionCostCodeAnswer } from '@/lib/caretaker-section-cost-code'
+import {
+  caretakerSectionInScope,
+  resolveCaretakerInspectionScope,
+} from '@/lib/caretaker-specific-task-inspection'
 import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
 import { resolveIssueRoutingRecipient } from '@/lib/resolve-issue-routing'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
@@ -302,7 +306,16 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
   return { sent, failed }
 }
 
-async function sendCaretakerPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectorEmail, inspectionTitle, locationLine }) {
+async function sendCaretakerPhotoAndYesNotifications({
+  inspectionId,
+  templateVersion,
+  answers,
+  answerRows,
+  inspectorEmail,
+  inspectionTitle,
+  locationLine,
+  scope,
+}) {
   if (!isCaretakerTemplate(templateVersion)) return { sent: 0, failed: [] }
   const sent = []
   const failed = []
@@ -310,6 +323,7 @@ async function sendCaretakerPhotoAndYesNotifications({ inspectionId, templateVer
   const dedupe = new Set()
 
   for (const section of templateVersion.sections || []) {
+    if (!caretakerSectionInScope(section, scope)) continue
     const sectionNo = getCaretakerSectionNumber(section)
     const questions = section.questions || []
     for (let index = 0; index < questions.length; index += 1) {
@@ -666,7 +680,11 @@ export async function POST(request, { params }) {
           const sections = (templateVersion && templateVersion.sections) || []
           const completedAt = new Date().toISOString()
           const inspectionBlockId = inspectionLive.block_id || inspection.block_id || null
+          const caretakerScope = isCaretakerTemplate(templateVersion)
+            ? resolveCaretakerInspectionScope(inspectionLive)
+            : null
           for (const sec of sections) {
+            if (!caretakerSectionInScope(sec, caretakerScope)) continue
             const recipientQ = findRecipientQuestion(sec.questions || [])
             const recipientId =
               recipientQ && answers[recipientQ.id] != null && answers[recipientQ.id] !== ''
@@ -1056,6 +1074,7 @@ export async function POST(request, { params }) {
 
       if (emailVersion && isCaretakerTemplate(emailVersion)) {
         try {
+          const caretakerScope = resolveCaretakerInspectionScope(inspectionLive)
           const caretakerEmails = await sendCaretakerPhotoAndYesNotifications({
             inspectionId: id,
             templateVersion: emailVersion,
@@ -1064,6 +1083,7 @@ export async function POST(request, { params }) {
             inspectorEmail,
             inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'Caretaker inspection',
             locationLine: estateBlockLine,
+            scope: caretakerScope,
           })
           if (Array.isArray(caretakerEmails.sent)) {
             emailResults.sent.push(...caretakerEmails.sent)
