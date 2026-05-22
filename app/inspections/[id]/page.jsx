@@ -8,6 +8,7 @@ import GenerateWalkaboutActionPlanPdfButton from '@/app/components/GenerateWalka
 import GenerateWalkaboutResidentPosterPdfButton from '@/app/components/GenerateWalkaboutResidentPosterPdfButton'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import InspectionFollowUpUpdates from '@/app/components/inspection/InspectionFollowUpUpdates'
+import InspectionActionCard from '@/app/components/actions/InspectionActionCard'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 import { inspectionIsCaretaker } from '@/lib/caretaker-template'
 import {
@@ -20,14 +21,6 @@ const ACTION_STATUS_OPTIONS = [
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Complete' },
 ]
-
-function formatActionStatus(value) {
-  const option = ACTION_STATUS_OPTIONS.find((item) => item.value === value)
-  if (option) return option.label
-  return String(value || 'open')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-}
 
 function isEsmInspectionRecord(inspection) {
   const text = [
@@ -442,118 +435,19 @@ export default function InspectionDetail() {
         ) : (
           <div style={{ display: 'grid', gap: '1rem' }}>
             {actions.map((action) => (
-              <div
+              <InspectionActionCard
                 key={action.id}
-                onClick={canEditActions ? () => startEditAction(action) : undefined}
-                style={{
-                  padding: '1rem',
-                  borderRadius: '0.5rem',
-                  backgroundColor: '#f8fafc',
-                  border: editingActionId === action.id ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                  cursor: canEditActions ? 'pointer' : 'default',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: '1rem', fontWeight: 600, color: '#111827' }}>{action.title || 'Action'}</div>
-                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>{formatActionStatus(action.status)}</div>
-                </div>
-                {action.category ? (
-                  <div style={{ marginTop: '0.25rem', color: '#475569' }}>{action.category}</div>
-                ) : null}
-                {action.comment ? (
-                  <p style={{ margin: '0.75rem 0 0 0', color: '#334155' }}>{action.comment}</p>
-                ) : null}
-                {action.description && action.description !== action.comment ? (
-                  <p style={{ margin: '0.5rem 0 0 0', color: '#334155' }}>{action.description}</p>
-                ) : null}
-                {action.location ? (
-                  <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                    Location: {action.location}
-                  </div>
-                ) : null}
-                {canEditActions ? (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      startEditAction(action)
-                    }}
-                    style={{
-                      marginTop: '0.9rem',
-                      padding: '0.5rem 0.85rem',
-                      borderRadius: '0.375rem',
-                      border: '1px solid #2563eb',
-                      background: '#fff',
-                      color: '#1d4ed8',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Edit
-                  </button>
-                ) : null}
-                {canEditActions && editingActionId === action.id ? (
-                  <div
-                    onClick={(event) => event.stopPropagation()}
-                    style={{
-                      marginTop: '1rem',
-                      padding: '1rem',
-                      borderRadius: '0.5rem',
-                      border: '1px solid #cbd5e1',
-                      background: '#fff',
-                    }}
-                  >
-                    <div style={{ display: 'grid', gap: '0.85rem' }}>
-                      <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>
-                        Status
-                        <select
-                          value={actionEditForm.status}
-                          onChange={(event) => setActionEditForm((prev) => ({ ...prev, status: event.target.value }))}
-                          style={{ width: '100%', padding: '0.65rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '1rem' }}
-                        >
-                          {ACTION_STATUS_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>
-                        Notes / update comments
-                        <textarea
-                          value={actionEditForm.comment}
-                          onChange={(event) => setActionEditForm((prev) => ({ ...prev, comment: event.target.value }))}
-                          rows={3}
-                          style={{
-                            width: '100%',
-                            padding: '0.65rem',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '0.375rem',
-                            fontSize: '1rem',
-                            fontFamily: 'inherit',
-                          }}
-                        />
-                      </label>
-                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <button
-                          type="button"
-                          onClick={() => setEditingActionId('')}
-                          disabled={actionSaving}
-                          style={{ padding: '0.6rem 0.9rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', background: '#fff', cursor: 'pointer' }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => saveActionUpdate(action.id)}
-                          disabled={actionSaving}
-                          style={{ padding: '0.6rem 0.9rem', border: 'none', borderRadius: '0.375rem', background: actionSaving ? '#9ca3af' : '#2563eb', color: '#fff', fontWeight: 700, cursor: actionSaving ? 'wait' : 'pointer' }}
-                        >
-                          {actionSaving ? 'Saving...' : 'Update action'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+                action={action}
+                canEdit={canEditActions}
+                isEditing={editingActionId === action.id}
+                editForm={actionEditForm}
+                onEditFormChange={setActionEditForm}
+                onStartEdit={() => startEditAction(action)}
+                onCancelEdit={() => setEditingActionId('')}
+                onSave={() => saveActionUpdate(action.id)}
+                saving={actionSaving}
+                statusOptions={ACTION_STATUS_OPTIONS}
+              />
             ))}
           </div>
         )}
