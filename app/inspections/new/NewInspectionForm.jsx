@@ -57,9 +57,16 @@ import {
   readOfflineInspectionDrafts,
   removeOfflineInspectionDraft,
   upsertOfflineInspectionDraft,
+  OFFLINE_DRAFT_STORAGE_FULL_MESSAGE,
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
 import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
+import {
+  isBrowserOnline,
+  readCachedTemplatesPayload,
+  safeFetch,
+  writeCachedTemplatesPayload,
+} from '@/lib/offline-browser'
 import { packNvWizardExtras } from '@/lib/nv-notes-pack'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
@@ -543,15 +550,15 @@ function InspectionQuestion({
     })()
 
   useEffect(() => {
-    if (!estateCostCodeSelectNeedsApi) {
+    if (!estateCostCodeSelectNeedsApi || !isBrowserOnline()) {
       setEstateApiCostCodes([])
       return undefined
     }
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/cost-codes', { cache: 'no-store', credentials: 'include' })
-        if (!res.ok || cancelled) return
+        const res = await safeFetch('/api/cost-codes', { cache: 'no-store', credentials: 'include' })
+        if (!res?.ok || cancelled) return
         const rows = await res.json()
         if (!Array.isArray(rows) || cancelled) return
         setEstateApiCostCodes(
@@ -2032,19 +2039,23 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [expandedByQuestionId, setExpandedByQuestionId] = useState({})
   const [peopleOptions, setPeopleOptions] = useState([])
   const [showEstateFormGuidance, setShowEstateFormGuidance] = useState(false)
-  const [isOnline, setIsOnline] = useState(true)
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  )
   const [offlineDraftId, setOfflineDraftId] = useState('')
   const [offlineDrafts, setOfflineDrafts] = useState([])
-  const [offlineNotice, setOfflineNotice] = useState('')
+  const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
+  const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
   const [inspectionEndTime, setInspectionEndTime] = useState('')
 
   useEffect(() => {
     let cancelled = false
     async function loadPeople() {
+      if (!isBrowserOnline()) return
       try {
-        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        if (!res.ok || cancelled) return
+        const res = await safeFetch('/api/people', { cache: 'no-store', credentials: 'include' })
+        if (!res?.ok || cancelled) return
         const rows = await res.json()
         if (cancelled || !Array.isArray(rows)) return
         setPeopleOptions(
@@ -2087,6 +2098,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const startWizard = async () => {
     if (!templateId || !selectedTemplate) return
+    if (!isBrowserOnline()) {
+      setSubmitError('Waiting for internet connection to start the wizard.')
+      return
+    }
     if (locationRequiredForSelectedTemplate && !postgresBlockId.trim()) {
       setValidationErrors((prev) => ({ ...prev, block_id: 'Please select a location' }))
       setSubmitError('Please select a location')
@@ -2131,68 +2146,108 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   useEffect(() => {
     let cancelled = false
 
+    function applyTemplatesPayload(templatesData) {
+      const templateList = templatesData.templates || []
+      applyNeighbourhoodVoicePatchesToList(templateList)
+      for (const t of templateList) {
+        applyTemplateDisplayPatches(t)
+      }
+      setApiPayload(templatesData)
+      const list = templatesData.templates || []
+      if (list.length > 0) {
+        if (effectiveLockedTemplateId) {
+          const hasRequestedTemplate = list.some((t) => t.id === effectiveLockedTemplateId)
+          if (hasRequestedTemplate) setTemplateId(effectiveLockedTemplateId)
+          else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
+            setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
+          } else if (!templateId) setTemplateId(list[0].id)
+        } else if (!templateId) {
+          setTemplateId(list[0].id)
+        }
+      } else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
+        setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
+      }
+    }
+
     async function load() {
+      if (!isBrowserOnline()) {
+        const cached = readCachedTemplatesPayload()
+        if (!cancelled) {
+          if (cached?.templates?.length) {
+            applyTemplatesPayload(cached)
+            setLoadError(null)
+          } else {
+            setLoadError(null)
+          }
+          setLoading(false)
+        }
+        return
+      }
+
       try {
-        let templatesRes = await fetch(`/api/templates?t=${Date.now()}`, {
+        let templatesRes = await safeFetch(`/api/templates?t=${Date.now()}`, {
           credentials: 'include',
           cache: 'no-store',
         })
-        // Mobile browsers can hold onto stale cached/API responses after deploy;
-        // retry once with a second cache-busted URL before surfacing an error.
+        if (!templatesRes) {
+          const cached = readCachedTemplatesPayload()
+          if (cached?.templates?.length) {
+            if (!cancelled) {
+              applyTemplatesPayload(cached)
+              setLoadError(null)
+            }
+          } else if (!cancelled) {
+            setLoadError('Templates could not be loaded while offline.')
+          }
+          return
+        }
         if (!templatesRes.ok) {
-          templatesRes = await fetch(`/api/templates?t=${Date.now()}&retry=1`, {
+          templatesRes = await safeFetch(`/api/templates?t=${Date.now()}&retry=1`, {
             credentials: 'include',
             cache: 'no-store',
           })
         }
 
-        if (!templatesRes.ok) {
-          const body = await templatesRes.json().catch(() => ({}))
-          const status = templatesRes.status
+        if (!templatesRes?.ok) {
+          const body = await templatesRes?.json().catch(() => ({}))
+          const status = templatesRes?.status || 0
           const isAirtableAuth = status === 401 || body?.diagnostics?.airtable_status_code === 401
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[NewInspectionForm] /api/templates failed', status, body)
+          const cached = readCachedTemplatesPayload()
+          if (cached?.templates?.length) {
+            if (!cancelled) {
+              applyTemplatesPayload(cached)
+              setLoadError(null)
+            }
+            return
           }
           if (isAirtableAuth) {
             throw new Error('Templates could not be loaded. Please contact support if this continues.')
           }
           throw new Error(
-            templatesRes.status === 503
+            status === 503
               ? 'Templates are not available yet. Please try again later.'
               : 'Templates could not be loaded. Please try again.'
           )
         }
 
         const templatesData = await templatesRes.json()
-        const templateList = templatesData.templates || []
-        applyNeighbourhoodVoicePatchesToList(templateList)
-        for (const t of templateList) {
-          applyTemplateDisplayPatches(t)
-        }
-
+        writeCachedTemplatesPayload(templatesData)
         if (!cancelled) {
-          setApiPayload(templatesData)
-          const list = templatesData.templates || []
-          if (list.length > 0) {
-            if (effectiveLockedTemplateId) {
-              const hasRequestedTemplate = list.some((t) => t.id === effectiveLockedTemplateId)
-              if (hasRequestedTemplate) setTemplateId(effectiveLockedTemplateId)
-              else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
-                setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
-              } else if (!templateId) setTemplateId(list[0].id)
-            } else if (!templateId) {
-              setTemplateId(list[0].id)
-            }
-          } else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
-            setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
-          }
+          applyTemplatesPayload(templatesData)
+          setLoadError(null)
         }
       } catch (err) {
         if (!cancelled) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[NewInspectionForm] load templates', err)
+          const cached = readCachedTemplatesPayload()
+          if (cached?.templates?.length) {
+            applyTemplatesPayload(cached)
+            setLoadError(null)
+          } else {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[NewInspectionForm] load templates', err)
+            }
+            setLoadError(err instanceof Error ? err.message : 'Templates could not be loaded.')
           }
-          setLoadError(err instanceof Error ? err.message : 'Templates could not be loaded.')
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -2314,9 +2369,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   )
 
   useEffect(() => {
-    const updateOnlineStatus = () => setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
+    const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
     updateOnlineStatus()
-    setOfflineDrafts(readOfflineInspectionDrafts())
+    const drafts = readOfflineInspectionDrafts()
+    setOfflineDrafts(drafts)
+    if (!templateId && drafts[0]?.payload?.templateId) {
+      setTemplateId(drafts[0].payload.templateId)
+    }
     window.addEventListener('online', updateOnlineStatus)
     window.addEventListener('offline', updateOnlineStatus)
     return () => {
@@ -2325,56 +2384,84 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
   }, [])
 
+  const noteDraftSaveResult = (saved) => {
+    setDraftStorageWarning(saved ? '' : OFFLINE_DRAFT_STORAGE_FULL_MESSAGE)
+  }
+
   useEffect(() => {
-    if (isOnline || !hasInspectionDraftContent(currentDraftPayload)) return
-    const id = offlineDraftId || createOfflineDraftId()
-    if (!offlineDraftId) setOfflineDraftId(id)
-    setOfflineDrafts(
-      upsertOfflineInspectionDraft({
+    if (!submitSuccessMessage) return undefined
+    const timer = window.setTimeout(() => setSubmitSuccessMessage(''), 5000)
+    return () => window.clearTimeout(timer)
+  }, [submitSuccessMessage])
+
+  useEffect(() => {
+    if (!hasInspectionDraftContent(currentDraftPayload)) return undefined
+    const timer = window.setTimeout(() => {
+      try {
+        const id = offlineDraftId || createOfflineDraftId()
+        if (!offlineDraftId) setOfflineDraftId(id)
+        const { drafts: next, saved } = upsertOfflineInspectionDraft({
+          id,
+          label: currentDraftPayload.templateName || currentDraftPayload.formType,
+          payload: currentDraftPayload,
+        })
+        setOfflineDrafts(next)
+        noteDraftSaveResult(saved)
+      } catch {
+        noteDraftSaveResult(false)
+      }
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [offlineDraftId, currentDraftPayload])
+
+  const saveCurrentOfflineDraft = () => {
+    try {
+      const id = offlineDraftId || createOfflineDraftId()
+      if (!offlineDraftId) setOfflineDraftId(id)
+      const { drafts: next, saved } = upsertOfflineInspectionDraft({
         id,
         label: currentDraftPayload.templateName || currentDraftPayload.formType,
         payload: currentDraftPayload,
       })
-    )
-    setOfflineNotice('Inspection saved on this phone.')
-  }, [isOnline, offlineDraftId, currentDraftPayload])
-
-  const saveCurrentOfflineDraft = () => {
-    const id = offlineDraftId || createOfflineDraftId()
-    if (!offlineDraftId) setOfflineDraftId(id)
-    const next = upsertOfflineInspectionDraft({
-      id,
-      label: currentDraftPayload.templateName || currentDraftPayload.formType,
-      payload: currentDraftPayload,
-    })
-    setOfflineDrafts(next)
-    setOfflineNotice('Inspection saved on this phone.')
-    return id
+      setOfflineDrafts(next)
+      noteDraftSaveResult(saved)
+      return id
+    } catch {
+      noteDraftSaveResult(false)
+      return offlineDraftId || ''
+    }
   }
 
   const restoreOfflineDraft = (draft) => {
-    const payload = draft?.payload || {}
-    const body = payload.submitBody || {}
-    setOfflineDraftId(draft.id)
-    setTemplateId(body.template_id || payload.templateId || '')
-    setPostgresBlockId(body.block_id || payload.blockId || '')
-    setLocation(body.location || payload.location || '')
-    setDescription(body.description || payload.description || '')
-    setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
-    setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
-    setAnswers(body.answers || {})
-    setAnswerExtras(body.answer_extras || {})
-    setSubmitError(null)
-    setOfflineNotice('Inspection reopened from this phone. You can continue working.')
+    try {
+      const payload = draft?.payload || {}
+      const body = payload.submitBody || {}
+      setOfflineDraftId(draft.id)
+      setTemplateId(body.template_id || payload.templateId || '')
+      setPostgresBlockId(body.block_id || payload.blockId || '')
+      setLocation(body.location || payload.location || '')
+      setDescription(body.description || payload.description || '')
+      setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
+      setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
+      setAnswers(body.answers || {})
+      setAnswerExtras(body.answer_extras || {})
+      setSubmitError(null)
+    } catch {
+      setSubmitError('Could not reopen the saved inspection on this phone.')
+    }
   }
 
   const prepareSubmitBodyForUpload = async (body) => {
-    if (!submitBodyHasPendingPhotos(body)) return body
-    return uploadPendingPhotosInSubmitBody(body)
+    if (!submitBodyHasPendingPhotos(body) || !isBrowserOnline()) return body
+    try {
+      return await uploadPendingPhotosInSubmitBody(body)
+    } catch {
+      throw new Error('Waiting for internet connection to complete upload.')
+    }
   }
 
   const submitPendingInspection = async (inspectionId) => {
-    const submitRes = await fetch(`/api/inspections/${inspectionId}/submit`, {
+    const submitRes = await safeFetch(`/api/inspections/${inspectionId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -2383,6 +2470,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         inspection_end_time: datetimeLocalToIso(inspectionEndTime),
       }),
     })
+    if (!submitRes) {
+      throw new Error('Waiting for internet connection to submit this inspection.')
+    }
     const submitData = await submitRes.json().catch(() => ({}))
     if (!submitRes.ok || submitData.error) {
       const msg = submitData.error || submitData.details || `Submit failed (${submitRes.status})`
@@ -2393,7 +2483,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const submitOfflineDraft = async (draft) => {
     if (!isOnline) {
-      setOfflineNotice('Waiting for internet connection to complete upload and submit this inspection.')
+      setSubmitError('Waiting for internet connection to submit this inspection.')
       return
     }
     let body = draft?.payload?.submitBody
@@ -2403,15 +2493,19 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setSubmitWarning(null)
     try {
       body = await prepareSubmitBodyForUpload(body)
-      const res = await fetch('/api/inspections', {
+      const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ ...body, draft: true }),
       })
+      if (!res) {
+        setSubmitError('Waiting for internet connection to submit this inspection.')
+        return
+      }
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || data.error) {
-        setSubmitError(data.error || data.details || `Request failed (${res.status})`)
+      if (!res?.ok || data.error) {
+        setSubmitError(data.error || data.details || `Request failed (${res?.status || 0})`)
         return
       }
       const inspectionId = data.inspectionId ?? data.id
@@ -2433,11 +2527,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
+      setDraftStorageWarning('')
+      setSubmitSuccessMessage('Inspection submitted successfully')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
-      if (submitBodyHasPendingPhotos(draft?.payload?.submitBody)) {
-        setOfflineNotice('Waiting for internet connection to complete upload.')
-      }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -2686,15 +2779,20 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         return
       }
       let submitBody = currentSubmitBody
-      if (submitBodyHasPendingPhotos(submitBody)) {
+      if (isOnline && submitBodyHasPendingPhotos(submitBody)) {
         submitBody = await prepareSubmitBodyForUpload(submitBody)
       }
-      const res = await fetch('/api/inspections', {
+      const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ ...submitBody, draft: true }),
       })
+      if (!res) {
+        saveCurrentOfflineDraft()
+        setIsSubmitting(false)
+        return
+      }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         const msg = res.status === 401
@@ -2730,14 +2828,17 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         return
       }
 
+      if (offlineDraftId) {
+        setOfflineDrafts(removeOfflineInspectionDraft(offlineDraftId))
+        setOfflineDraftId('')
+      }
+      setDraftStorageWarning('')
+      setSubmitSuccessMessage('Inspection submitted successfully')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (!isBrowserOnline()) {
         saveCurrentOfflineDraft()
         return
-      }
-      if (submitBodyHasPendingPhotos(currentSubmitBody)) {
-        setOfflineNotice('Waiting for internet connection to complete upload.')
       }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
@@ -2745,23 +2846,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
   }
 
-  if (loading) {
+  if (loading && isOnline) {
     return (
       <div>
         <p>Loading templates...</p>
-      </div>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <div>
-        <Link href="/" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '0.875rem' }}>
-          ← Back to Inspections
-        </Link>
-        <div style={{ marginTop: '1rem', padding: '1rem', background: '#fee2e2', color: '#dc2626', borderRadius: '0.5rem' }}>
-          {loadError}
-        </div>
       </div>
     )
   }
@@ -2811,18 +2899,32 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         />
       ) : null}
 
-      {(!isOnline || offlineDrafts.length > 0 || offlineNotice) && (
-        <OfflineInspectionStatusPanel
-          isOnline={isOnline}
-          isSubmitting={isSubmitting}
-          offlineNotice={offlineNotice}
-          offlineDrafts={offlineDrafts}
-          activeDraftId={offlineDraftId}
-          activeDraftPayload={currentDraftPayload}
-          onReopenDraft={restoreOfflineDraft}
-          onSubmitDraft={submitOfflineDraft}
-        />
-      )}
+      {loadError && isOnline ? (
+        <div
+          style={{
+            marginBottom: '1rem',
+            padding: '0.85rem 1rem',
+            background: '#fef2f2',
+            color: '#b91c1c',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+          }}
+        >
+          {loadError}
+        </div>
+      ) : null}
+
+      <OfflineInspectionStatusPanel
+        isOnline={isOnline}
+        isSubmitting={isSubmitting}
+        activeDraftId={offlineDraftId}
+        activeDraftPayload={currentDraftPayload}
+        offlineDrafts={offlineDrafts}
+        submitSuccessMessage={submitSuccessMessage}
+        storageWarning={draftStorageWarning}
+        onReopenDraft={restoreOfflineDraft}
+        onSubmitDraft={submitOfflineDraft}
+      />
 
       <form
         onSubmit={handleSubmit}

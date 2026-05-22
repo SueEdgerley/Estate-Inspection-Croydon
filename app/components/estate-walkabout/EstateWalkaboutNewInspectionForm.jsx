@@ -17,9 +17,11 @@ import {
   readOfflineInspectionDrafts,
   removeOfflineInspectionDraft,
   upsertOfflineInspectionDraft,
+  OFFLINE_DRAFT_STORAGE_FULL_MESSAGE,
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
 import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
+import { isBrowserOnline, safeFetch } from '@/lib/offline-browser'
 
 const EW = {
   pageBg: '#f1f5f9',
@@ -214,10 +216,13 @@ export default function EstateWalkaboutNewInspectionForm({
   const [validationErrors, setValidationErrors] = useState({})
   const [toastMessage, setToastMessage] = useState('')
   const toastTimerRef = useRef(null)
-  const [isOnline, setIsOnline] = useState(true)
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  )
   const [offlineDraftId, setOfflineDraftId] = useState('')
   const [offlineDrafts, setOfflineDrafts] = useState([])
-  const [offlineNotice, setOfflineNotice] = useState('')
+  const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
+  const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
   const [inspectionEndTime, setInspectionEndTime] = useState('')
 
@@ -230,9 +235,10 @@ export default function EstateWalkaboutNewInspectionForm({
   useEffect(() => {
     let cancelled = false
     async function loadPeople() {
+      if (!isBrowserOnline()) return
       try {
-        const res = await fetch('/api/people', { cache: 'no-store', credentials: 'include' })
-        if (!res.ok || cancelled) return
+        const res = await safeFetch('/api/people', { cache: 'no-store', credentials: 'include' })
+        if (!res?.ok || cancelled) return
         const rows = await res.json()
         if (cancelled || !Array.isArray(rows)) return
         setPeopleOptions(
@@ -370,7 +376,7 @@ export default function EstateWalkaboutNewInspectionForm({
   )
 
   useEffect(() => {
-    const updateOnlineStatus = () => setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine)
+    const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
     updateOnlineStatus()
     setOfflineDrafts(readOfflineInspectionDrafts())
     window.addEventListener('online', updateOnlineStatus)
@@ -381,63 +387,90 @@ export default function EstateWalkaboutNewInspectionForm({
     }
   }, [])
 
+  const noteDraftSaveResult = (saved) => {
+    setDraftStorageWarning(saved ? '' : OFFLINE_DRAFT_STORAGE_FULL_MESSAGE)
+  }
+
   useEffect(() => {
-    if (isOnline || !hasInspectionDraftContent(currentDraftPayload)) return
-    const id = offlineDraftId || createOfflineDraftId()
-    if (!offlineDraftId) setOfflineDraftId(id)
-    setOfflineDrafts(
-      upsertOfflineInspectionDraft({
+    if (!submitSuccessMessage) return undefined
+    const timer = window.setTimeout(() => setSubmitSuccessMessage(''), 5000)
+    return () => window.clearTimeout(timer)
+  }, [submitSuccessMessage])
+
+  useEffect(() => {
+    if (!hasInspectionDraftContent(currentDraftPayload)) return undefined
+    const timer = window.setTimeout(() => {
+      try {
+        const id = offlineDraftId || createOfflineDraftId()
+        if (!offlineDraftId) setOfflineDraftId(id)
+        const { drafts: next, saved } = upsertOfflineInspectionDraft({
+          id,
+          label: 'Estate Walkabout',
+          payload: currentDraftPayload,
+        })
+        setOfflineDrafts(next)
+        noteDraftSaveResult(saved)
+      } catch {
+        noteDraftSaveResult(false)
+      }
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [offlineDraftId, currentDraftPayload])
+
+  const saveCurrentOfflineDraft = () => {
+    try {
+      const id = offlineDraftId || createOfflineDraftId()
+      if (!offlineDraftId) setOfflineDraftId(id)
+      const { drafts: next, saved } = upsertOfflineInspectionDraft({
         id,
         label: 'Estate Walkabout',
         payload: currentDraftPayload,
       })
-    )
-    setOfflineNotice('Inspection saved on this phone.')
-  }, [isOnline, offlineDraftId, currentDraftPayload])
-
-  const saveCurrentOfflineDraft = () => {
-    const id = offlineDraftId || createOfflineDraftId()
-    if (!offlineDraftId) setOfflineDraftId(id)
-    const next = upsertOfflineInspectionDraft({
-      id,
-      label: 'Estate Walkabout',
-      payload: currentDraftPayload,
-    })
-    setOfflineDrafts(next)
-    setOfflineNotice('Inspection saved on this phone.')
+      setOfflineDrafts(next)
+      noteDraftSaveResult(saved)
+    } catch {
+      noteDraftSaveResult(false)
+    }
   }
 
   const restoreOfflineDraft = (draft) => {
-    const payload = draft?.payload || {}
-    const body = payload.submitBody || {}
-    setOfflineDraftId(draft.id)
-    setPostgresBlockId(body.block_id || payload.blockId || '')
-    setLocation(body.location || payload.location || '')
-    setDescription(body.description || payload.description || '')
-    setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
-    setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
-    const restoredAnswers = { ...(body.answers || {}) }
-    let restoredChecklist = []
     try {
-      restoredChecklist = JSON.parse(restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID] || '[]')
+      const payload = draft?.payload || {}
+      const body = payload.submitBody || {}
+      setOfflineDraftId(draft.id)
+      setPostgresBlockId(body.block_id || payload.blockId || '')
+      setLocation(body.location || payload.location || '')
+      setDescription(body.description || payload.description || '')
+      setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
+      setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
+      const restoredAnswers = { ...(body.answers || {}) }
+      let restoredChecklist = []
+      try {
+        restoredChecklist = JSON.parse(restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID] || '[]')
+      } catch {
+        restoredChecklist = []
+      }
+      delete restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID]
+      setAnswers({ ...emptyAnswers(), ...restoredAnswers })
+      setAnswerExtras(body.answer_extras || {})
+      setChecklist(Array.isArray(restoredChecklist) ? restoredChecklist : [])
+      setSubmitError(null)
     } catch {
-      restoredChecklist = []
+      setSubmitError('Could not reopen the saved inspection on this phone.')
     }
-    delete restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID]
-    setAnswers({ ...emptyAnswers(), ...restoredAnswers })
-    setAnswerExtras(body.answer_extras || {})
-    setChecklist(Array.isArray(restoredChecklist) ? restoredChecklist : [])
-    setSubmitError(null)
-    setOfflineNotice('Inspection reopened from this phone. You can continue working.')
   }
 
   const prepareSubmitBodyForUpload = async (body) => {
-    if (!submitBodyHasPendingPhotos(body)) return body
-    return uploadPendingPhotosInSubmitBody(body)
+    if (!submitBodyHasPendingPhotos(body) || !isBrowserOnline()) return body
+    try {
+      return await uploadPendingPhotosInSubmitBody(body)
+    } catch {
+      throw new Error('Waiting for internet connection to complete upload.')
+    }
   }
 
   const submitPendingInspection = async (inspectionId) => {
-    const submitRes = await fetch(`/api/inspections/${inspectionId}/submit`, {
+    const submitRes = await safeFetch(`/api/inspections/${inspectionId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -446,6 +479,9 @@ export default function EstateWalkaboutNewInspectionForm({
         inspection_end_time: datetimeLocalToIso(inspectionEndTime),
       }),
     })
+    if (!submitRes) {
+      throw new Error('Waiting for internet connection to submit this inspection.')
+    }
     const submitData = await submitRes.json().catch(() => ({}))
     if (!submitRes.ok || submitData.error) {
       const msg = submitData.error || submitData.details || `Submit failed (${submitRes.status})`
@@ -456,7 +492,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const submitOfflineDraft = async (draft) => {
     if (!isOnline) {
-      setOfflineNotice('Waiting for internet connection to complete upload and submit this inspection.')
+      setSubmitError('Waiting for internet connection to submit this inspection.')
       return
     }
     let body = draft?.payload?.submitBody
@@ -466,12 +502,16 @@ export default function EstateWalkaboutNewInspectionForm({
     setSubmitWarning(null)
     try {
       body = await prepareSubmitBodyForUpload(body)
-      const res = await fetch('/api/inspections', {
+      const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ ...body, draft: true }),
       })
+      if (!res) {
+        setSubmitError('Waiting for internet connection to submit this inspection.')
+        return
+      }
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) {
         setSubmitError(data.error || data.details || `Request failed (${res.status})`)
@@ -496,11 +536,10 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
+      setDraftStorageWarning('')
+      setSubmitSuccessMessage('Inspection submitted successfully')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
-      if (submitBodyHasPendingPhotos(draft?.payload?.submitBody)) {
-        setOfflineNotice('Waiting for internet connection to complete upload.')
-      }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -592,15 +631,20 @@ export default function EstateWalkaboutNewInspectionForm({
         return
       }
       let submitBody = currentSubmitBody
-      if (submitBodyHasPendingPhotos(submitBody)) {
+      if (isOnline && submitBodyHasPendingPhotos(submitBody)) {
         submitBody = await prepareSubmitBodyForUpload(submitBody)
       }
-      const res = await fetch('/api/inspections', {
+      const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ ...submitBody, draft: true }),
       })
+      if (!res) {
+        saveCurrentOfflineDraft()
+        setIsSubmitting(false)
+        return
+      }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSubmitError(data?.error || data?.details || `Request failed (${res.status})`)
@@ -627,14 +671,17 @@ export default function EstateWalkaboutNewInspectionForm({
         setSubmitWarning(submitWarnings.join(' '))
         return
       }
+      if (offlineDraftId) {
+        setOfflineDrafts(removeOfflineInspectionDraft(offlineDraftId))
+        setOfflineDraftId('')
+      }
+      setDraftStorageWarning('')
+      setSubmitSuccessMessage('Inspection submitted successfully')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (!isBrowserOnline()) {
         saveCurrentOfflineDraft()
         return
-      }
-      if (submitBodyHasPendingPhotos(currentSubmitBody)) {
-        setOfflineNotice('Waiting for internet connection to complete upload.')
       }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
@@ -873,19 +920,18 @@ export default function EstateWalkaboutNewInspectionForm({
               {toastMessage}
             </div>
           )}
-          {(!isOnline || offlineDrafts.length > 0 || offlineNotice) && (
-            <OfflineInspectionStatusPanel
-              isOnline={isOnline}
-              isSubmitting={isSubmitting}
-              offlineNotice={offlineNotice}
-              offlineDrafts={offlineDrafts}
-              activeDraftId={offlineDraftId}
-              activeDraftPayload={currentDraftPayload}
-              onReopenDraft={restoreOfflineDraft}
-              onSubmitDraft={submitOfflineDraft}
-              style={{ maxWidth: 'none' }}
-            />
-          )}
+          <OfflineInspectionStatusPanel
+            isOnline={isOnline}
+            isSubmitting={isSubmitting}
+            activeDraftId={offlineDraftId}
+            activeDraftPayload={currentDraftPayload}
+            offlineDrafts={offlineDrafts}
+            submitSuccessMessage={submitSuccessMessage}
+            storageWarning={draftStorageWarning}
+            onReopenDraft={restoreOfflineDraft}
+            onSubmitDraft={submitOfflineDraft}
+            style={{ maxWidth: 'none' }}
+          />
           {submitError && (
             <div
               style={{

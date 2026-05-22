@@ -2,14 +2,11 @@
 
 import {
   formatDraftLastSaved,
-  getDraftConnectionStatus,
-  getDraftNextStep,
   getDraftPhotoStatus,
-  getOfflineDraftStatusSummary,
   hasInspectionDraftContent,
 } from '@/lib/offline-inspection-drafts'
 
-const panelStyle = {
+const offlineBannerStyle = {
   maxWidth: 800,
   margin: '0 0 1rem',
   padding: '0.9rem 1rem',
@@ -19,21 +16,26 @@ const panelStyle = {
   color: '#92400e',
 }
 
-const cardStyle = {
-  marginTop: '0.75rem',
-  padding: '0.75rem 0.85rem',
-  borderRadius: '0.45rem',
-  border: '1px solid #fcd34d',
-  background: '#fff',
-  color: '#1f2937',
+const onlineDraftStyle = {
+  maxWidth: 800,
+  margin: '0 0 1rem',
+  padding: '0.55rem 0.85rem',
+  border: '1px solid #cbd5e1',
+  borderRadius: '0.5rem',
+  background: '#f8fafc',
+  color: '#334155',
+  fontSize: '0.875rem',
 }
 
-const listStyle = {
-  margin: '0.45rem 0 0',
-  paddingLeft: '1.1rem',
+const successBannerStyle = {
+  maxWidth: 800,
+  margin: '0 0 1rem',
+  padding: '0.75rem 1rem',
+  border: '1px solid #86efac',
+  borderRadius: '0.5rem',
+  background: '#ecfdf5',
+  color: '#166534',
   fontSize: '0.875rem',
-  lineHeight: 1.55,
-  color: '#334155',
 }
 
 const smallButtonStyle = {
@@ -46,72 +48,100 @@ const smallButtonStyle = {
   cursor: 'pointer',
 }
 
-function InspectionStatusCard({ title, summary, actions, isSubmitting, isOnline }) {
+export function resolveInspectionStatusMode({
+  isOnline,
+  activeDraftId,
+  activeDraftPayload,
+  submitSuccessMessage,
+}) {
+  if (submitSuccessMessage) return 'submitted'
+  if (!isOnline) return 'offline'
+  const hasActiveDraft =
+    Boolean(activeDraftId) &&
+    activeDraftPayload &&
+    hasInspectionDraftContent({ submitBody: activeDraftPayload.submitBody || {} })
+  if (hasActiveDraft) return 'online-draft'
+  return 'hidden'
+}
+
+function OtherSavedDraftsList({ drafts, isOnline, isSubmitting, onReopenDraft, onSubmitDraft }) {
+  if (!drafts.length) return null
   return (
-    <div style={cardStyle}>
-      {title ? (
-        <strong style={{ display: 'block', fontSize: '0.925rem', color: '#92400e' }}>{title}</strong>
-      ) : null}
-      <p style={{ margin: '0.35rem 0 0', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>
-        Inspection status
-      </p>
-      <ul style={listStyle}>
-        <li>{summary.answersLabel}</li>
-        <li>{summary.photoStatus.label}</li>
-        {!isOnline && summary.connectionStatus.key !== 'upload-waiting' ? (
-          <li>Waiting for internet connection</li>
-        ) : null}
-        <li>{summary.connectionStatus.label}</li>
-        {summary.lastSavedAt ? <li>Last saved at {summary.lastSavedAt}</li> : null}
-      </ul>
-      <p style={{ margin: '0.55rem 0 0', fontSize: '0.875rem', color: '#475569' }}>
-        <strong style={{ color: '#334155' }}>What to do next:</strong> {summary.nextStep}
-      </p>
-      {actions ? (
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>{actions}</div>
-      ) : null}
-      {isSubmitting ? (
-        <p style={{ margin: '0.55rem 0 0', fontSize: '0.8125rem', color: '#64748b' }}>Submitting…</p>
-      ) : null}
+    <div style={{ display: 'grid', gap: '0.5rem', marginTop: '0.65rem' }}>
+      {drafts.map((draft) => (
+        <div
+          key={draft.id}
+          style={{
+            display: 'flex',
+            gap: '0.5rem',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            fontSize: '0.875rem',
+          }}
+        >
+          <span style={{ flex: '1 1 220px' }}>
+            {draft.label || draft.payload?.templateName || 'Inspection'}
+            {draft.updatedAt || draft.createdAt
+              ? ` · ${formatDraftLastSaved(draft)}`
+              : ''}
+          </span>
+          <button type="button" onClick={() => onReopenDraft?.(draft)} style={smallButtonStyle}>
+            Open saved inspection
+          </button>
+          <button
+            type="button"
+            disabled={!isOnline || isSubmitting}
+            onClick={() => onSubmitDraft?.(draft)}
+            style={{
+              ...smallButtonStyle,
+              opacity: !isOnline || isSubmitting ? 0.55 : 1,
+              cursor: !isOnline || isSubmitting ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Submit inspection
+          </button>
+        </div>
+      ))}
     </div>
   )
 }
 
-function ActiveInspectionStatusCard({ isOnline, activeDraftPayload, activeDraftRecord, isSubmitting }) {
-  if (!hasInspectionDraftContent({ submitBody: activeDraftPayload?.submitBody || {} })) return null
+const storageWarningStyle = {
+  margin: '0 0 1rem',
+  maxWidth: 800,
+  padding: '0.65rem 0.85rem',
+  borderRadius: '0.45rem',
+  border: '1px solid #fca5a5',
+  background: '#fef2f2',
+  color: '#991b1b',
+  fontSize: '0.875rem',
+  lineHeight: 1.45,
+}
 
-  const photoStatus = getDraftPhotoStatus(activeDraftPayload)
-  const connectionStatus = getDraftConnectionStatus({
-    isOnline,
-    draftStatus: activeDraftRecord?.status || 'unsent',
-    hasAnswers: true,
-    hasPendingPhotos: photoStatus.pendingCount > 0,
-  })
-  const summary = {
-    answersLabel: 'Answers saved on this phone',
-    photoStatus,
-    connectionStatus,
-    lastSavedAt: activeDraftRecord ? formatDraftLastSaved(activeDraftRecord) : null,
-    nextStep: getDraftNextStep({ isOnline, photoStatusKey: photoStatus.key }),
-  }
-
+function StorageWarning({ message, compact = false }) {
+  if (!message) return null
   return (
-    <InspectionStatusCard
-      title="Inspection saved on this phone"
-      summary={summary}
-      isSubmitting={isSubmitting}
-      isOnline={isOnline}
-    />
+    <p
+      style={{
+        ...storageWarningStyle,
+        margin: compact ? '0.55rem 0 0' : storageWarningStyle.margin,
+        maxWidth: compact ? 'none' : storageWarningStyle.maxWidth,
+      }}
+      role="alert"
+    >
+      {message}
+    </p>
   )
 }
 
 export default function OfflineInspectionStatusPanel({
   isOnline,
   isSubmitting = false,
-  offlineNotice = '',
-  offlineDrafts = [],
   activeDraftId = '',
   activeDraftPayload = null,
+  offlineDrafts = [],
+  submitSuccessMessage = '',
+  storageWarning = '',
   onReopenDraft,
   onSubmitDraft,
   style,
@@ -119,71 +149,72 @@ export default function OfflineInspectionStatusPanel({
   const activeDraftRecord = activeDraftId
     ? offlineDrafts.find((draft) => draft.id === activeDraftId) || null
     : null
-  const savedDrafts = offlineDrafts.filter((draft) => draft.id !== activeDraftId)
-  const hasActiveDraftContent =
-    activeDraftPayload && hasInspectionDraftContent({ submitBody: activeDraftPayload.submitBody || {} })
-  const showActiveCard = hasActiveDraftContent && (!isOnline || Boolean(activeDraftId))
+  const otherSavedDrafts = offlineDrafts.filter((draft) => draft.id !== activeDraftId)
+  const photoStatus = activeDraftPayload ? getDraftPhotoStatus(activeDraftPayload) : null
+  const lastSavedAt = activeDraftRecord ? formatDraftLastSaved(activeDraftRecord) : null
 
-  if (!showActiveCard && !offlineDrafts.length && !offlineNotice) return null
+  const mode = resolveInspectionStatusMode({
+    isOnline,
+    activeDraftId,
+    activeDraftPayload,
+    submitSuccessMessage,
+  })
+
+  if (mode === 'hidden') {
+    if (!storageWarning) return null
+    return (
+      <div style={{ ...style }}>
+        <StorageWarning message={storageWarning} />
+      </div>
+    )
+  }
+
+  if (mode === 'submitted') {
+    return (
+      <div style={{ ...successBannerStyle, ...style }} role="status" aria-live="polite">
+        <strong>{submitSuccessMessage || 'Inspection submitted successfully'}</strong>
+        <StorageWarning message={storageWarning} compact />
+      </div>
+    )
+  }
+
+  if (mode === 'online-draft') {
+    return (
+      <div style={{ ...onlineDraftStyle, ...style }} role="status" aria-live="polite">
+        <strong>Inspection in progress</strong>
+        {lastSavedAt ? ` · Draft saved at ${lastSavedAt}` : ' · Draft saved on this phone'}
+        {photoStatus?.pendingCount > 0 ? ' · Photos waiting to upload when signal returns' : ''}
+        <StorageWarning message={storageWarning} compact />
+      </div>
+    )
+  }
 
   return (
-    <div style={{ ...panelStyle, ...style }}>
-      <strong>
-        {!isOnline ? 'Inspection saved on this phone' : 'Inspections saved on this phone'}
-      </strong>
+    <div style={{ ...offlineBannerStyle, ...style }} role="status" aria-live="polite">
+      <strong>Inspection saved on this phone</strong>
       <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
-        You can continue working. Your inspection is saved on this phone and photos will upload when signal returns.
+        You can continue working.
+        {photoStatus?.pendingCount > 0
+          ? ' Photos waiting to upload when signal returns.'
+          : ' Photos will upload when signal returns.'}
       </p>
-      {offlineNotice ? (
-        <p style={{ margin: '0.55rem 0 0', color: '#475569', fontSize: '0.875rem' }}>{offlineNotice}</p>
+      {lastSavedAt ? (
+        <p style={{ margin: '0.35rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
+          Last saved at {lastSavedAt}
+        </p>
       ) : null}
-
-      {showActiveCard ? (
-        <ActiveInspectionStatusCard
+      <StorageWarning message={storageWarning} compact />
+      {otherSavedDrafts.length > 0 ? (
+        <OtherSavedDraftsList
+          drafts={otherSavedDrafts}
           isOnline={isOnline}
-          activeDraftPayload={activeDraftPayload}
-          activeDraftRecord={activeDraftRecord}
           isSubmitting={isSubmitting}
+          onReopenDraft={onReopenDraft}
+          onSubmitDraft={onSubmitDraft}
         />
-      ) : null}
-
-      {savedDrafts.length > 0 ? (
-        <div style={{ display: 'grid', gap: '0.65rem', marginTop: showActiveCard ? '0.65rem' : '0.75rem' }}>
-          {savedDrafts.map((draft) => {
-            const summary = getOfflineDraftStatusSummary(draft, isOnline)
-            return (
-              <InspectionStatusCard
-                key={draft.id}
-                title={summary.label}
-                summary={summary}
-                isSubmitting={isSubmitting}
-                isOnline={isOnline}
-                actions={
-                  <>
-                    <button type="button" onClick={() => onReopenDraft?.(draft)} style={smallButtonStyle}>
-                      Open saved inspection
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!isOnline || isSubmitting}
-                      onClick={() => onSubmitDraft?.(draft)}
-                      style={{
-                        ...smallButtonStyle,
-                        opacity: !isOnline || isSubmitting ? 0.55 : 1,
-                        cursor: !isOnline || isSubmitting ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      Submit inspection
-                    </button>
-                  </>
-                }
-              />
-            )
-          })}
-        </div>
       ) : null}
     </div>
   )
 }
 
-export { panelStyle as offlinePanelStyle, smallButtonStyle as offlineSmallButtonStyle }
+export { offlineBannerStyle as offlinePanelStyle, smallButtonStyle as offlineSmallButtonStyle }

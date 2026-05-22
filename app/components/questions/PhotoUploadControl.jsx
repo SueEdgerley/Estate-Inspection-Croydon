@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { isBrowserOnline } from '@/lib/offline-browser'
 import {
   isPendingLocalPhotoUrl,
   readImageFileAsDataUrl,
@@ -8,10 +9,6 @@ import {
 } from '@/lib/offline-photo-upload'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-
-function isBrowserOnline() {
-  return typeof navigator === 'undefined' ? true : navigator.onLine
-}
 
 export default function PhotoUploadControl({
   id,
@@ -29,25 +26,19 @@ export default function PhotoUploadControl({
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState(null)
   const [localSaveNotice, setLocalSaveNotice] = useState(null)
-  const [isOnline, setIsOnline] = useState(isBrowserOnline)
   const inputRef = useRef(null)
   const pendingReplaceRef = useRef(null)
   const syncingRef = useRef(false)
+  const photoUrlsRef = useRef(photoUrls)
 
   useEffect(() => {
-    const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
-    updateOnlineStatus()
-    window.addEventListener('online', updateOnlineStatus)
-    window.addEventListener('offline', updateOnlineStatus)
-    return () => {
-      window.removeEventListener('online', updateOnlineStatus)
-      window.removeEventListener('offline', updateOnlineStatus)
-    }
-  }, [])
+    photoUrlsRef.current = photoUrls
+  }, [photoUrls])
 
   const syncPendingUploads = useCallback(async () => {
     if (syncingRef.current || !isBrowserOnline()) return
-    const pendingUrls = photoUrls.filter(isPendingLocalPhotoUrl)
+    const currentUrls = photoUrlsRef.current
+    const pendingUrls = currentUrls.filter(isPendingLocalPhotoUrl)
     if (!pendingUrls.length) return
 
     syncingRef.current = true
@@ -57,30 +48,43 @@ export default function PhotoUploadControl({
     setProgress(0)
 
     try {
-      const { nextUrls, uploadedCount } = await uploadPendingLocalPhotoUrls(photoUrls, ({ uploadedCount: done, nextUrls: interimUrls }) => {
+      const { nextUrls, uploadedCount } = await uploadPendingLocalPhotoUrls(currentUrls, ({ uploadedCount: done }) => {
         setProgress(Math.round((done / pendingUrls.length) * 100))
-        onChange(interimUrls)
       })
       if (uploadedCount > 0) {
         onChange(nextUrls)
       }
-    } catch (err) {
-      setUploadError(err?.message || 'Photo upload failed. Please try again.')
+    } catch {
+      setLocalSaveNotice('Photo saved on this phone — waiting to upload')
     } finally {
       syncingRef.current = false
       setUploading(false)
       setProgress(100)
     }
-  }, [onChange, photoUrls])
+  }, [onChange])
 
   useEffect(() => {
-    if (!isOnline) return
-    syncPendingUploads()
-  }, [isOnline, syncPendingUploads])
+    const handleOnline = () => {
+      syncPendingUploads()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [syncPendingUploads])
 
-  const saveFileLocally = async (file) => readImageFileAsDataUrl(file)
+  const storePhotoLocally = async (file, urlsToAdd) => {
+    const localUrl = await readImageFileAsDataUrl(file)
+    if (!localUrl) throw new Error('Could not save photo on this phone.')
+    urlsToAdd.push(localUrl)
+    setLocalSaveNotice('Photo saved on this phone — waiting to upload')
+    setUploadError(null)
+  }
 
   const uploadFile = (file, onUploaded, onFailed) => {
+    if (!isBrowserOnline()) {
+      onFailed(null)
+      return
+    }
+
     const type = file.type || ''
     if (!type.startsWith('image/')) {
       onFailed('Please select image files only (JPEG, PNG, GIF, WebP).')
@@ -111,27 +115,15 @@ export default function PhotoUploadControl({
           }
         } catch {}
       }
-      let message = 'Photo upload failed. Please try again.'
-      try {
-        const data = JSON.parse(xhr.responseText)
-        message = data?.error || data?.details || message
-      } catch {}
-      onFailed(message)
+      onFailed(null)
     })
 
     xhr.addEventListener('error', () => {
-      onFailed('Network error during upload.')
+      onFailed(null)
     })
 
     xhr.open('POST', '/api/upload/photo')
     xhr.send(fd)
-  }
-
-  const storePhotoLocally = async (file, urlsToAdd, replaceUrl) => {
-    const localUrl = await saveFileLocally(file)
-    if (!localUrl) throw new Error('Could not save photo on this phone.')
-    urlsToAdd.push(localUrl)
-    setLocalSaveNotice('Photo saved on this phone — waiting to upload')
   }
 
   const handleSelect = async (e) => {
@@ -172,7 +164,7 @@ export default function PhotoUploadControl({
 
       if (!isBrowserOnline()) {
         try {
-          await storePhotoLocally(file, urlsToAdd, replaceUrl)
+          await storePhotoLocally(file, urlsToAdd)
           await processNext(index + 1)
         } catch (err) {
           setUploading(false)
@@ -190,12 +182,12 @@ export default function PhotoUploadControl({
         },
         async (message) => {
           try {
-            await storePhotoLocally(file, urlsToAdd, replaceUrl)
-            setUploadError(null)
+            await storePhotoLocally(file, urlsToAdd)
+            if (message) setUploadError(message)
             await processNext(index + 1)
           } catch (err) {
             setUploading(false)
-            setUploadError(message || err?.message || 'Could not save photo on this phone.')
+            setUploadError(err?.message || message || 'Could not save photo on this phone.')
             e.target.value = ''
           }
         }
