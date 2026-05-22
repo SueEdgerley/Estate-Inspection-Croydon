@@ -1205,14 +1205,13 @@ export async function GET(request) {
         const actionTotal = Number(counts?.issues_count) || 0
         const actionOpen = Number(counts?.open_issues_count) || 0
         const responseTotal = Number(responseCounts.count) || 0
-        const totalIssues = Math.max(actionTotal, responseTotal)
         return {
           ...row,
-          issue_count: totalIssues,
-          issues_count: totalIssues,
+          issue_count: actionTotal,
+          issues_count: actionTotal,
           action_count: actionTotal,
           response_issue_count: responseTotal,
-          open_issues_count: actionTotal > 0 ? Math.max(actionOpen, responseTotal) : responseTotal,
+          open_issues_count: actionOpen,
         }
       })
 
