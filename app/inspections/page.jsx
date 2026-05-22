@@ -6,6 +6,10 @@ import { usePathname } from 'next/navigation'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl, withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 import { inspectionTypeLabel } from '@/lib/inspection-work-types'
+import {
+  getCaretakerInspectionModeListLabel,
+  parseCaretakerScopeFromDescription,
+} from '@/lib/caretaker-specific-task-inspection'
 
 function normalizeInspectionListRows(data) {
   if (!Array.isArray(data)) return []
@@ -240,8 +244,29 @@ export default function InspectionsListPage() {
 
   const templateDisplay = (row) => {
     const templateName = row.template_name?.trim()
-    if (templateName) return inspectionTypeLabel(templateName, templateName)
-    return inspectionTypeLabel(row.work_type || row.type, 'Inspection')
+    return templateName
+      ? inspectionTypeLabel(templateName, templateName)
+      : inspectionTypeLabel(row.work_type || row.type, 'Inspection')
+  }
+
+  const inspectionModeDisplay = (row) => {
+    const fromApi = row.scope_label?.trim()
+    if (fromApi) return fromApi
+    return getCaretakerInspectionModeListLabel(parseCaretakerScopeFromDescription(row.description))
+  }
+
+  const templateCellContent = (row) => {
+    const modeLabel = inspectionModeDisplay(row)
+    return (
+      <>
+        <div>{templateDisplay(row)}</div>
+        {modeLabel ? (
+          <div style={{ marginTop: '0.25rem', fontSize: '0.8125rem', color: '#6b7280', lineHeight: 1.4 }}>
+            {modeLabel}
+          </div>
+        ) : null}
+      </>
+    )
   }
 
   const statusDisplay = (row) => {
@@ -347,7 +372,7 @@ export default function InspectionsListPage() {
     const escapeCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`
     const rows = selectedRows.map((inspection) => [
       inspection.id || '',
-      templateDisplay(inspection),
+      [templateDisplay(inspection), inspectionModeDisplay(inspection)].filter(Boolean).join(' · '),
       inspection.estate_name || '',
       inspection.block_name || '',
       locationDisplay(inspection),
@@ -1060,7 +1085,7 @@ export default function InspectionsListPage() {
                 ) : (
                   summaryRows.map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '0.75rem 1rem', color: '#111827' }}>{templateDisplay(row)}</td>
+                      <td style={{ padding: '0.75rem 1rem', color: '#111827' }}>{templateCellContent(row)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{locationDisplay(row)}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
                       <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.template_name ?? '–'}</td>
@@ -1142,7 +1167,7 @@ export default function InspectionsListPage() {
                         </td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.estate_name ?? '–'}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.block_name ?? '–'}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{templateDisplay(row)}</td>
+                        <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{templateCellContent(row)}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{row.inspector_name ?? '–'}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#374151' }}>{formatDate(row.submitted_at || row.created_at)}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>

@@ -13,6 +13,8 @@ import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { isCaretakerTemplate } from '@/lib/caretaker-template'
 import {
   caretakerSectionInScope,
+  getCaretakerInspectionModeListLabel,
+  parseCaretakerScopeFromDescription,
   resolveCaretakerInspectionScope,
 } from '@/lib/caretaker-specific-task-inspection'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
@@ -1139,11 +1141,20 @@ export async function GET(request) {
       [...whereParams, limit]
     )
     const inspectionIds = rows.map((row) => String(row.id || '').trim()).filter(Boolean)
-    let rowsWithActionCounts = rows.map((row) => ({
-      ...row,
-      issues_count: 0,
-      open_issues_count: 0,
-    }))
+    const enrichListRowWithScopeLabel = (row) => {
+      const listLabel = getCaretakerInspectionModeListLabel(
+        parseCaretakerScopeFromDescription(row.description)
+      )
+      return listLabel ? { ...row, scope_label: listLabel } : row
+    }
+
+    let rowsWithActionCounts = rows.map((row) =>
+      enrichListRowWithScopeLabel({
+        ...row,
+        issues_count: 0,
+        open_issues_count: 0,
+      })
+    )
 
     if (inspectionIds.length > 0) {
       const actionCountPlaceholders = inspectionIds.map((_, idx) => `$${idx + 1}`).join(', ')
@@ -1205,14 +1216,14 @@ export async function GET(request) {
         const actionTotal = Number(counts?.issues_count) || 0
         const actionOpen = Number(counts?.open_issues_count) || 0
         const responseTotal = Number(responseCounts.count) || 0
-        return {
+        return enrichListRowWithScopeLabel({
           ...row,
           issue_count: actionTotal,
           issues_count: actionTotal,
           action_count: actionTotal,
           response_issue_count: responseTotal,
           open_issues_count: actionOpen,
-        }
+        })
       })
 
       const sampleInspection =
@@ -1290,6 +1301,8 @@ export async function POST(request) {
     caretaker_inspection_mode,
     caretaker_specific_section_id,
     caretaker_specific_section_title,
+    caretaker_specific_scope_title,
+    caretaker_specific_question_id,
   } = body
 
   const dueDateParsed = parseDueDateInput(due_date)
@@ -1751,6 +1764,8 @@ export async function POST(request) {
           caretaker_inspection_mode,
           caretaker_specific_section_id,
           caretaker_specific_section_title,
+          caretaker_specific_scope_title,
+          caretaker_specific_question_id,
         })
       : null
 

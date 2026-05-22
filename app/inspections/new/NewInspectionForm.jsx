@@ -72,9 +72,12 @@ import CaretakerInspectionModeSelector from '@/app/components/caretaker/Caretake
 import {
   CARETAKER_INSPECTION_MODE_FULL,
   CARETAKER_INSPECTION_MODE_SPECIFIC,
+  caretakerQuestionInScope,
+  caretakerSpecificTaskSelectionIdFromScope,
   encodeCaretakerScopeInDescription,
   getCaretakerSectionOptions,
   parseCaretakerScopeFromDescription,
+  resolveCaretakerSpecificTaskSelection,
 } from '@/lib/caretaker-specific-task-inspection'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
@@ -2024,6 +2027,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [caretakerInspectionMode, setCaretakerInspectionMode] = useState(CARETAKER_INSPECTION_MODE_FULL)
   const [caretakerSpecificSectionId, setCaretakerSpecificSectionId] = useState('')
   const caretakerSectionRefs = useRef({})
+  const caretakerQuestionRefs = useRef({})
 
   useEffect(() => {
     let cancelled = false
@@ -2270,18 +2274,30 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     () => (isCaretakerForm ? getCaretakerSectionOptions(inspectionRenderSections) : []),
     [isCaretakerForm, inspectionRenderSections]
   )
-  const caretakerSpecificSectionTitle = useMemo(() => {
-    if (!caretakerSpecificSectionId) return ''
-    const section = inspectionRenderSections.find((s) => String(s.id) === String(caretakerSpecificSectionId))
-    return section?.title || section?.name || ''
-  }, [caretakerSpecificSectionId, inspectionRenderSections])
+  const caretakerSpecificTaskScope = useMemo(
+    () => resolveCaretakerSpecificTaskSelection(caretakerSpecificSectionId, inspectionRenderSections),
+    [caretakerSpecificSectionId, inspectionRenderSections]
+  )
   const caretakerSectionsToRender = useMemo(() => {
     if (!isCaretakerForm || caretakerInspectionMode !== CARETAKER_INSPECTION_MODE_SPECIFIC) {
       return inspectionRenderSections
     }
-    if (!caretakerSpecificSectionId) return []
-    return inspectionRenderSections.filter((s) => String(s.id) === String(caretakerSpecificSectionId))
-  }, [isCaretakerForm, caretakerInspectionMode, caretakerSpecificSectionId, inspectionRenderSections])
+    if (!caretakerSpecificTaskScope?.sectionId) return []
+    const section = inspectionRenderSections.find(
+      (s) => String(s.id) === String(caretakerSpecificTaskScope.sectionId)
+    )
+    if (!section) return []
+    if (!caretakerSpecificTaskScope.questionId) return [section]
+    const questions = (section.questions || []).filter(
+      (q) => String(q.id) === String(caretakerSpecificTaskScope.questionId)
+    )
+    return [{ ...section, questions }]
+  }, [
+    isCaretakerForm,
+    caretakerInspectionMode,
+    caretakerSpecificTaskScope,
+    inspectionRenderSections,
+  ])
 
   const estateChecklistIndexByQid = useMemo(
     () =>
@@ -2320,10 +2336,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     const caretakerScopeFields = isCaretakerForm
       ? {
           caretaker_inspection_mode: caretakerInspectionMode,
-          ...(caretakerInspectionMode === CARETAKER_INSPECTION_MODE_SPECIFIC && caretakerSpecificSectionId
+          ...(caretakerInspectionMode === CARETAKER_INSPECTION_MODE_SPECIFIC && caretakerSpecificTaskScope?.sectionId
             ? {
-                caretaker_specific_section_id: caretakerSpecificSectionId,
-                caretaker_specific_section_title: caretakerSpecificSectionTitle,
+                caretaker_specific_section_id: caretakerSpecificTaskScope.sectionId,
+                caretaker_specific_section_title: caretakerSpecificTaskScope.sectionTitle,
+                ...(caretakerSpecificTaskScope.scopeTitle
+                  ? { caretaker_specific_scope_title: caretakerSpecificTaskScope.scopeTitle }
+                  : {}),
+                ...(caretakerSpecificTaskScope.questionId
+                  ? { caretaker_specific_question_id: caretakerSpecificTaskScope.questionId }
+                  : {}),
               }
             : {}),
         }
@@ -2336,8 +2358,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       description: isCaretakerForm
         ? encodeCaretakerScopeInDescription(description, {
             mode: caretakerInspectionMode,
-            sectionId: caretakerSpecificSectionId,
-            sectionTitle: caretakerSpecificSectionTitle,
+            sectionId: caretakerSpecificTaskScope?.sectionId || '',
+            sectionTitle: caretakerSpecificTaskScope?.sectionTitle || '',
+            scopeTitle: caretakerSpecificTaskScope?.scopeTitle || undefined,
+            questionId: caretakerSpecificTaskScope?.questionId || undefined,
           })
         : description.trim() || undefined,
       answers,
@@ -2360,8 +2384,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     selectedTemplate,
     isCaretakerForm,
     caretakerInspectionMode,
-    caretakerSpecificSectionId,
-    caretakerSpecificSectionTitle,
+    caretakerSpecificTaskScope,
     showInspectionTimingFields,
     inspectionStartTime,
     inspectionEndTime,
@@ -2393,15 +2416,24 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   )
 
   useEffect(() => {
-    if (!isCaretakerForm || caretakerInspectionMode !== CARETAKER_INSPECTION_MODE_SPECIFIC || !caretakerSpecificSectionId) {
+    if (
+      !isCaretakerForm ||
+      caretakerInspectionMode !== CARETAKER_INSPECTION_MODE_SPECIFIC ||
+      !caretakerSpecificTaskScope?.sectionId
+    ) {
       return undefined
     }
     const timer = window.setTimeout(() => {
-      const el = caretakerSectionRefs.current[caretakerSpecificSectionId]
+      if (caretakerSpecificTaskScope.questionId) {
+        const el = caretakerQuestionRefs.current[caretakerSpecificTaskScope.questionId]
+        el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      const el = caretakerSectionRefs.current[caretakerSpecificTaskScope.sectionId]
       el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
     }, 120)
     return () => window.clearTimeout(timer)
-  }, [isCaretakerForm, caretakerInspectionMode, caretakerSpecificSectionId])
+  }, [isCaretakerForm, caretakerInspectionMode, caretakerSpecificTaskScope])
 
   useEffect(() => {
     const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
@@ -2484,8 +2516,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           CARETAKER_INSPECTION_MODE_FULL
       )
       setCaretakerSpecificSectionId(
-        body.caretaker_specific_section_id ||
+        caretakerSpecificTaskSelectionIdFromScope(parsedScope) ||
           payload.caretakerSpecificSectionId ||
+          (body.caretaker_specific_question_id
+            ? `stq:${body.caretaker_specific_question_id}`
+            : '') ||
+          body.caretaker_specific_section_id ||
           parsedScope.sectionId ||
           ''
       )
@@ -2632,12 +2668,23 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
     let sectionsToValidate = inspectionRenderSections
     if (isCaretakerForm && caretakerInspectionMode === CARETAKER_INSPECTION_MODE_SPECIFIC) {
-      if (!caretakerSpecificSectionId) {
+      if (!caretakerSpecificTaskScope?.sectionId) {
         errs.caretaker_specific_section = 'Please choose which area you are inspecting today'
       } else {
-        sectionsToValidate = inspectionRenderSections.filter(
-          (sec) => String(sec.id) === String(caretakerSpecificSectionId)
-        )
+        sectionsToValidate = inspectionRenderSections
+          .filter((sec) => String(sec.id) === String(caretakerSpecificTaskScope.sectionId))
+          .map((sec) => {
+            if (!caretakerSpecificTaskScope.questionId) return sec
+            return {
+              ...sec,
+              questions: (sec.questions || []).filter((q) =>
+                caretakerQuestionInScope(q, {
+                  mode: CARETAKER_INSPECTION_MODE_SPECIFIC,
+                  questionId: caretakerSpecificTaskScope.questionId,
+                })
+              ),
+            }
+          })
       }
     }
 
@@ -3421,12 +3468,27 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       lightCommentTextarea: lightCommentTextareaForTemplate,
                       section,
                     }
+                    const questionWrapProps =
+                      isCaretakerForm && !isNVTemplate(selectedTemplate)
+                        ? {
+                            ref: (el) => {
+                              caretakerQuestionRefs.current[q.id] = el
+                            },
+                            id: `caretaker-question-${q.id}`,
+                          }
+                        : {}
                     return useEstateListLayout ? (
-                      <li key={q.id} style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}>
+                      <li
+                        key={q.id}
+                        {...questionWrapProps}
+                        style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}
+                      >
                         <InspectionQuestion {...qProps} />
                       </li>
                     ) : (
-                      <InspectionQuestion key={q.id} {...qProps} />
+                      <div key={q.id} {...questionWrapProps}>
+                        <InspectionQuestion {...qProps} />
+                      </div>
                     )
                   })
                   if (estateInspectionForm || esmInspectionForm) {
