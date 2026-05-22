@@ -19,6 +19,7 @@ import {
   upsertOfflineInspectionDraft,
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
+import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
 
 const EW = {
   pageBg: '#f1f5f9',
@@ -391,7 +392,7 @@ export default function EstateWalkaboutNewInspectionForm({
         payload: currentDraftPayload,
       })
     )
-    setOfflineNotice('Inspection saved on this phone. Waiting for internet connection.')
+    setOfflineNotice('Inspection saved on this phone.')
   }, [isOnline, offlineDraftId, currentDraftPayload])
 
   const saveCurrentOfflineDraft = () => {
@@ -403,7 +404,7 @@ export default function EstateWalkaboutNewInspectionForm({
       payload: currentDraftPayload,
     })
     setOfflineDrafts(next)
-    setOfflineNotice('Inspection saved on this phone. Waiting for internet connection.')
+    setOfflineNotice('Inspection saved on this phone.')
   }
 
   const restoreOfflineDraft = (draft) => {
@@ -427,7 +428,12 @@ export default function EstateWalkaboutNewInspectionForm({
     setAnswerExtras(body.answer_extras || {})
     setChecklist(Array.isArray(restoredChecklist) ? restoredChecklist : [])
     setSubmitError(null)
-    setOfflineNotice('Inspection reopened from this phone. Review your answers, then submit when you are back online.')
+    setOfflineNotice('Inspection reopened from this phone. You can continue working.')
+  }
+
+  const prepareSubmitBodyForUpload = async (body) => {
+    if (!submitBodyHasPendingPhotos(body)) return body
+    return uploadPendingPhotosInSubmitBody(body)
   }
 
   const submitPendingInspection = async (inspectionId) => {
@@ -450,15 +456,16 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const submitOfflineDraft = async (draft) => {
     if (!isOnline) {
-      setOfflineNotice('Waiting for internet connection. Reconnect to submit this inspection.')
+      setOfflineNotice('Waiting for internet connection to complete upload and submit this inspection.')
       return
     }
-    const body = draft?.payload?.submitBody
+    let body = draft?.payload?.submitBody
     if (!body) return
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitWarning(null)
     try {
+      body = await prepareSubmitBodyForUpload(body)
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -491,6 +498,9 @@ export default function EstateWalkaboutNewInspectionForm({
       setOfflineDraftId('')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
+      if (submitBodyHasPendingPhotos(draft?.payload?.submitBody)) {
+        setOfflineNotice('Waiting for internet connection to complete upload.')
+      }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -581,11 +591,15 @@ export default function EstateWalkaboutNewInspectionForm({
         setIsSubmitting(false)
         return
       }
+      let submitBody = currentSubmitBody
+      if (submitBodyHasPendingPhotos(submitBody)) {
+        submitBody = await prepareSubmitBodyForUpload(submitBody)
+      }
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...currentSubmitBody, draft: true }),
+        body: JSON.stringify({ ...submitBody, draft: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -618,6 +632,9 @@ export default function EstateWalkaboutNewInspectionForm({
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         saveCurrentOfflineDraft()
         return
+      }
+      if (submitBodyHasPendingPhotos(currentSubmitBody)) {
+        setOfflineNotice('Waiting for internet connection to complete upload.')
       }
       setSubmitError(err.message || 'Something went wrong')
     } finally {

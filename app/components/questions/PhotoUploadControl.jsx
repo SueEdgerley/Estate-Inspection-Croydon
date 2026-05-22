@@ -1,9 +1,17 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  isPendingLocalPhotoUrl,
+  readImageFileAsDataUrl,
+  uploadPendingLocalPhotoUrls,
+} from '@/lib/offline-photo-upload'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-const UPLOAD_ENDPOINT = '/api/upload/photo'
+
+function isBrowserOnline() {
+  return typeof navigator === 'undefined' ? true : navigator.onLine
+}
 
 export default function PhotoUploadControl({
   id,
@@ -20,10 +28,113 @@ export default function PhotoUploadControl({
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState(null)
+  const [localSaveNotice, setLocalSaveNotice] = useState(null)
+  const [isOnline, setIsOnline] = useState(isBrowserOnline)
   const inputRef = useRef(null)
   const pendingReplaceRef = useRef(null)
+  const syncingRef = useRef(false)
 
-  const handleSelect = (e) => {
+  useEffect(() => {
+    const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
+    updateOnlineStatus()
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
+    }
+  }, [])
+
+  const syncPendingUploads = useCallback(async () => {
+    if (syncingRef.current || !isBrowserOnline()) return
+    const pendingUrls = photoUrls.filter(isPendingLocalPhotoUrl)
+    if (!pendingUrls.length) return
+
+    syncingRef.current = true
+    setUploading(true)
+    setUploadError(null)
+    setLocalSaveNotice(null)
+    setProgress(0)
+
+    try {
+      const { nextUrls, uploadedCount } = await uploadPendingLocalPhotoUrls(photoUrls, ({ uploadedCount: done, nextUrls: interimUrls }) => {
+        setProgress(Math.round((done / pendingUrls.length) * 100))
+        onChange(interimUrls)
+      })
+      if (uploadedCount > 0) {
+        onChange(nextUrls)
+      }
+    } catch (err) {
+      setUploadError(err?.message || 'Photo upload failed. Please try again.')
+    } finally {
+      syncingRef.current = false
+      setUploading(false)
+      setProgress(100)
+    }
+  }, [onChange, photoUrls])
+
+  useEffect(() => {
+    if (!isOnline) return
+    syncPendingUploads()
+  }, [isOnline, syncPendingUploads])
+
+  const saveFileLocally = async (file) => readImageFileAsDataUrl(file)
+
+  const uploadFile = (file, onUploaded, onFailed) => {
+    const type = file.type || ''
+    if (!type.startsWith('image/')) {
+      onFailed('Please select image files only (JPEG, PNG, GIF, WebP).')
+      return
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      onFailed('Each file must be 10MB or smaller.')
+      return
+    }
+
+    const xhr = new XMLHttpRequest()
+    const fd = new FormData()
+    fd.append('file', file)
+
+    xhr.upload.addEventListener('progress', (ev) => {
+      if (ev.lengthComputable) {
+        setProgress(Math.round((ev.loaded / ev.total) * 100))
+      }
+    })
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          if (data?.url) {
+            onUploaded(data.url)
+            return
+          }
+        } catch {}
+      }
+      let message = 'Photo upload failed. Please try again.'
+      try {
+        const data = JSON.parse(xhr.responseText)
+        message = data?.error || data?.details || message
+      } catch {}
+      onFailed(message)
+    })
+
+    xhr.addEventListener('error', () => {
+      onFailed('Network error during upload.')
+    })
+
+    xhr.open('POST', '/api/upload/photo')
+    xhr.send(fd)
+  }
+
+  const storePhotoLocally = async (file, urlsToAdd, replaceUrl) => {
+    const localUrl = await saveFileLocally(file)
+    if (!localUrl) throw new Error('Could not save photo on this phone.')
+    urlsToAdd.push(localUrl)
+    setLocalSaveNotice('Photo saved on this phone — waiting to upload')
+  }
+
+  const handleSelect = async (e) => {
     const files = e.target.files ? Array.from(e.target.files) : []
     if (!files.length) return
 
@@ -34,86 +145,72 @@ export default function PhotoUploadControl({
     if (!filesToProcess.length) return
 
     setUploadError(null)
+    setLocalSaveNotice(null)
     const urlsToAdd = []
 
-    const processNext = (index) => {
+    const finishSelection = () => {
+      setUploading(false)
+      setProgress(100)
+      e.target.value = ''
+      if (isReplace && urlsToAdd.length) {
+        onChange(photoUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u)))
+      } else if (urlsToAdd.length) {
+        onChange([...photoUrls, ...urlsToAdd])
+      }
+    }
+
+    const processNext = async (index) => {
       if (index >= filesToProcess.length) {
-        setUploading(false)
-        setProgress(100)
-        e.target.value = ''
-        if (isReplace && urlsToAdd.length) {
-          onChange(photoUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u)))
-        } else if (urlsToAdd.length) {
-          onChange([...photoUrls, ...urlsToAdd])
+        finishSelection()
+        if (isBrowserOnline() && urlsToAdd.some(isPendingLocalPhotoUrl)) {
+          await syncPendingUploads()
         }
         return
       }
 
       const file = filesToProcess[index]
-      const type = file.type || ''
-      if (!type.startsWith('image/')) {
-        setUploadError('Please select image files only (JPEG, PNG, GIF, WebP).')
-        setUploading(false)
-        e.target.value = ''
-        return
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        setUploadError('Each file must be 10MB or smaller.')
-        setUploading(false)
-        e.target.value = ''
-        return
-      }
 
-      const xhr = new XMLHttpRequest()
-      const fd = new FormData()
-      fd.append('file', file)
-
-      xhr.upload.addEventListener('progress', (ev) => {
-        if (ev.lengthComputable) {
-          const pct = Math.round(((index + ev.loaded / ev.total) / filesToProcess.length) * 100)
-          setProgress(pct)
-        }
-      })
-
-      xhr.addEventListener('load', () => {
-        setProgress(Math.round(((index + 1) / filesToProcess.length) * 100))
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const data = JSON.parse(xhr.responseText)
-            if (data?.url) urlsToAdd.push(data.url)
-          } catch {}
-        } else {
-          let message = 'Photo upload failed. Please try again.'
-          try {
-            const data = JSON.parse(xhr.responseText)
-            message = data?.error || data?.details || message
-          } catch {}
+      if (!isBrowserOnline()) {
+        try {
+          await storePhotoLocally(file, urlsToAdd, replaceUrl)
+          await processNext(index + 1)
+        } catch (err) {
           setUploading(false)
-          setUploadError(message)
+          setUploadError(err?.message || 'Could not save photo on this phone.')
           e.target.value = ''
-          return
         }
-        processNext(index + 1)
-      })
+        return
+      }
 
-      xhr.addEventListener('error', () => {
-        setUploading(false)
-        setUploadError('Network error during upload.')
-        e.target.value = ''
-      })
-
-      xhr.open('POST', UPLOAD_ENDPOINT)
-      xhr.send(fd)
+      uploadFile(
+        file,
+        (url) => {
+          urlsToAdd.push(url)
+          processNext(index + 1)
+        },
+        async (message) => {
+          try {
+            await storePhotoLocally(file, urlsToAdd, replaceUrl)
+            setUploadError(null)
+            await processNext(index + 1)
+          } catch (err) {
+            setUploading(false)
+            setUploadError(message || err?.message || 'Could not save photo on this phone.')
+            e.target.value = ''
+          }
+        }
+      )
     }
 
     setUploading(true)
     setProgress(0)
-    processNext(0)
+    await processNext(0)
   }
 
   const handleRemove = (urlToRemove) => {
     onChange(photoUrls.filter((u) => u !== urlToRemove))
     setUploadError(null)
+    setLocalSaveNotice(null)
   }
 
   const handleReplace = (urlToReplace) => {
@@ -179,6 +276,9 @@ export default function PhotoUploadControl({
           />
         </div>
       )}
+      {localSaveNotice ? (
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>{localSaveNotice}</p>
+      ) : null}
       {photoUrls.length > 0 && (
         <div
           style={{
@@ -212,6 +312,11 @@ export default function PhotoUploadControl({
                 }}
               />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {isPendingLocalPhotoUrl(url) ? (
+                  <span style={{ fontSize: '0.72rem', color: '#92400e', maxWidth: 120, lineHeight: 1.35 }}>
+                    Saved on phone — waiting to upload
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => handleReplace(url)}

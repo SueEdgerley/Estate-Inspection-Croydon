@@ -59,6 +59,7 @@ import {
   upsertOfflineInspectionDraft,
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
+import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
 import { packNvWizardExtras } from '@/lib/nv-notes-pack'
 
 /** Same NV tokens as the inspection wizard — single source in `buildInspectionFormNvTokens`. */
@@ -2335,7 +2336,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         payload: currentDraftPayload,
       })
     )
-    setOfflineNotice('Inspection saved on this phone. Waiting for internet connection.')
+    setOfflineNotice('Inspection saved on this phone.')
   }, [isOnline, offlineDraftId, currentDraftPayload])
 
   const saveCurrentOfflineDraft = () => {
@@ -2347,7 +2348,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       payload: currentDraftPayload,
     })
     setOfflineDrafts(next)
-    setOfflineNotice('Inspection saved on this phone. Waiting for internet connection.')
+    setOfflineNotice('Inspection saved on this phone.')
     return id
   }
 
@@ -2364,7 +2365,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setAnswers(body.answers || {})
     setAnswerExtras(body.answer_extras || {})
     setSubmitError(null)
-    setOfflineNotice('Inspection reopened from this phone. Review your answers, then submit when you are back online.')
+    setOfflineNotice('Inspection reopened from this phone. You can continue working.')
+  }
+
+  const prepareSubmitBodyForUpload = async (body) => {
+    if (!submitBodyHasPendingPhotos(body)) return body
+    return uploadPendingPhotosInSubmitBody(body)
   }
 
   const submitPendingInspection = async (inspectionId) => {
@@ -2387,15 +2393,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const submitOfflineDraft = async (draft) => {
     if (!isOnline) {
-      setOfflineNotice('Waiting for internet connection. Reconnect to submit this inspection.')
+      setOfflineNotice('Waiting for internet connection to complete upload and submit this inspection.')
       return
     }
-    const body = draft?.payload?.submitBody
+    let body = draft?.payload?.submitBody
     if (!body) return
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitWarning(null)
     try {
+      body = await prepareSubmitBodyForUpload(body)
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2428,6 +2435,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       setOfflineDraftId('')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
+      if (submitBodyHasPendingPhotos(draft?.payload?.submitBody)) {
+        setOfflineNotice('Waiting for internet connection to complete upload.')
+      }
       setSubmitError(err.message || 'Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -2675,11 +2685,15 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setIsSubmitting(false)
         return
       }
+      let submitBody = currentSubmitBody
+      if (submitBodyHasPendingPhotos(submitBody)) {
+        submitBody = await prepareSubmitBodyForUpload(submitBody)
+      }
       const res = await fetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...currentSubmitBody, draft: true }),
+        body: JSON.stringify({ ...submitBody, draft: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -2721,6 +2735,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         saveCurrentOfflineDraft()
         return
+      }
+      if (submitBodyHasPendingPhotos(currentSubmitBody)) {
+        setOfflineNotice('Waiting for internet connection to complete upload.')
       }
       setSubmitError(err.message || 'Something went wrong')
     } finally {

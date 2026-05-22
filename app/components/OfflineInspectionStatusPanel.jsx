@@ -58,10 +58,10 @@ function InspectionStatusCard({ title, summary, actions, isSubmitting, isOnline 
       <ul style={listStyle}>
         <li>{summary.answersLabel}</li>
         <li>{summary.photoStatus.label}</li>
-        {!isOnline ? <li>Waiting for internet connection</li> : null}
-        {!isOnline && summary.connectionStatus.key === 'waiting' ? null : (
-          <li>{summary.connectionStatus.label}</li>
-        )}
+        {!isOnline && summary.connectionStatus.key !== 'upload-waiting' ? (
+          <li>Waiting for internet connection</li>
+        ) : null}
+        <li>{summary.connectionStatus.label}</li>
         {summary.lastSavedAt ? <li>Last saved at {summary.lastSavedAt}</li> : null}
       </ul>
       <p style={{ margin: '0.55rem 0 0', fontSize: '0.875rem', color: '#475569' }}>
@@ -85,6 +85,7 @@ function ActiveInspectionStatusCard({ isOnline, activeDraftPayload, activeDraftR
     isOnline,
     draftStatus: activeDraftRecord?.status || 'unsent',
     hasAnswers: true,
+    hasPendingPhotos: photoStatus.pendingCount > 0,
   })
   const summary = {
     answersLabel: 'Answers saved on this phone',
@@ -131,7 +132,7 @@ export default function OfflineInspectionStatusPanel({
         {!isOnline ? 'Inspection saved on this phone' : 'Inspections saved on this phone'}
       </strong>
       <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
-        Your answers stay on this device until you submit. To add new photos, you need an internet connection.
+        You can continue working. Your inspection is saved on this phone and photos will upload when signal returns.
       </p>
       {offlineNotice ? (
         <p style={{ margin: '0.55rem 0 0', color: '#475569', fontSize: '0.875rem' }}>{offlineNotice}</p>
