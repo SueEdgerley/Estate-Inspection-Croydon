@@ -1786,6 +1786,11 @@ export async function POST(request) {
           // matching the Walkabout best-effort action creation pattern.
           continue
         }
+        if (isCaretakerTemplate(template)) {
+          // Caretaker actions are created on POST /api/inspections/[id]/submit
+          // (NewInspectionForm and review flow use draft + submit).
+          continue
+        }
         const residentMessage = comment || q.question_text || 'Issue raised from inspection'
         const category = safeActionText(q.action_category || q.category, 'Follow-up', 50)
         let isIssue = inspectionAnswerTriggersIssue(q, section, answer)

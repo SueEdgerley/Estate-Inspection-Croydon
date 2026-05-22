@@ -764,7 +764,10 @@ function InspectionQuestion({
   const isExpanded = isNvTemplate && !!expandedByQuestionId[question.id]
   const suppressEsmSection11Or13StandaloneComment =
     isEsmSection11Or13IssueQuestion && esmUseDedicatedFollowUp
-  const showStandaloneComment = showComment && !suppressEsmSection11Or13StandaloneComment
+  const showStandaloneComment =
+    showComment &&
+    !suppressEsmSection11Or13StandaloneComment &&
+    !(caretakerTemplate && showCaretakerPhotoCommentUnderUpload)
   const showCommentPhotoBlock =
     !esmUseDedicatedFollowUp &&
     !isEsmSection11Or13IssueQuestion &&
@@ -777,6 +780,7 @@ function InspectionQuestion({
       isExpanded)
   const showPhotoInYesNoFollowUp =
     !esmYesNoIssueQuestion &&
+    !caretakerSimplePhotoCapture &&
     (!isNvTemplate ||
       photoRequired ||
       (question.caretaker_recipient_on_yes && isYes) ||
@@ -1540,7 +1544,7 @@ function InspectionQuestion({
             {showPhotoInYesNoFollowUp ? photoBlock : null}
           </div>
         )}
-        {caretakerSimplePhotoCapture ? simplePhotoBlock : null}
+        {caretakerSimplePhotoCapture && !showPhotoInYesNoFollowUp ? simplePhotoBlock : null}
         {!isNvTemplate &&
           !caretakerAlwaysPhoto &&
           (estateInspectionForm

@@ -613,26 +613,28 @@ export default function QuestionRenderer({
       )
     }
 
-    return (
-      <div style={caretakerS12CardStyle}>
-        <YesNoQuestion
-          question={displayQuestion}
-          sectionName={sectionName}
-          inspectionId={inspectionId}
-          value={localValue}
-          onChange={handleChange}
-          errors={errors}
-          section={section}
-          sectionQuestions={sectionQuestions}
-          allAnswers={allAnswers}
-          alwaysShowCaretakerComment={true}
-          alwaysShowCaretakerCommentPhoto={true}
-          alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
-          caretakerSections12Structured={true}
-          estateInspectionForm={estateInspectionForm}
-        />
-      </div>
-    )
+    if (kind === 'yes_no') {
+      return (
+        <div style={caretakerS12CardStyle}>
+          <YesNoQuestion
+            question={displayQuestion}
+            sectionName={sectionName}
+            inspectionId={inspectionId}
+            value={localValue}
+            onChange={handleChange}
+            errors={errors}
+            section={section}
+            sectionQuestions={sectionQuestions}
+            allAnswers={allAnswers}
+            alwaysShowCaretakerComment={true}
+            alwaysShowCaretakerCommentPhoto={true}
+            alwaysShowCaretakerRecipient={alwaysShowCaretakerRecipient}
+            caretakerSections12Structured={true}
+            estateInspectionForm={estateInspectionForm}
+          />
+        </div>
+      )
+    }
   }
 
   return (
