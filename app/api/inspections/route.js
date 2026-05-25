@@ -66,12 +66,15 @@ import {
   resolveIssueRecipientForAction,
 } from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
+import {
+  logBulkRefuseEmail,
+  sendBulkRefuseWalkaboutEmail,
+  WALKABOUT_BULK_REFUSE_EMAIL,
+  WALKABOUT_BULK_REFUSE_QID,
+} from '@/lib/walkabout-email-notifications'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const WALKABOUT_BULK_REFUSE_QID = 'ew_it_bulk_refuse_removal'
-const WALKABOUT_BULK_REFUSE_EMAIL = 'Nick.spenceley@croydon.gov.uk'
 
 const CARETAKER_SECTION_2_EMAIL = 'housingestateservices@croydon.gov.uk'
 const CARETAKER_SECTION_2_LOVE_CLEAN_STREETS_EMAIL = 'logged_in_user'
@@ -85,14 +88,6 @@ function escapeHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-}
-
-function getAppBaseUrl(request) {
-  const explicit = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL
-  if (explicit && String(explicit).trim()) return String(explicit).trim().replace(/\/$/, '')
-  const vercelUrl = process.env.VERCEL_URL
-  if (vercelUrl && String(vercelUrl).trim()) return `https://${String(vercelUrl).trim().replace(/^https?:\/\//, '').replace(/\/$/, '')}`
-  return new URL(request.url).origin.replace(/\/$/, '')
 }
 
 function collectPhotoUrlsFromExtras(extras) {
@@ -549,23 +544,6 @@ async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspection
   return result
 }
 
-function collectBulkRefusePhotoUrls({ answerExtras = {}, answers = {} }) {
-  const direct = collectPhotoUrlsFromExtras(answerExtras[WALKABOUT_BULK_REFUSE_QID])
-  const checklist = (() => {
-    try {
-      const parsed = JSON.parse(String(answers[ESTATE_WALKABOUT_CHECKLIST_QID] || '[]'))
-      if (!Array.isArray(parsed)) return []
-      return parsed
-        .filter((item) => /bulk\s+refuse/i.test(`${item?.description || ''} ${item?.action_summary || ''}`))
-        .flatMap((item) => (Array.isArray(item?.photo_urls) ? item.photo_urls : []))
-        .filter((url) => typeof url === 'string' && url.trim())
-    } catch {
-      return []
-    }
-  })()
-  return Array.from(new Set([...direct, ...checklist]))
-}
-
 function parseDueDateInput(raw) {
   if (raw == null || raw === '') return null
   const d = raw instanceof Date ? raw : new Date(typeof raw === 'string' ? raw : String(raw))
@@ -809,157 +787,6 @@ async function getOrCreateTemplateVersion(templateId, templateName, snapshot) {
     VALUES (${versionId}, ${templateId}, ${templateName || null}, ${versionHash}, ${JSON.stringify(snapshot)}::jsonb)
   `
   return { id: versionId, snapshot, versionHash, reused: false }
-}
-
-async function getActivePersonName(sqlFn, personId) {
-  const id = personId != null ? String(personId).trim() : ''
-  if (!id) return ''
-  try {
-    const result = await sqlFn`
-      SELECT name FROM people
-      WHERE id = ${id}
-        AND COALESCE(active, true) = true
-      LIMIT 1
-    `
-    return String(result.rows[0]?.name || '').trim()
-  } catch (error) {
-    console.warn('[Inspections] Bulk refuse responsible person lookup failed:', error?.message || error)
-    return ''
-  }
-}
-
-async function logBulkRefuseEmail(sqlFn, { inspectionId, status, routing }) {
-  try {
-    await insertOutboundEmailLog(sqlFn, {
-      inspectionId,
-      questionId: WALKABOUT_BULK_REFUSE_QID,
-      emailTo: WALKABOUT_BULK_REFUSE_EMAIL,
-      emailRouting: routing,
-      status,
-      sentAt: status === 'sent' ? new Date() : null,
-    })
-  } catch (error) {
-    console.warn('[Inspections] Bulk refuse email log failed:', error?.message || error)
-  }
-}
-
-async function sendBulkRefuseWalkaboutEmail(sqlFn, {
-  request,
-  inspectionId,
-  estateName,
-  locationLine,
-  answers,
-  answerExtras,
-  posterPdfUrl,
-  submittedAt,
-}) {
-  if (normalizeYesNoAnswer(answers?.[WALKABOUT_BULK_REFUSE_QID]) !== 'yes') {
-    return { sent: 0, failed: [] }
-  }
-
-  const dateInspected = answers?.ew_sig_inspection_date || submittedAt || new Date().toISOString()
-  const inspectionVisitDate = answers?.ew_q_planned_date || ''
-  const responsiblePerson = await getActivePersonName(sqlFn, answers?.ew_q_responsible)
-  const role = String(answers?.ew_q_role || '').trim()
-  const estateArea = String(answers?.ew_q_area || '').trim()
-  const exactLocation = String(answers?.ew_it_bulk_refuse_exact_location || locationLine || estateArea || '').trim()
-  const comments = String(answers?.ew_it_bulk_refuse_comments || answers?.ew_it_comments || '').trim()
-  const photoUrls = collectBulkRefusePhotoUrls({ answerExtras, answers })
-  const baseUrl = getAppBaseUrl(request)
-  const inspectionUrl = `${baseUrl}/inspections/${inspectionId}`
-  const subject = `Estate Walkabout – Bulk Refuse Removal Required – ${estateName || estateArea || 'Estate'} – ${formatDateGb(dateInspected)}`
-  const photoHtml = photoUrls.length
-    ? `<ul>${photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></li>`).join('')}</ul>`
-    : '<p>No photo link was provided for this question.</p>'
-  const posterHtml = posterPdfUrl
-    ? `<li>Action plan / poster: <a href="${escapeHtml(posterPdfUrl)}">${escapeHtml(posterPdfUrl)}</a></li>`
-    : '<li>Action plan / poster: Not generated</li>'
-  const html = `
-    <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
-      ${croydonLogoEmailHeaderHtml()}
-      <p>Hello,</p>
-      <p>A bulk refuse removal has been identified during an Estate Walkabout.</p>
-      <h2 style="font-size:16px">Inspection details</h2>
-      <ul>
-        <li>Estate / Area: ${escapeHtml(estateArea || '—')}</li>
-        <li>Block / Location: ${escapeHtml(locationLine || '—')}</li>
-        <li>Ward: —</li>
-        <li>Date inspected: ${escapeHtml(formatDateGb(dateInspected) || '—')}</li>
-        <li>Inspection visit date: ${escapeHtml(formatDateGb(inspectionVisitDate) || inspectionVisitDate || '—')}</li>
-        <li>Responsible person: ${escapeHtml(responsiblePerson || '—')}</li>
-        <li>Role: ${escapeHtml(role || '—')}</li>
-      </ul>
-      <h2 style="font-size:16px">Issue raised</h2>
-      <ul>
-        <li>Bulk refuse removal required: Yes</li>
-        <li>Exact location: ${escapeHtml(exactLocation || '—')}</li>
-        <li>Comments entered by inspector: ${escapeHtml(comments || '—')}</li>
-      </ul>
-      <p><strong>Photo attached or link to photo(s):</strong></p>
-      ${photoHtml}
-      <h2 style="font-size:16px">Actions</h2>
-      <p>Please arrange removal and update works/order reference if raised.</p>
-      <h2 style="font-size:16px">System links</h2>
-      <ul>
-        <li>Inspection record: <a href="${escapeHtml(inspectionUrl)}">${escapeHtml(inspectionUrl)}</a></li>
-        ${posterHtml}
-      </ul>
-      <p>Thank you.</p>
-    </div>
-  `
-  const text = [
-    'Hello,',
-    '',
-    'A bulk refuse removal has been identified during an Estate Walkabout.',
-    '',
-    'Inspection details:',
-    `- Estate / Area: ${estateArea || '—'}`,
-    `- Block / Location: ${locationLine || '—'}`,
-    '- Ward: —',
-    `- Date inspected: ${formatDateGb(dateInspected) || '—'}`,
-    `- Inspection visit date: ${formatDateGb(inspectionVisitDate) || inspectionVisitDate || '—'}`,
-    `- Responsible person: ${responsiblePerson || '—'}`,
-    `- Role: ${role || '—'}`,
-    '',
-    'Issue raised:',
-    '- Bulk refuse removal required: Yes',
-    `- Exact location: ${exactLocation || '—'}`,
-    `- Comments entered by inspector: ${comments || '—'}`,
-    `- Photo attached or link to photo(s): ${photoUrls.length ? photoUrls.join('; ') : 'No photo link was provided for this question.'}`,
-    '',
-    'Actions:',
-    'Please arrange removal and update works/order reference if raised.',
-    '',
-    'System links:',
-    `- Inspection record link: ${inspectionUrl}`,
-    `- Action plan / poster link: ${posterPdfUrl || 'Not generated'}`,
-    '',
-    'Thank you.',
-  ].join('\n')
-
-  const result = await sendAppEmail({
-    to: WALKABOUT_BULK_REFUSE_EMAIL,
-    subject,
-    html,
-    text,
-  })
-  if (result.ok) {
-    await logBulkRefuseEmail(sqlFn, {
-      inspectionId,
-      status: 'sent',
-      routing: 'estate_walkabout_bulk_refuse',
-    })
-    return { sent: 1, failed: [] }
-  }
-  await logBulkRefuseEmail(sqlFn, {
-    inspectionId,
-    status: 'failed',
-    routing: `estate_walkabout_bulk_refuse:${result.error || 'send_failed'}`,
-  })
-  return {
-    sent: 0,
-    failed: [{ email: WALKABOUT_BULK_REFUSE_EMAIL, error: result.error || 'send_failed' }],
-  }
 }
 
 async function persistInspectionResponses({ inspectionId, template, answers = {}, answer_extras = {} }) {

@@ -55,6 +55,7 @@ import {
   resolveIssueRecipientForAction,
 } from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
+import { sendBulkRefuseWalkaboutEmail } from '@/lib/walkabout-email-notifications'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -90,6 +91,39 @@ function collectEsmIdCardPhotoUrlsFromExtras(extras) {
   return Array.isArray(structured.id_card_photo_urls)
     ? structured.id_card_photo_urls.filter((url) => typeof url === 'string' && url.trim())
     : []
+}
+
+function buildAnswerExtrasMapFromRows(answerRows) {
+  const map = {}
+  for (const row of answerRows || []) {
+    const qid = row?.question_id
+    if (!qid) continue
+    const parsed = parseCaretakerAnswerNotes(row.notes)
+    map[qid] = {
+      comment: parsed.comment,
+      recipient_person_id: parsed.recipient_person_id,
+      photo_urls: parsed.extraPhotoUrls,
+    }
+  }
+  return map
+}
+
+async function enrichAnswerExtrasWithDbPhotos(sqlFn, inspectionId, answerExtras, questionIds = []) {
+  for (const questionId of questionIds) {
+    if (!questionId) continue
+    const photosResult = await sqlFn`
+      SELECT blob_url FROM inspection_photos
+      WHERE inspection_id = ${inspectionId} AND question_id = ${questionId}
+    `
+    const dbPhotos = (photosResult.rows || []).map((row) => row.blob_url).filter(Boolean)
+    if (dbPhotos.length === 0) continue
+    const existing = answerExtras[questionId] || {}
+    answerExtras[questionId] = {
+      ...existing,
+      photo_urls: [...new Set([...(existing.photo_urls || []), ...dbPhotos])],
+    }
+  }
+  return answerExtras
 }
 
 function parseInspectionTimeInput(value) {
@@ -1142,8 +1176,66 @@ export async function POST(request, { params }) {
         }
       }
 
-      // ESM action recipients are already notified by sendEmails() using the consolidated
-      // "Action required" template, so do not send the older duplicate notification email.
+      if (emailVersion && isEstateWalkaboutTemplateVersion(emailVersion)) {
+        try {
+          const answerExtras = await enrichAnswerExtrasWithDbPhotos(
+            sql,
+            id,
+            buildAnswerExtrasMapFromRows(answersResult.rows),
+            ['ew_it_bulk_refuse_removal']
+          )
+          const estRow = await sql`
+            SELECT e.name AS estate_name
+            FROM inspections i
+            LEFT JOIN estates e ON e.id = i.estate_id
+            WHERE i.id = ${id}
+            LIMIT 1
+          `
+          const bulkEmailResult = await sendBulkRefuseWalkaboutEmail(sql, {
+            request,
+            inspectionId: id,
+            estateName: estRow.rows[0]?.estate_name || '',
+            locationLine: estateBlockLine,
+            answers,
+            answerExtras,
+            posterPdfUrl,
+            submittedAt: inspectionLive.submitted_at || submittedAtForTiming.toISOString(),
+          })
+          if ((bulkEmailResult.sent || 0) > 0 && bulkEmailResult.email) {
+            emailResults.sent.push({ email: bulkEmailResult.email, type: 'estate_walkabout_bulk_refuse' })
+          }
+          if (Array.isArray(bulkEmailResult.failed)) {
+            emailResults.failed.push(...bulkEmailResult.failed)
+          }
+        } catch (walkaboutEmailErr) {
+          console.error('[inspections/submit] walkabout bulk refuse notification:', walkaboutEmailErr)
+          actionCreationWarnings.push(
+            `Walkabout bulk refuse notification: ${walkaboutEmailErr?.message || String(walkaboutEmailErr)}`
+          )
+        }
+      }
+
+      if (emailVersion && isEsmInspectionFormTemplate(emailVersion)) {
+        try {
+          const esmEmails = await sendEsmPhotoAndYesNotifications({
+            inspectionId: id,
+            templateVersion: emailVersion,
+            answers,
+            answerRows: answersResult.rows,
+            inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'ESM inspection',
+            locationLine: estateBlockLine,
+          })
+          if (Array.isArray(esmEmails.sent)) {
+            emailResults.sent.push(...esmEmails.sent)
+          }
+          if (Array.isArray(esmEmails.failed)) {
+            emailResults.failed.push(...esmEmails.failed)
+          }
+        } catch (esmEmailErr) {
+          console.error('[inspections/submit] ESM notifications:', esmEmailErr)
+          actionCreationWarnings.push(`ESM notification error: ${esmEmailErr?.message || String(esmEmailErr)}`)
+        }
+      }
     } else {
       console.log('[inspections/submit] skipping notification resend for already-submitted inspection', { inspectionId: id })
     }
