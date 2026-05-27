@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { isBrowserOnline } from '@/lib/offline-browser'
 import {
   isPendingLocalPhotoUrl,
@@ -9,10 +9,74 @@ import {
 } from '@/lib/offline-photo-upload'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_IMAGE_DIMENSION = 1600
+const JPEG_QUALITY = 0.8
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality)
+  })
+}
+
+async function loadImageFromFile(file) {
+  if (typeof createImageBitmap === 'function') {
+    return createImageBitmap(file, { imageOrientation: 'from-image' })
+  }
+
+  const url = URL.createObjectURL(file)
+  try {
+    return await new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('Could not load image for compression'))
+      img.src = url
+    })
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+async function compressImageFile(file) {
+  const type = file?.type || ''
+  if (!type.startsWith('image/') || type === 'image/gif') return file
+  if (typeof document === 'undefined') return file
+
+  try {
+    const image = await loadImageFromFile(file)
+    const sourceWidth = image.width || image.naturalWidth
+    const sourceHeight = image.height || image.naturalHeight
+    if (!sourceWidth || !sourceHeight) return file
+
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(sourceWidth, sourceHeight))
+    const width = Math.max(1, Math.round(sourceWidth * scale))
+    const height = Math.max(1, Math.round(sourceHeight * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+
+    ctx.drawImage(image, 0, 0, width, height)
+    if (typeof image.close === 'function') image.close()
+
+    const blob = await canvasToBlob(canvas, 'image/jpeg', JPEG_QUALITY)
+    if (!blob) return file
+
+    const compressedName = String(file.name || 'photo.jpg').replace(/\.[^.]+$/, '') + '.jpg'
+    if (typeof File === 'function') {
+      return new File([blob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
+    }
+    blob.name = compressedName
+    return blob
+  } catch (err) {
+    console.warn('[PhotoUploadControl] Photo compression skipped; using original image.', err?.name || err?.message || err)
+    return file
+  }
+}
 
 export default function PhotoUploadControl({
   id,
-  value = [],
+  value = null,
   onChange,
   required = false,
   error,
@@ -21,7 +85,10 @@ export default function PhotoUploadControl({
   multiple = true,
   mobileStacked = false,
 }) {
-  const photoUrls = Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []
+  const photoUrls = useMemo(
+    () => (Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []),
+    [value]
+  )
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState(null)
@@ -72,7 +139,8 @@ export default function PhotoUploadControl({
   }, [syncPendingUploads])
 
   const storePhotoLocally = async (file, urlsToAdd) => {
-    const localUrl = await readImageFileAsDataUrl(file)
+    const photoForStorage = await compressImageFile(file)
+    const localUrl = await readImageFileAsDataUrl(photoForStorage)
     if (!localUrl) throw new Error('Could not save photo on this phone.')
     urlsToAdd.push(localUrl)
     setLocalSaveNotice('Photo saved on this phone — waiting to upload')
@@ -97,7 +165,7 @@ export default function PhotoUploadControl({
 
     const xhr = new XMLHttpRequest()
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('file', file, file.name || 'photo.jpg')
 
     xhr.upload.addEventListener('progress', (ev) => {
       if (ev.lengthComputable) {
@@ -174,24 +242,31 @@ export default function PhotoUploadControl({
         return
       }
 
-      uploadFile(
-        file,
-        (url) => {
-          urlsToAdd.push(url)
-          processNext(index + 1)
-        },
-        async (message) => {
-          try {
-            await storePhotoLocally(file, urlsToAdd)
-            if (message) setUploadError(message)
-            await processNext(index + 1)
-          } catch (err) {
-            setUploading(false)
-            setUploadError(err?.message || message || 'Could not save photo on this phone.')
-            e.target.value = ''
+      try {
+        const uploadFileOrBlob = await compressImageFile(file)
+        uploadFile(
+          uploadFileOrBlob,
+          (url) => {
+            urlsToAdd.push(url)
+            processNext(index + 1)
+          },
+          async (message) => {
+            try {
+              await storePhotoLocally(uploadFileOrBlob, urlsToAdd)
+              if (message) setUploadError(message)
+              await processNext(index + 1)
+            } catch (err) {
+              setUploading(false)
+              setUploadError(err?.message || message || 'Could not save photo on this phone.')
+              e.target.value = ''
+            }
           }
-        }
-      )
+        )
+      } catch (err) {
+        setUploading(false)
+        setUploadError(err?.message || 'Could not prepare photo for upload.')
+        e.target.value = ''
+      }
     }
 
     setUploading(true)
