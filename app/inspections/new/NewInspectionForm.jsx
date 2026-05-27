@@ -408,6 +408,15 @@ function hasQuestionPhotos(extras) {
   return Array.isArray(extras?.photo_urls) && extras.photo_urls.some((u) => typeof u === 'string' && u.trim())
 }
 
+function storeSubmitWarningForInspection(inspectionId, warning) {
+  if (!inspectionId || !warning || typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(`inspection_submit_warning_${inspectionId}`, warning)
+  } catch {
+    // Non-blocking: warning persistence must not stop a completed submit.
+  }
+}
+
 function hasEsmIdCardPhotos(extras) {
   return Array.isArray(extras?.id_card_photo_urls) && extras.id_card_photo_urls.some((u) => typeof u === 'string' && u.trim())
 }
@@ -2606,8 +2615,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
       ]
       if (submitWarnings.length > 0) {
-        setSubmitWarning(submitWarnings.join(' '))
-        return
+        storeSubmitWarningForInspection(inspectionId, submitWarnings.join(' '))
       }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
@@ -2930,8 +2938,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
       ]
       if (submitWarnings.length > 0) {
-        setSubmitWarning(submitWarnings.join(' '))
-        return
+        storeSubmitWarningForInspection(inspectionId, submitWarnings.join(' '))
       }
 
       if (offlineDraftId) {

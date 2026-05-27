@@ -56,6 +56,17 @@ export default function InspectionDetail() {
   const [actionSaveError, setActionSaveError] = useState('')
   const [roleUi, setRoleUi] = useState(null)
   const [viewerEmail, setViewerEmail] = useState('')
+  const [submitWarning, setSubmitWarning] = useState('')
+
+  useEffect(() => {
+    if (!id || typeof window === 'undefined') return
+    const key = `inspection_submit_warning_${id}`
+    const warning = window.sessionStorage.getItem(key)
+    if (warning) {
+      setSubmitWarning(warning)
+      window.sessionStorage.removeItem(key)
+    }
+  }, [id])
 
   useEffect(() => {
     if (!id) {
@@ -303,6 +314,22 @@ export default function InspectionDetail() {
           {inspection.location_label || inspection.id}
         </p>
       </div>
+
+      {submitWarning && (
+        <div
+          style={{
+            padding: '0.75rem',
+            backgroundColor: '#fffbeb',
+            border: '1px solid #f59e0b',
+            borderRadius: '0.375rem',
+            color: '#92400e',
+            marginBottom: '1.5rem',
+            fontSize: '0.875rem',
+          }}
+        >
+          Inspection submitted, but follow-up work needs attention: {submitWarning}
+        </div>
+      )}
 
       <div style={{
         backgroundColor: 'white',
