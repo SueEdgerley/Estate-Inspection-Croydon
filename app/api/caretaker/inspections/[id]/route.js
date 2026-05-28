@@ -3,7 +3,11 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
-import { getAppRoleContextForClerkUser, normalizeJobTitle } from '@/lib/app-role-access'
+import {
+  getAppRoleContextForClerkUser,
+  normalizeJobTitle,
+  roleBypassesOperationalRouteRestrictions,
+} from '@/lib/app-role-access'
 import { inspectionIsCaretaker } from '@/lib/caretaker-template'
 import {
   inspectionIsSubmitted,
@@ -51,12 +55,13 @@ export async function GET(_request, { params }) {
 
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
-    if (normalizeJobTitle(roleCtx?.jobTitle) !== 'caretaker') {
+    const elevatedAccess = roleBypassesOperationalRouteRestrictions(roleCtx)
+    if (!elevatedAccess && normalizeJobTitle(roleCtx?.jobTitle) !== 'caretaker') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const userEmail = await getCurrentUserEmail()
-    if (!userOwnsInspection(userEmail, row)) {
+    if (!elevatedAccess && !userOwnsInspection(userEmail, row)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

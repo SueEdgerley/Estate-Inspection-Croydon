@@ -3,7 +3,11 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { getCurrentUserEmail } from '@/lib/auth'
-import { getAppRoleContextForClerkUser, normalizeJobTitle } from '@/lib/app-role-access'
+import {
+  getAppRoleContextForClerkUser,
+  normalizeJobTitle,
+  roleBypassesOperationalRouteRestrictions,
+} from '@/lib/app-role-access'
 import { parseCaretakerScopeFromDescription } from '@/lib/caretaker-specific-task-inspection'
 
 export const runtime = 'nodejs'
@@ -23,12 +27,13 @@ export async function GET() {
 
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
-    if (normalizeJobTitle(roleCtx?.jobTitle) !== 'caretaker') {
+    const elevatedAccess = roleBypassesOperationalRouteRestrictions(roleCtx)
+    if (!elevatedAccess && normalizeJobTitle(roleCtx?.jobTitle) !== 'caretaker') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const userEmail = await getCurrentUserEmail()
-    if (!userEmail) {
+    if (!elevatedAccess && !userEmail) {
       return NextResponse.json({ error: 'Could not resolve signed-in user.' }, { status: 400 })
     }
 
@@ -51,7 +56,7 @@ export async function GET() {
       FROM inspections i
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = i.block_id
-      WHERE lower(trim(COALESCE(i.inspector_id, ''))) = lower(trim(${userEmail}))
+      WHERE (${elevatedAccess} = true OR lower(trim(COALESCE(i.inspector_id, ''))) = lower(trim(${userEmail || ''})))
         AND (
           i.submitted_at IS NOT NULL
           OR lower(trim(COALESCE(i.status, ''))) IN ('submitted', 'completed', 'complete')
