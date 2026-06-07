@@ -524,6 +524,7 @@ function InspectionQuestion({
   mobileStackedForm = false,
   lightCommentTextarea = false,
   section = null,
+  onPhotoUploadStatusChange,
 }) {
   const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
   const expandedSectionRef = useRef(null)
@@ -912,7 +913,12 @@ function InspectionQuestion({
         onAnswerExtras(question.id, { comment: '', photo_urls: [], recipient_person_id: '' })
       } else if (commentWhen === 'on_yes' && (val === 'No' || val === 'NA')) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [] })
-      } else if (!caretakerYesTriggersFollowUp && (val === 'Yes' || val === 'NA')) {
+      } else if (
+        !caretakerTemplate &&
+        !caretakerAlwaysPhoto &&
+        !caretakerYesTriggersFollowUp &&
+        (val === 'Yes' || val === 'NA')
+      ) {
         onAnswerExtras(question.id, { comment: '', photo_urls: [] })
       }
     }
@@ -929,6 +935,7 @@ function InspectionQuestion({
         id={photoId}
         value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
+        onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
         required={photoRequired}
         error={errorPhotos}
         label={photoRequired ? 'Add photo *' : 'Add photo'}
@@ -975,6 +982,7 @@ function InspectionQuestion({
           id={`vehicle-photo-${question.id}`}
           value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
           onChange={(urls) => setExtras({ photo_urls: urls })}
+          onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(`${question.id}:vehicle`, uploading)}
           required
           error={errorPhotos}
           label="Add vehicle/issue photo"
@@ -990,6 +998,7 @@ function InspectionQuestion({
           id={`id-card-photo-${question.id}`}
           value={Array.isArray(extras.id_card_photo_urls) ? extras.id_card_photo_urls : []}
           onChange={(urls) => setExtras({ id_card_photo_urls: urls })}
+          onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(`${question.id}:id-card`, uploading)}
           required
           error={errorPhotos && !hasEsmIdCardPhotos(extras) ? errorPhotos : undefined}
           label="Add ID badge photo"
@@ -1008,6 +1017,7 @@ function InspectionQuestion({
         id={photoId}
         value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
+        onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
         error={errorPhotos}
         label="Add photo"
         mobileStacked={mobileStackedForm}
@@ -1632,6 +1642,7 @@ function InspectionQuestion({
                 id={`g-photo-${question.id}`}
                 value={extras.photo_urls || []}
                 onChange={(urls) => setExtras({ photo_urls: urls })}
+                onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
                 label="Add photo"
                 error={errorPhotos}
                 mobileStacked={mobileStackedForm}
@@ -1648,6 +1659,7 @@ function InspectionQuestion({
               id={`nv-single-photo-${question.id}`}
               value={(extras.photo_urls || []).slice(0, 1)}
               onChange={(urls) => setExtras({ photo_urls: urls.slice(0, 1) })}
+              onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
               label="Add photo"
               multiple={false}
               error={errorPhotos}
@@ -1767,6 +1779,7 @@ function InspectionQuestion({
           id={`photo-${question.id}`}
           value={urls}
           onChange={(next) => handleChange(stringifyPhotos(next.slice(0, 1)))}
+          onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
           label="Add photo"
           multiple={false}
           required={isRequired}
@@ -2031,6 +2044,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [offlineDrafts, setOfflineDrafts] = useState([])
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
+  const [activePhotoUploads, setActivePhotoUploads] = useState({})
   const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
   const [inspectionEndTime, setInspectionEndTime] = useState('')
   const [caretakerInspectionMode, setCaretakerInspectionMode] = useState(CARETAKER_INSPECTION_MODE_FULL)
@@ -2269,6 +2283,23 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         isEsmInspectionFormTemplate(selectedTemplate) ||
         isGroundsMaintenanceTemplate(selectedTemplate))
   )
+  const hasActivePhotoUploads = useMemo(
+    () => Object.values(activePhotoUploads).some(Boolean),
+    [activePhotoUploads]
+  )
+  const handlePhotoUploadStatusChange = (questionId, uploading) => {
+    if (!questionId) return
+    setActivePhotoUploads((prev) => {
+      if (uploading) {
+        if (prev[questionId]) return prev
+        return { ...prev, [questionId]: true }
+      }
+      if (!prev[questionId]) return prev
+      const next = { ...prev }
+      delete next[questionId]
+      return next
+    })
+  }
   const inspectionRenderSections = useMemo(() => {
     if (!selectedTemplate) return []
     if (isEstateInspectionFormTemplate(selectedTemplate) && !isEsmInspectionFormTemplate(selectedTemplate)) {
@@ -2575,6 +2606,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   }
 
   const submitOfflineDraft = async (draft) => {
+    if (hasActivePhotoUploads) {
+      setSubmitError('Please wait for photo uploads to finish before submitting this inspection.')
+      return
+    }
     if (!isOnline) {
       setSubmitError('Waiting for internet connection to submit this inspection.')
       return
@@ -2879,6 +2914,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     e.preventDefault()
     setSubmitError(null)
     setSubmitWarning(null)
+    if (hasActivePhotoUploads) {
+      setSubmitError('Please wait for photo uploads to finish before saving this inspection.')
+      return
+    }
     const errs = validate()
     if (Object.keys(errs).length > 0) return
 
@@ -3078,6 +3117,22 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             }}
           >
             Inspection submitted, but follow-up work needs attention: {submitWarning}
+          </div>
+        )}
+
+        {hasActivePhotoUploads && (
+          <div
+            style={{
+              padding: '0.75rem',
+              backgroundColor: '#fffbeb',
+              border: '1px solid #f59e0b',
+              borderRadius: '0.375rem',
+              color: '#92400e',
+              marginBottom: '1rem',
+              fontSize: '0.875rem',
+            }}
+          >
+            Photo upload in progress. Please wait until all photos finish uploading before saving this inspection.
           </div>
         )}
 
@@ -3474,6 +3529,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       mobileStackedForm: mobileStackedInspectionForm,
                       lightCommentTextarea: lightCommentTextareaForTemplate,
                       section,
+                      onPhotoUploadStatusChange: handlePhotoUploadStatusChange,
                     }
                     const questionWrapProps =
                       isCaretakerForm && !isNVTemplate(selectedTemplate)
@@ -3570,22 +3626,22 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </Link>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasActivePhotoUploads}
             style={{
               padding: '0.75rem 1.5rem',
               minHeight: 44,
-              backgroundColor: isSubmitting ? '#9ca3af' : '#3b82f6',
+              backgroundColor: isSubmitting || hasActivePhotoUploads ? '#9ca3af' : '#3b82f6',
               color: 'white',
               border: 'none',
               borderRadius: '0.5rem',
               fontSize: '1rem',
               fontWeight: 500,
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              cursor: isSubmitting || hasActivePhotoUploads ? 'not-allowed' : 'pointer',
               width: isMobile ? '100%' : 'auto',
               touchAction: 'manipulation',
             }}
           >
-            {isSubmitting ? 'Saving...' : 'Save inspection'}
+            {isSubmitting ? 'Saving...' : hasActivePhotoUploads ? 'Waiting for photos...' : 'Save inspection'}
           </button>
         </div>
       </form>

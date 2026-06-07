@@ -84,6 +84,7 @@ export default function PhotoUploadControl({
   label = 'Add photo',
   multiple = true,
   mobileStacked = false,
+  onUploadStatusChange,
 }) {
   const photoUrls = useMemo(
     () => (Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []),
@@ -101,6 +102,10 @@ export default function PhotoUploadControl({
   useEffect(() => {
     photoUrlsRef.current = photoUrls
   }, [photoUrls])
+
+  useEffect(() => {
+    onUploadStatusChange?.(uploading)
+  }, [onUploadStatusChange, uploading])
 
   const syncPendingUploads = useCallback(async () => {
     if (syncingRef.current || !isBrowserOnline()) return
