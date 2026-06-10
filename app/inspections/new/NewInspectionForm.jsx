@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
@@ -52,6 +52,7 @@ import SignOffSection from '@/app/components/wizard/SignOffSection'
 import { buildInspectionFormNvTokens } from '@/lib/inspection-form-ui'
 import {
   createOfflineDraftId,
+  formatDraftLastSaved,
   hasInspectionDraftContent,
   readOfflineInspectionDrafts,
   removeOfflineInspectionDraft,
@@ -59,6 +60,14 @@ import {
   OFFLINE_DRAFT_STORAGE_FULL_MESSAGE,
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
+import {
+  clearInspectionResumeDraft,
+  formatResumeDraftSavedAt,
+  readInspectionResumeDraft,
+  resumeDraftHasMeaningfulContent,
+  writeInspectionResumeDraft,
+} from '@/lib/inspection-resume-draft'
+import ResumeInspectionDraftModal from '@/app/components/ResumeInspectionDraftModal'
 import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
 import {
   isBrowserOnline,
@@ -114,6 +123,58 @@ function normalizeYesNoNaValue(val) {
   if (s === 'na') return 'NA'
   if (['yes', 'no', 'na'].includes(s)) return s.charAt(0).toUpperCase() + s.slice(1)
   return ''
+}
+
+function normalizeDraftContextValue(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function getDraftTemplateId(draft) {
+  const payload = draft?.payload || {}
+  return payload.submitBody?.template_id || payload.templateId || ''
+}
+
+function getDraftBlockId(draft) {
+  const payload = draft?.payload || {}
+  return String(payload.submitBody?.block_id || payload.blockId || '').trim()
+}
+
+function getDraftLocationLabel(draft) {
+  const payload = draft?.payload || {}
+  return String(
+    payload.locationLabel ||
+      payload.submitBody?.location ||
+      payload.location ||
+      ''
+  ).trim()
+}
+
+function caretakerDraftMatchesContext(draft, { templateId, blockId, locationLabel }) {
+  const draftTemplateId = getDraftTemplateId(draft)
+  if (templateId && draftTemplateId !== templateId) return false
+
+  const currentBlockId = String(blockId || '').trim()
+  const draftBlockId = getDraftBlockId(draft)
+  const currentLocation = normalizeDraftContextValue(locationLabel)
+  const draftLocation = normalizeDraftContextValue(getDraftLocationLabel(draft))
+
+  if (currentBlockId) {
+    if (draftBlockId) return draftBlockId === currentBlockId
+    return Boolean(currentLocation && draftLocation && draftLocation === currentLocation)
+  }
+
+  if (currentLocation) {
+    if (!draftLocation) return false
+    return draftLocation === currentLocation
+  }
+
+  return true
+}
+
+function sortDraftsByMostRecent(a, b) {
+  const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime() || 0
+  const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime() || 0
+  return bTime - aTime
 }
 
 function showRecipientForAnswer(requiredWhen, answerValue) {
@@ -2045,12 +2106,28 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [activePhotoUploads, setActivePhotoUploads] = useState({})
+  const [dismissedDraftIds, setDismissedDraftIds] = useState([])
+  const [resumeDraftPrompt, setResumeDraftPrompt] = useState(null)
+  // Gate for the "inspection-draft" autosave: disabled while the resume prompt
+  // is open (or was dismissed with Escape) so the saved draft is not overwritten
+  // by the empty form. Re-enabled on Resume/Discard, or once the form actually
+  // changes from the baseline captured when the prompt was dismissed.
+  const resumeDraftAutosaveRef = useRef({ enabled: false, baseline: '' })
+  // Once the user has resumed, discarded, or dismissed the prompt, never
+  // re-open it for this mounted session (the draft then mirrors the live form).
+  const resumeDraftPromptResolvedRef = useRef(false)
   const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
   const [inspectionEndTime, setInspectionEndTime] = useState('')
   const [caretakerInspectionMode, setCaretakerInspectionMode] = useState(CARETAKER_INSPECTION_MODE_FULL)
   const [caretakerSpecificSectionId, setCaretakerSpecificSectionId] = useState('')
   const caretakerSectionRefs = useRef({})
   const caretakerQuestionRefs = useRef({})
+  const submitCompletedRef = useRef(false)
+  const selectedBlockName = useMemo(() => {
+    if (!postgresBlockId) return ''
+    const block = locationBlocks.find((b) => String(b?.id) === String(postgresBlockId))
+    return String(block?.name || '').trim()
+  }, [locationBlocks, postgresBlockId])
 
   useEffect(() => {
     let cancelled = false
@@ -2141,15 +2218,30 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
       setApiPayload(templatesData)
       const list = templatesData.templates || []
+      // This effect only re-runs on `effectiveLockedTemplateId` changes, so its
+      // closure holds a stale `templateId`; the current selection must be read
+      // via the functional update or a draft-preselected template would be
+      // clobbered by the list default. While an unresolved resume draft exists,
+      // prefer its template so the resume prompt is not orphaned by `list[0]`.
+      const defaultTemplateIdFor = (current) => {
+        if (current) return current
+        if (!resumeDraftPromptResolvedRef.current) {
+          const draftTemplateId = getDraftTemplateId(readInspectionResumeDraft())
+          if (draftTemplateId && list.some((t) => t.id === draftTemplateId)) {
+            return draftTemplateId
+          }
+        }
+        return list[0].id
+      }
       if (list.length > 0) {
         if (effectiveLockedTemplateId) {
           const hasRequestedTemplate = list.some((t) => t.id === effectiveLockedTemplateId)
           if (hasRequestedTemplate) setTemplateId(effectiveLockedTemplateId)
           else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
             setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
-          } else if (!templateId) setTemplateId(list[0].id)
-        } else if (!templateId) {
-          setTemplateId(list[0].id)
+          } else setTemplateId(defaultTemplateIdFor)
+        } else {
+          setTemplateId(defaultTemplateIdFor)
         }
       } else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
         setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
@@ -2338,6 +2430,47 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     caretakerSpecificTaskScope,
     inspectionRenderSections,
   ])
+  const matchingCaretakerDrafts = useMemo(() => {
+    if (!isCaretakerForm || !templateId) return []
+    const currentLocationLabel = selectedBlockName || location.trim()
+    return offlineDrafts.filter((draft) => {
+      if (!draft?.id || draft.id === offlineDraftId || dismissedDraftIds.includes(draft.id)) return false
+      const payload = draft.payload || {}
+      return (
+        hasInspectionDraftContent({ submitBody: payload.submitBody || {} }) &&
+        caretakerDraftMatchesContext(draft, {
+          templateId,
+          blockId: postgresBlockId,
+          locationLabel: currentLocationLabel,
+        })
+      )
+    }).sort(sortDraftsByMostRecent)
+  }, [
+    dismissedDraftIds,
+    isCaretakerForm,
+    location,
+    offlineDraftId,
+    offlineDrafts,
+    postgresBlockId,
+    selectedBlockName,
+    templateId,
+  ])
+  const getCaretakerDraftDisplayLocation = useCallback(
+    (draft) => {
+      const explicitLocation = getDraftLocationLabel(draft)
+      if (explicitLocation) return explicitLocation
+      const draftBlockId = getDraftBlockId(draft)
+      if (!draftBlockId) return ''
+      const block = locationBlocks.find((item) => String(item?.id) === String(draftBlockId))
+      return String(block?.name || '').trim()
+    },
+    [locationBlocks]
+  )
+  const discardCaretakerDraft = useCallback((draftId) => {
+    if (!draftId) return
+    setOfflineDrafts(removeOfflineInspectionDraft(draftId))
+    setDismissedDraftIds((prev) => [...new Set([...prev, draftId])])
+  }, [])
 
   const estateChecklistIndexByQid = useMemo(
     () =>
@@ -2435,6 +2568,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       templateId,
       templateName: selectedTemplate?.name || selectedTemplate?.template_name || '',
       blockId: postgresBlockId.trim() || '',
+      locationLabel: selectedBlockName || location.trim(),
       location: location.trim(),
       description: description.trim(),
       userEmail: user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '',
@@ -2446,6 +2580,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       selectedTemplate,
       templateId,
       postgresBlockId,
+      selectedBlockName,
       location,
       description,
       user,
@@ -2491,9 +2626,40 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
   }, [])
 
-  const noteDraftSaveResult = (saved) => {
+  useEffect(() => {
+    if (resumeDraftPromptResolvedRef.current) return
+    const draft = readInspectionResumeDraft()
+    const draftTemplateId =
+      draft?.payload?.submitBody?.template_id || draft?.payload?.templateId || ''
+    const activeTemplateId = templateId || effectiveLockedTemplateId
+    const conflictsWithLockedTemplate =
+      !!effectiveLockedTemplateId && !!draftTemplateId && draftTemplateId !== effectiveLockedTemplateId
+    const conflictsWithSelectedTemplate =
+      !!templateId && !!draftTemplateId && draftTemplateId !== templateId
+    const matchesCurrentContext = caretakerDraftMatchesContext(draft, {
+      templateId: activeTemplateId,
+      blockId: postgresBlockId,
+      locationLabel: selectedBlockName || location.trim(),
+    })
+    if (
+      draft &&
+      resumeDraftHasMeaningfulContent(draft.payload) &&
+      !conflictsWithLockedTemplate &&
+      !conflictsWithSelectedTemplate &&
+      matchesCurrentContext
+    ) {
+      setResumeDraftPrompt((current) => (current?.savedAt === draft.savedAt ? current : draft))
+    } else {
+      // Suppress *opening* only. Never auto-close an open prompt: programmatic
+      // changes (e.g. the template default applied when templates load) must
+      // not resolve it on the user's behalf — only Resume/Discard/Escape do.
+      resumeDraftAutosaveRef.current.enabled = true
+    }
+  }, [effectiveLockedTemplateId, location, postgresBlockId, selectedBlockName, templateId])
+
+  const noteDraftSaveResult = useCallback((saved) => {
     setDraftStorageWarning(saved ? '' : OFFLINE_DRAFT_STORAGE_FULL_MESSAGE)
-  }
+  }, [])
 
   useEffect(() => {
     if (!submitSuccessMessage) return undefined
@@ -2503,6 +2669,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   useEffect(() => {
     if (!hasInspectionDraftContent(currentDraftPayload)) return undefined
+    if (submitCompletedRef.current || submitSuccessMessage) return undefined
     const timer = window.setTimeout(() => {
       try {
         const id = offlineDraftId || createOfflineDraftId()
@@ -2519,9 +2686,37 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
     }, 1000)
     return () => window.clearTimeout(timer)
-  }, [offlineDraftId, currentDraftPayload])
+  }, [offlineDraftId, currentDraftPayload, noteDraftSaveResult, submitSuccessMessage])
 
-  const saveCurrentOfflineDraft = () => {
+  // Debounced autosave of the resume draft ("inspection-draft" localStorage key).
+  useEffect(() => {
+    if (resumeDraftPrompt) return undefined
+    if (submitCompletedRef.current || submitSuccessMessage) return undefined
+    if (!resumeDraftHasMeaningfulContent(currentDraftPayload)) return undefined
+    if (!resumeDraftAutosaveRef.current.enabled) {
+      if (JSON.stringify(currentSubmitBody) === resumeDraftAutosaveRef.current.baseline) {
+        return undefined
+      }
+      resumeDraftAutosaveRef.current.enabled = true
+    }
+    const timer = window.setTimeout(() => {
+      writeInspectionResumeDraft({
+        ...currentDraftPayload,
+        locationLabel: selectedBlockName || currentDraftPayload.location || '',
+        offlineDraftId,
+      })
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [
+    resumeDraftPrompt,
+    submitSuccessMessage,
+    currentDraftPayload,
+    currentSubmitBody,
+    selectedBlockName,
+    offlineDraftId,
+  ])
+
+  const saveCurrentOfflineDraft = useCallback(() => {
     try {
       const id = offlineDraftId || createOfflineDraftId()
       if (!offlineDraftId) setOfflineDraftId(id)
@@ -2537,42 +2732,102 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       noteDraftSaveResult(false)
       return offlineDraftId || ''
     }
+  }, [currentDraftPayload, offlineDraftId, noteDraftSaveResult])
+
+  useEffect(() => {
+    const hasDraftContent = hasInspectionDraftContent(currentDraftPayload)
+    if (!isCaretakerForm || !hasDraftContent || submitSuccessMessage) return undefined
+
+    const flushDraft = () => {
+      if (submitCompletedRef.current) return
+      saveCurrentOfflineDraft()
+    }
+    const handleBeforeUnload = (event) => {
+      flushDraft()
+      event.preventDefault()
+      event.returnValue = ''
+      return ''
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraft()
+    }
+
+    window.addEventListener('pagehide', flushDraft)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flushDraft)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [currentDraftPayload, isCaretakerForm, saveCurrentOfflineDraft, submitSuccessMessage])
+
+  const applyInspectionDraftPayload = (payload) => {
+    const body = payload.submitBody || {}
+    const parsedScope = parseCaretakerScopeFromDescription(body.description || payload.description || '')
+    setTemplateId(body.template_id || payload.templateId || '')
+    setPostgresBlockId(body.block_id || payload.blockId || '')
+    setLocation(body.location || payload.location || '')
+    setDescription(parsedScope.userDescription)
+    setCaretakerInspectionMode(
+      body.caretaker_inspection_mode ||
+        payload.caretakerInspectionMode ||
+        parsedScope.mode ||
+        CARETAKER_INSPECTION_MODE_FULL
+    )
+    setCaretakerSpecificSectionId(
+      caretakerSpecificTaskSelectionIdFromScope(parsedScope) ||
+        payload.caretakerSpecificSectionId ||
+        (body.caretaker_specific_question_id
+          ? `stq:${body.caretaker_specific_question_id}`
+          : '') ||
+        body.caretaker_specific_section_id ||
+        parsedScope.sectionId ||
+        ''
+    )
+    setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
+    setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
+    setAnswers(body.answers || {})
+    setAnswerExtras(body.answer_extras || {})
+    setSubmitError(null)
   }
 
   const restoreOfflineDraft = (draft) => {
     try {
-      const payload = draft?.payload || {}
-      const body = payload.submitBody || {}
-      const parsedScope = parseCaretakerScopeFromDescription(body.description || payload.description || '')
       setOfflineDraftId(draft.id)
-      setTemplateId(body.template_id || payload.templateId || '')
-      setPostgresBlockId(body.block_id || payload.blockId || '')
-      setLocation(body.location || payload.location || '')
-      setDescription(parsedScope.userDescription)
-      setCaretakerInspectionMode(
-        body.caretaker_inspection_mode ||
-          payload.caretakerInspectionMode ||
-          parsedScope.mode ||
-          CARETAKER_INSPECTION_MODE_FULL
-      )
-      setCaretakerSpecificSectionId(
-        caretakerSpecificTaskSelectionIdFromScope(parsedScope) ||
-          payload.caretakerSpecificSectionId ||
-          (body.caretaker_specific_question_id
-            ? `stq:${body.caretaker_specific_question_id}`
-            : '') ||
-          body.caretaker_specific_section_id ||
-          parsedScope.sectionId ||
-          ''
-      )
-      setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
-      setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
-      setAnswers(body.answers || {})
-      setAnswerExtras(body.answer_extras || {})
-      setSubmitError(null)
+      applyInspectionDraftPayload(draft?.payload || {})
     } catch {
       setSubmitError('Could not reopen the saved inspection on this phone.')
     }
+  }
+
+  const handleResumeSavedDraft = () => {
+    const draft = resumeDraftPrompt
+    setResumeDraftPrompt(null)
+    resumeDraftPromptResolvedRef.current = true
+    resumeDraftAutosaveRef.current.enabled = true
+    if (!draft?.payload) return
+    try {
+      if (draft.payload.offlineDraftId) setOfflineDraftId(draft.payload.offlineDraftId)
+      applyInspectionDraftPayload(draft.payload)
+    } catch {
+      setSubmitError('Could not restore the saved inspection on this device.')
+    }
+  }
+
+  const handleDiscardSavedDraft = () => {
+    clearInspectionResumeDraft()
+    setResumeDraftPrompt(null)
+    resumeDraftPromptResolvedRef.current = true
+    resumeDraftAutosaveRef.current.enabled = true
+  }
+
+  const handleCloseSavedDraftPrompt = () => {
+    // Escape / overlay click: keep the saved draft, but pause autosave until the
+    // form actually changes so the draft is not overwritten by an empty form.
+    resumeDraftAutosaveRef.current = { enabled: false, baseline: JSON.stringify(currentSubmitBody) }
+    setResumeDraftPrompt(null)
+    resumeDraftPromptResolvedRef.current = true
   }
 
   const prepareSubmitBodyForUpload = async (body) => {
@@ -2619,6 +2874,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitWarning(null)
+    submitCompletedRef.current = false
     try {
       body = await prepareSubmitBodyForUpload(body)
       const res = await safeFetch('/api/inspections', {
@@ -2655,7 +2911,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
       setDraftStorageWarning('')
+      clearInspectionResumeDraft()
       setSubmitSuccessMessage('Inspection submitted successfully')
+      submitCompletedRef.current = true
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
       setSubmitError(err.message || 'Something went wrong')
@@ -2914,6 +3172,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     e.preventDefault()
     setSubmitError(null)
     setSubmitWarning(null)
+    submitCompletedRef.current = false
     if (hasActivePhotoUploads) {
       setSubmitError('Please wait for photo uploads to finish before saving this inspection.')
       return
@@ -2985,7 +3244,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         setOfflineDraftId('')
       }
       setDraftStorageWarning('')
+      clearInspectionResumeDraft()
       setSubmitSuccessMessage('Inspection submitted successfully')
+      submitCompletedRef.current = true
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
       if (!isBrowserOnline()) {
@@ -3020,6 +3281,18 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   return (
     <div>
+      {resumeDraftPrompt ? (
+        <ResumeInspectionDraftModal
+          inspectionType={
+            resumeDraftPrompt.payload.templateName || resumeDraftPrompt.payload.formType || 'Inspection'
+          }
+          locationLabel={resumeDraftPrompt.payload.locationLabel || resumeDraftPrompt.payload.location || ''}
+          savedAtLabel={formatResumeDraftSavedAt(resumeDraftPrompt.savedAt)}
+          onResume={handleResumeSavedDraft}
+          onDiscard={handleDiscardSavedDraft}
+          onClose={handleCloseSavedDraftPrompt}
+        />
+      ) : null}
       <div style={{ marginBottom: '2rem' }}>
         <Link
           href="/"
@@ -3077,6 +3350,92 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         onReopenDraft={restoreOfflineDraft}
         onSubmitDraft={submitOfflineDraft}
       />
+
+      {matchingCaretakerDrafts.length > 0 ? (
+        <div
+          style={{
+            maxWidth: 800,
+            margin: '0 0 1rem',
+            padding: '0.85rem 1rem',
+            border: '1px solid #93c5fd',
+            borderRadius: '0.5rem',
+            background: '#eff6ff',
+            color: '#1e3a8a',
+            fontSize: '0.875rem',
+            lineHeight: 1.45,
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          <strong>Resume saved inspection?</strong>
+          <p style={{ margin: '0.35rem 0 0 0' }}>
+            Saved caretaker inspection draft{matchingCaretakerDrafts.length === 1 ? '' : 's'} from
+            this phone match the current template and location. Drafts are kept until you submit,
+            discard them, or clear this browser&apos;s storage.
+          </p>
+          <div style={{ display: 'grid', gap: '0.75rem', marginTop: '0.75rem' }}>
+            {matchingCaretakerDrafts.map((draft) => {
+              const draftLocation = getCaretakerDraftDisplayLocation(draft)
+              const savedAt = draft.updatedAt || draft.createdAt ? formatDraftLastSaved(draft) : ''
+              return (
+                <div
+                  key={draft.id}
+                  style={{
+                    display: 'grid',
+                    gap: '0.5rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid #bfdbfe',
+                  }}
+                >
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 700, color: '#172554' }}>
+                      {draft.payload?.templateName || draft.payload?.formType || draft.label || 'Caretaker Inspection'}
+                    </p>
+                    {draftLocation ? (
+                      <p style={{ margin: '0.2rem 0 0' }}>Location: {draftLocation}</p>
+                    ) : null}
+                    {savedAt ? (
+                      <p style={{ margin: '0.2rem 0 0', color: '#475569' }}>Last saved: {savedAt}</p>
+                    ) : null}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => restoreOfflineDraft(draft)}
+                      style={{
+                        padding: '0.5rem 0.85rem',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        background: '#1d4ed8',
+                        color: 'white',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Resume
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => discardCaretakerDraft(draft.id)}
+                      style={{
+                        padding: '0.5rem 0.85rem',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '0.375rem',
+                        background: 'white',
+                        color: '#1d4ed8',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <form
         onSubmit={handleSubmit}
