@@ -3966,7 +3966,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '1rem',
+            justifyContent: isMobile ? 'flex-start' : 'flex-end',
+            flexWrap: 'wrap',
+            // Keep the actions clear of the Android gesture/navigation area on phones.
+            paddingBottom: isMobile ? 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' : undefined,
+          }}
+        >
           <Link
             href="/inspections"
             style={{
@@ -3977,7 +3986,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               textDecoration: 'none',
               color: '#374151',
               fontWeight: 500,
-              width: isMobile ? '100%' : 'auto',
+              width: 'auto',
               textAlign: 'center',
             }}
           >
@@ -3996,11 +4005,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               fontSize: '1rem',
               fontWeight: 500,
               cursor: isSubmitting || hasActivePhotoUploads ? 'not-allowed' : 'pointer',
-              width: isMobile ? '100%' : 'auto',
+              width: 'auto',
+              // On phones show the primary action first (left), clear of edge gestures.
+              order: isMobile ? -1 : undefined,
               touchAction: 'manipulation',
             }}
           >
-            {isSubmitting ? 'Saving...' : hasActivePhotoUploads ? 'Waiting for photos...' : 'Save inspection'}
+            {isSubmitting ? 'Submitting...' : hasActivePhotoUploads ? 'Waiting for photos...' : 'Submit Inspection'}
           </button>
         </div>
       </form>
