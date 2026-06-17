@@ -191,6 +191,194 @@ function getInspectionDurationLabel(startValue, endValue) {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 }
 
+function normalizeSearchText(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function SearchablePersonSelector({
+  id,
+  value,
+  onChange,
+  people = [],
+  error = false,
+  placeholder = 'Search by officer name',
+}) {
+  const [query, setQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+  const closeTimerRef = useRef(null)
+  const typingClearedSelectionRef = useRef(false)
+
+  const selectedPerson = useMemo(
+    () => people.find((person) => String(person.value) === String(value || '')) || null,
+    [people, value]
+  )
+
+  useEffect(() => {
+    if (typingClearedSelectionRef.current) {
+      typingClearedSelectionRef.current = false
+      return
+    }
+    setQuery(selectedPerson?.label || '')
+  }, [selectedPerson])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    }
+  }, [])
+
+  const normalizedQuery = normalizeSearchText(query)
+  const filteredPeople = useMemo(() => {
+    if (!normalizedQuery) return people.slice(0, 50)
+    return people
+      .filter((person) =>
+        [person.label, person.jobTitle]
+          .some((part) => normalizeSearchText(part).includes(normalizedQuery))
+      )
+      .slice(0, 50)
+  }, [normalizedQuery, people])
+
+  const handleSelect = (person) => {
+    onChange(person.value)
+    setQuery(person.label)
+    setIsOpen(false)
+  }
+
+  const handleClear = () => {
+    onChange('')
+    setQuery('')
+    setIsOpen(true)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        id={id}
+        type="search"
+        list={`${id}-options`}
+        data-walkabout-person-field={id}
+        value={query}
+        onChange={(event) => {
+          const nextQuery = event.target.value
+          const exactMatch = people.find(
+            (person) => normalizeSearchText(person.label) === normalizeSearchText(nextQuery)
+          )
+          setQuery(nextQuery)
+          setIsOpen(true)
+          if (exactMatch) {
+            onChange(exactMatch.value)
+          } else if (value) {
+            typingClearedSelectionRef.current = true
+            onChange('')
+          }
+        }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => {
+          closeTimerRef.current = setTimeout(() => setIsOpen(false), 150)
+        }}
+        placeholder={placeholder}
+        autoComplete="off"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={isOpen}
+        aria-controls={`${id}-results`}
+        aria-invalid={!!error}
+        inputMode="search"
+        autoCapitalize="words"
+        style={{
+          ...selectStyle(error),
+          WebkitAppearance: 'none',
+          appearance: 'none',
+          color: EW.text,
+          WebkitTextFillColor: EW.text,
+          touchAction: 'manipulation',
+        }}
+      />
+      <datalist id={`${id}-options`}>
+        {people.map((person) => (
+          <option key={person.value} value={person.label} />
+        ))}
+      </datalist>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+        <span style={{ fontSize: 13, color: EW.muted }}>
+          {selectedPerson ? `Selected: ${selectedPerson.label}` : 'Start typing to filter staff'}
+        </span>
+        {(query || value) && (
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={handleClear}
+            style={{
+              border: 0,
+              padding: 0,
+              background: 'transparent',
+              color: '#1d4ed8',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <div
+          id={`${id}-results`}
+          role="listbox"
+          aria-label="Matching staff"
+          style={{
+            marginTop: 6,
+            maxHeight: 260,
+            overflowY: 'auto',
+            border: `1px solid ${EW.border}`,
+            borderRadius: 8,
+            background: '#fff',
+            boxShadow: '0 12px 24px rgba(15, 23, 42, 0.12)',
+            zIndex: 20,
+          }}
+        >
+          {filteredPeople.length > 0 ? (
+            filteredPeople.map((person) => (
+              <button
+                key={person.value}
+                type="button"
+                role="option"
+                aria-selected={person.value === String(value || '')}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleSelect(person)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: 0,
+                  borderBottom: '1px solid #f1f5f9',
+                  background: person.value === String(value || '') ? '#ecfdf5' : '#fff',
+                  color: EW.text,
+                  textAlign: 'left',
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ display: 'block', fontWeight: 600 }}>{person.label}</span>
+                {person.jobTitle ? (
+                  <span style={{ display: 'block', marginTop: 2, fontSize: 13, color: EW.muted }}>
+                    {person.jobTitle}
+                  </span>
+                ) : null}
+              </button>
+            ))
+          ) : (
+            <p style={{ margin: 0, padding: '0.75rem', color: EW.muted, fontSize: 15 }}>
+              No matching staff
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function EstateWalkaboutNewInspectionForm({
   blocks = [],
   templates = [],
@@ -1049,19 +1237,15 @@ export default function EstateWalkaboutNewInspectionForm({
             <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>Lead officer and inspection details.</p>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <div>
-                <label style={labelStyle}>Responsible person *</label>
-                <select
+                <label htmlFor="ew_q_responsible" style={labelStyle}>Responsible Officer *</label>
+                <SearchablePersonSelector
+                  id="ew_q_responsible"
                   value={answers.ew_q_responsible}
-                  onChange={(e) => setResponsiblePerson(e.target.value)}
-                  style={selectStyle(!!validationErrors.ew_q_responsible)}
-                >
-                  <option value="">— Select… —</option>
-                  {peopleOptions.map((person) => (
-                    <option key={person.value} value={person.value}>
-                      {person.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setResponsiblePerson}
+                  people={peopleOptions}
+                  error={!!validationErrors.ew_q_responsible}
+                  placeholder="Type a few letters to search officers"
+                />
                 {validationErrors.ew_q_responsible && <p style={errStyle}>{validationErrors.ew_q_responsible}</p>}
               </div>
               <div>
@@ -1117,19 +1301,15 @@ export default function EstateWalkaboutNewInspectionForm({
             {yna('ew_st_esm_present', 'Is there an ESM present?')}
             {yna('ew_st_ward_cllr_present', 'Is there a Ward Cllr present?')}
             <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>What is the name of the repairs officer?</label>
-              <select
+              <label htmlFor="ew_st_repairs_officer_select" style={labelStyle}>Repairs Officer</label>
+              <SearchablePersonSelector
+                id="ew_st_repairs_officer_select"
                 value={answers.ew_st_repairs_officer_select}
-                onChange={(e) => setField('ew_st_repairs_officer_select', e.target.value)}
-                style={selectStyle(!!validationErrors.ew_st_repairs_officer_select)}
-              >
-                <option value="">— Select… —</option>
-                {peopleOptions.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(personId) => setField('ew_st_repairs_officer_select', personId)}
+                people={peopleOptions}
+                error={!!validationErrors.ew_st_repairs_officer_select}
+                placeholder="Type a few letters to search officers"
+              />
               {validationErrors.ew_st_repairs_officer_select && (
                 <p style={errStyle}>{validationErrors.ew_st_repairs_officer_select}</p>
               )}
@@ -1383,6 +1563,7 @@ function selectStyle(bad) {
     fontSize: 16,
     minHeight: 48,
     background: '#fff',
+    boxSizing: 'border-box',
   }
 }
 
