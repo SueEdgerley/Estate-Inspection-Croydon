@@ -250,24 +250,24 @@ function SearchablePersonSelector({
     setIsOpen(true)
   }
 
+  const statusLabel = selectedPerson
+    ? `Selected: ${selectedPerson.label}`
+    : normalizedQuery
+      ? `${filteredPeople.length} matching staff. Tap a result to select.`
+      : 'Start typing to filter staff'
+
   return (
     <div style={{ position: 'relative' }}>
       <input
         id={id}
-        type="search"
-        list={`${id}-options`}
+        type="text"
         data-walkabout-person-field={id}
         value={query}
         onChange={(event) => {
           const nextQuery = event.target.value
-          const exactMatch = people.find(
-            (person) => normalizeSearchText(person.label) === normalizeSearchText(nextQuery)
-          )
           setQuery(nextQuery)
           setIsOpen(true)
-          if (exactMatch) {
-            onChange(exactMatch.value)
-          } else if (value) {
+          if (value) {
             typingClearedSelectionRef.current = true
             onChange('')
           }
@@ -279,6 +279,7 @@ function SearchablePersonSelector({
         placeholder={placeholder}
         autoComplete="off"
         role="combobox"
+        aria-haspopup="listbox"
         aria-autocomplete="list"
         aria-expanded={isOpen}
         aria-controls={`${id}-results`}
@@ -294,19 +295,15 @@ function SearchablePersonSelector({
           touchAction: 'manipulation',
         }}
       />
-      <datalist id={`${id}-options`}>
-        {people.map((person) => (
-          <option key={person.value} value={person.label} />
-        ))}
-      </datalist>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
         <span style={{ fontSize: 13, color: EW.muted }}>
-          {selectedPerson ? `Selected: ${selectedPerson.label}` : 'Start typing to filter staff'}
+          {statusLabel}
         </span>
         {(query || value) && (
           <button
             type="button"
             onMouseDown={(event) => event.preventDefault()}
+            onPointerDown={(event) => event.preventDefault()}
             onClick={handleClear}
             style={{
               border: 0,
@@ -346,6 +343,10 @@ function SearchablePersonSelector({
                 role="option"
                 aria-selected={person.value === String(value || '')}
                 onMouseDown={(event) => event.preventDefault()}
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  handleSelect(person)
+                }}
                 onClick={() => handleSelect(person)}
                 style={{
                   display: 'block',
