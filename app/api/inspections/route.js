@@ -5,7 +5,7 @@ import { createHash } from 'crypto'
 import { ensureDatabase, ensureInspectionTimingFields, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
-import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
+import { applyTemplateDisplayPatches, patchCaretakerTemplatesList } from '@/lib/caretaker-fire-template-patch'
 import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
 import { validateInspectionEstateAndBlock } from '@/lib/validate-inspection-estate-block'
@@ -767,6 +767,92 @@ function hashSnapshot(snapshot) {
   return createHash('sha256').update(stableStringify(snapshot)).digest('hex')
 }
 
+function isAirtableConfigured() {
+  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY
+  return Boolean(process.env.AIRTABLE_BASE_ID?.trim() && hasKey?.trim())
+}
+
+/** Latest Postgres snapshot for one template (same source as GET /api/templates fallback). */
+async function loadTemplateFromPostgresSnapshot(templateId) {
+  await ensureDatabase()
+  const result = await sql`
+    SELECT template_id, template_name, snapshot, created_at
+    FROM template_versions
+    WHERE template_id = ${templateId} AND snapshot IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+  `
+  const row = result.rows[0]
+  if (!row?.snapshot || typeof row.snapshot !== 'object') return null
+  const snapshot = row.snapshot
+  return {
+    id: snapshot.id ?? row.template_id,
+    template_key: snapshot.template_key ?? '',
+    name: snapshot.name ?? row.template_name ?? 'Template',
+    template_type: snapshot.template_type ?? snapshot.type ?? 'standard',
+    type: snapshot.type ?? snapshot.template_type ?? 'standard',
+    sections: Array.isArray(snapshot.sections) ? snapshot.sections : [],
+    questions: Array.isArray(snapshot.questions) ? snapshot.questions : [],
+  }
+}
+
+/**
+ * Resolve live template for inspection create. Prefer Airtable; on 401/429 or missing row,
+ * fall back to template_versions (matches Forms page behaviour when Airtable is rate-limited).
+ */
+async function resolveTemplateForInspectionCreate(templateId) {
+  const airtableFallbackStatuses = new Set([401, 429])
+  let airtableError = null
+
+  if (isAirtableConfigured()) {
+    try {
+      const nested = await getTemplatesNested()
+      const template = nested.find((t) => t.id === templateId) ?? null
+      if (template) {
+        console.log('[api/inspections] template resolved from Airtable', {
+          template_id: templateId,
+          template_name: template.name,
+          section_count: template.sections?.length ?? 0,
+        })
+        return { template, templateSource: 'airtable' }
+      }
+      console.warn('[api/inspections] template_id not in Airtable nested result', { template_id: templateId })
+    } catch (err) {
+      airtableError = err
+      const airtableStatus = err.airtableStatus ?? err.statusCode ?? err.status ?? null
+      console.error('[api/inspections] getTemplatesNested failed', {
+        template_id: templateId,
+        airtable_status: airtableStatus,
+        airtable_table: err.airtableTableName ?? null,
+        message: err?.message || String(err),
+      })
+      if (!airtableFallbackStatuses.has(airtableStatus)) {
+        throw err
+      }
+    }
+  } else {
+    console.warn('[api/inspections] Airtable not configured; using template_versions for template lookup')
+  }
+
+  const fromPostgres = await loadTemplateFromPostgresSnapshot(templateId)
+  if (fromPostgres) {
+    const template = patchCaretakerTemplatesList([fromPostgres])[0] ?? fromPostgres
+    console.log('[api/inspections] template resolved from template_versions fallback', {
+      template_id: templateId,
+      template_name: template.name,
+      section_count: template.sections?.length ?? 0,
+      airtable_fallback_reason: airtableError?.message ?? 'not_in_airtable_or_airtable_unconfigured',
+    })
+    return { template, templateSource: 'template_versions_fallback' }
+  }
+
+  return {
+    template: null,
+    templateSource: 'not_found',
+    airtableError: airtableError?.message ?? null,
+  }
+}
+
 async function getOrCreateTemplateVersion(templateId, templateName, snapshot) {
   const versionHash = hashSnapshot(snapshot)
   /** Reuse only when the **most recently created** row for this template_id has the same hash (stableStringify of snapshot). */
@@ -1092,7 +1178,6 @@ export async function GET(request) {
 
 export async function POST(request) {
   const { userId } = await auth()
-  console.log('auth userId', userId)
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -1103,6 +1188,15 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  console.log('[api/inspections] POST start', {
+    user_id: userId,
+    template_id: body?.template_id ?? null,
+    draft: body?.draft === true,
+    block_id: body?.block_id ?? null,
+    estate_id: body?.estate_id ?? null,
+    ad_hoc: body?.ad_hoc === true,
+  })
 
   if (body && body.test === true) {
     return NextResponse.json({
@@ -1243,14 +1337,6 @@ export async function POST(request) {
     }
   }
 
-  const hasKey = process.env.AIRTABLE_API_TOKEN || process.env.AIRTABLE_API_KEY
-  if (!process.env.AIRTABLE_BASE_ID?.trim() || !hasKey?.trim()) {
-    return NextResponse.json(
-      { error: 'Airtable not configured. Set AIRTABLE_BASE_ID and AIRTABLE_API_TOKEN (or legacy AIRTABLE_API_KEY).' },
-      { status: 503 }
-    )
-  }
-
   if (!template_id) {
     return NextResponse.json(
       { error: 'template_id is required' },
@@ -1269,14 +1355,29 @@ export async function POST(request) {
   const inspectorName = await getCurrentUserName()
 
   try {
-    const nested = await getTemplatesNested()
-    let template = nested.find((t) => t.id === template_id)
-    if (!template) {
+    const { template: resolvedTemplate, templateSource, airtableError } =
+      await resolveTemplateForInspectionCreate(template_id)
+    if (!resolvedTemplate) {
+      console.error('[api/inspections] template not found for create', {
+        template_id,
+        template_source: templateSource,
+        airtable_error: airtableError,
+      })
       return NextResponse.json(
-        { error: 'Template not found' },
+        {
+          error: 'Template not found',
+          details:
+            'No matching template in Airtable or Postgres template_versions. If this form was recently added, an admin may need to sync templates.',
+        },
         { status: 400 }
       )
     }
+    let template = resolvedTemplate
+    console.log('[api/inspections] using template', {
+      template_id: template.id,
+      template_name: template.name,
+      template_source: templateSource,
+    })
     if (isEstateWalkaboutTemplate(template)) {
       template = getCanonicalEstateWalkaboutTemplateForInsert(template)
     }
@@ -1338,6 +1439,12 @@ export async function POST(request) {
     const resolveRecipientEmail = buildRecipientResolver(peopleResult.rows || [])
     const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
     if (!loc.ok) {
+      console.warn('[api/inspections] location validation failed', {
+        template_id,
+        block_id: bodyBlockId ?? null,
+        estate_id: bodyEstateId ?? null,
+        message: loc.message,
+      })
       return NextResponse.json({ error: loc.message }, { status: loc.status })
     }
     const estateId = loc.estateId
@@ -1411,6 +1518,12 @@ export async function POST(request) {
         )
       `
       await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
+      console.log('[api/inspections] draft inspection created', {
+        inspection_id: inspectionId,
+        template_id,
+        template_source: templateSource,
+        block_id: blockId,
+      })
       return NextResponse.json(
         {
           inspectionId,
@@ -1959,6 +2072,13 @@ export async function POST(request) {
       }
     }
 
+    console.log('[api/inspections] inspection created', {
+      inspection_id: inspectionId,
+      template_id,
+      template_source: templateSource,
+      draft: createDraft === true,
+      block_id: blockId,
+    })
     return NextResponse.json({
       inspectionId,
       id: inspectionId,
@@ -1988,9 +2108,23 @@ export async function POST(request) {
       ...(pdfErrorMessage ? { pdfError: pdfErrorMessage } : {}),
     }, { status: 201 })
   } catch (error) {
-    console.error('Error creating inspection:', error)
+    const airtableStatus = error.airtableStatus ?? error.statusCode ?? error.status ?? null
+    console.error('[api/inspections] create failed', {
+      template_id,
+      draft: createDraft === true,
+      block_id: bodyBlockId ?? null,
+      estate_id: bodyEstateId ?? null,
+      user_id: userId,
+      airtable_status: airtableStatus,
+      airtable_table: error.airtableTableName ?? null,
+      message: error?.message || String(error),
+    })
     return NextResponse.json(
-      { error: 'Failed to create inspection', details: error.message },
+      {
+        error: 'Failed to create inspection',
+        details: error.message,
+        ...(airtableStatus != null ? { airtable_status: airtableStatus } : {}),
+      },
       { status: 500 }
     )
   }
