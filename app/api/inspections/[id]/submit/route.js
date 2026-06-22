@@ -44,7 +44,7 @@ import {
 } from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
-import { sendCaretakerSubmissionConfirmationEmail } from '@/lib/caretaker-submission-confirmation-email'
+import { sendInspectionSubmissionConfirmationEmail } from '@/lib/inspection-submission-confirmation-email'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
@@ -1146,34 +1146,6 @@ export async function POST(request, { params }) {
           console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)
           actionCreationWarnings.push(`Caretaker notification error: ${caretakerEmailErr?.message || String(caretakerEmailErr)}`)
         }
-
-        try {
-          const confirmationResult = await sendCaretakerSubmissionConfirmationEmail({
-            sql,
-            inspectionId: id,
-            inspection: inspectionLive,
-            inspectorEmail: inspectorEmail || inspectionLive.inspector_id,
-            inspectorName: inspectionLive.inspector_name || inspectorName,
-            estateBlockLine,
-            fullPdfUrl: fullPdfUrl ?? getInspectionFullReportPdfUrl(inspectionLive) ?? null,
-          })
-          if (confirmationResult.ok && !confirmationResult.skipped) {
-            emailResults.sent.push({
-              email: confirmationResult.to,
-              type: 'caretaker_submission_confirmation',
-            })
-          } else if (!confirmationResult.ok && !confirmationResult.skipped) {
-            emailResults.failed.push({
-              email: confirmationResult.to || inspectorEmail,
-              error: confirmationResult.error || 'caretaker_submission_confirmation_failed',
-            })
-          }
-        } catch (confirmationErr) {
-          console.error('[inspections/submit] caretaker submission confirmation:', confirmationErr)
-          actionCreationWarnings.push(
-            `Caretaker submission confirmation: ${confirmationErr?.message || String(confirmationErr)}`
-          )
-        }
       }
 
       if (emailVersion && isEstateWalkaboutTemplateVersion(emailVersion)) {
@@ -1238,6 +1210,38 @@ export async function POST(request, { params }) {
       }
     } else {
       console.log('[inspections/submit] skipping notification resend for already-submitted inspection', { inspectionId: id })
+    }
+
+    if (wasDraft) {
+      try {
+        const confirmationResult = await sendInspectionSubmissionConfirmationEmail({
+          sql,
+          inspectionId: id,
+          inspection: inspectionLive,
+          templateVersion: emailVersion,
+          inspectorEmail: inspectorEmail || inspectionLive.inspector_id,
+          inspectorName: inspectionLive.inspector_name || inspectorName,
+          estateBlockLine,
+          fullPdfUrl: fullPdfUrl ?? getInspectionFullReportPdfUrl(inspectionLive) ?? null,
+          posterPdfUrl: posterPdfUrl ?? inspectionLive.poster_pdf_url ?? null,
+        })
+        if (confirmationResult.ok && !confirmationResult.skipped) {
+          emailResults.sent.push({
+            email: confirmationResult.to,
+            type: 'inspection_submission_confirmation',
+          })
+        } else if (!confirmationResult.ok && !confirmationResult.skipped) {
+          emailResults.failed.push({
+            email: confirmationResult.to || inspectorEmail,
+            error: confirmationResult.error || 'inspection_submission_confirmation_failed',
+          })
+        }
+      } catch (confirmationErr) {
+        console.error('[inspections/submit] submission confirmation:', confirmationErr)
+        actionCreationWarnings.push(
+          `Submission confirmation: ${confirmationErr?.message || String(confirmationErr)}`
+        )
+      }
     }
 
     // Save recipient records (best-effort — inspection is already submitted)
