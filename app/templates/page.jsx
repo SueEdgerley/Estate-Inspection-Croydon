@@ -117,10 +117,21 @@ export default function FormsPage() {
       fetch(`/api/templates?t=${Date.now()}`, { cache: 'no-store', credentials: 'include' }).then(async (res) => {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[Forms]', res.status, body)
-          }
+          console.warn('[Forms] GET /api/templates failed', {
+            status: res.status,
+            error: body?.error,
+            details: body?.details,
+            source: body?.source,
+          })
           throw new Error('Forms could not be loaded. Please try again or contact support.')
+        }
+        if (body?.warning) {
+          console.warn('[Forms] GET /api/templates warning', body.warning)
+        }
+        if (body?.source === 'template_versions_fallback') {
+          console.info('[Forms] templates loaded from Postgres fallback', {
+            count: Array.isArray(body.templates) ? body.templates.length : 0,
+          })
         }
         return body
       }),

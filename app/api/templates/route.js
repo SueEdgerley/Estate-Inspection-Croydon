@@ -154,6 +154,85 @@ function mergeTemplatesById(primary, additions) {
   return merged
 }
 
+/** Serve latest Postgres template_versions snapshots when Airtable is unavailable. */
+async function loadTemplatesFromPostgresFallback(viewer, { airtableStatus, reason }) {
+  await ensureDatabase()
+  const pgUrl = getPgUrl()
+  if (!pgUrl) return null
+
+  const fallbackResult = await sql`
+    SELECT DISTINCT ON (template_id)
+      template_id, template_name, snapshot, created_at
+    FROM template_versions
+    WHERE snapshot IS NOT NULL
+    ORDER BY template_id, created_at DESC
+  `
+  const rawFallback = fallbackResult.rows
+    .map((row) => {
+      const snapshot = row.snapshot
+      if (!snapshot || typeof snapshot !== 'object') return null
+      return {
+        row_template_id: row.template_id,
+        row_template_name: row.template_name,
+        ...snapshot,
+      }
+    })
+    .filter((s) => s && typeof s === 'object')
+    .map((s) => ({
+      id: s.id ?? s.row_template_id,
+      template_key: s.template_key ?? '',
+      name: s.name ?? s.template_name ?? s.row_template_name ?? 'Template',
+      template_type: s.template_type ?? s.type ?? 'standard',
+      type: s.type ?? s.template_type ?? 'standard',
+      sections: Array.isArray(s.sections) ? s.sections : [],
+    }))
+    .filter((t) => t.id)
+
+  const archivedFilteredFallback = filterArchivedTemplates(rawFallback)
+  const visibleFallback = applyTemplateVisibility(archivedFilteredFallback, viewer)
+  const fallbackEsmTemplates = archivedFilteredFallback.filter(isEsmOrEstateInspectionCandidate)
+  const templates = patchCaretakerTemplatesList(
+    mergeTemplatesById(visibleFallback, fallbackEsmTemplates.length ? fallbackEsmTemplates : archivedFilteredFallback)
+  )
+
+  if (templates.length === 0) {
+    console.warn('[api/templates] Postgres fallback returned no templates', { airtableStatus, reason })
+    return null
+  }
+
+  logEsmTemplateSections('template_versions_fallback', templates)
+  if (getEsmTemplateDiagnostics('template_versions_fallback', templates).length > 0) {
+    console.warn('[api/templates] Airtable failed; serving ESM fallback template.', { airtableStatus, reason })
+  }
+
+  const diagnostics = getAirtableProductionDiagnostics({
+    failing_table: null,
+    airtable_status_code: airtableStatus,
+    grading_first_attempt: getLastTemplatesNestedFetchMeta(),
+  })
+
+  console.log('[api/templates] served from Postgres template_versions fallback', {
+    airtableStatus,
+    reason,
+    template_count: templates.length,
+  })
+
+  return NextResponse.json(
+    {
+      templates,
+      diagnostics,
+      templateSource: buildTemplateSourceDiagnostics('template_versions_fallback', templates, {
+        fallback_reason: reason,
+        fallback_includes_esm: true,
+        airtable_nested_fetch: getLastTemplatesNestedFetchMeta(),
+      }),
+      warning: `Airtable returned ${airtableStatus}; templates are temporarily loaded from latest Postgres snapshots until Airtable is available again.`,
+      source: 'template_versions_fallback',
+    },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+  )
+}
+
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
@@ -173,6 +252,12 @@ export async function GET() {
   }
 
   const viewer = await getViewerContext()
+  console.log('[api/templates] GET start', {
+    authenticated: Boolean(viewer.userId),
+    systemRole: viewer.systemRole,
+    jobTitle: viewer.jobTitle,
+    clerkIsAdmin: viewer.clerkIsAdmin,
+  })
 
   try {
     const templates = patchCaretakerTemplatesList(
@@ -184,7 +269,10 @@ export async function GET() {
       airtable_status_code: null,
       grading_first_attempt: getLastTemplatesNestedFetchMeta(),
     })
-    console.log('[Airtable diag] GET /api/templates OK', diagnostics)
+    console.log('[api/templates] GET OK from Airtable', {
+      template_count: templates.length,
+      diagnostics,
+    })
     return NextResponse.json(
       {
         templates,
@@ -198,76 +286,27 @@ export async function GET() {
       }
     )
   } catch (error) {
-    console.error('Error fetching templates:', error)
     const airtableStatus = error.airtableStatus ?? error.statusCode ?? error.status
-    // Fallback: if Airtable auth fails (401), use latest template snapshots from Postgres.
-    // This keeps Forms usable on devices even when Airtable auth/config is temporarily failing.
-    if (airtableStatus === 401) {
+    console.error('[api/templates] Airtable fetch failed', {
+      status: airtableStatus,
+      table: error.airtableTableName ?? null,
+      message: error?.message || String(error),
+    })
+    // Fallback: when Airtable auth/rate-limit fails, use latest template snapshots from Postgres.
+    const fallbackStatuses = new Set([401, 429])
+    if (fallbackStatuses.has(airtableStatus)) {
+      const reason =
+        airtableStatus === 429
+          ? 'Airtable returned 429 Too Many Requests (billing/rate limit) while fetching templates.'
+          : 'Airtable returned 401 Unauthorized while fetching templates.'
       try {
-        await ensureDatabase()
-        const pgUrl = getPgUrl()
-        if (pgUrl) {
-          const fallbackResult = await sql`
-            SELECT DISTINCT ON (template_id)
-              template_id, template_name, snapshot, created_at
-            FROM template_versions
-            WHERE snapshot IS NOT NULL
-            ORDER BY template_id, created_at DESC
-          `
-          const rawFallback = fallbackResult.rows
-            .map((row) => {
-              const snapshot = row.snapshot
-              if (!snapshot || typeof snapshot !== 'object') return null
-              return {
-                row_template_id: row.template_id,
-                row_template_name: row.template_name,
-                ...snapshot,
-              }
-            })
-            .filter((s) => s && typeof s === 'object')
-            .map((s) => ({
-              id: s.id ?? s.row_template_id,
-              template_key: s.template_key ?? '',
-              name: s.name ?? s.template_name ?? s.row_template_name ?? 'Template',
-              template_type: s.template_type ?? s.type ?? 'standard',
-              type: s.type ?? s.template_type ?? 'standard',
-              sections: Array.isArray(s.sections) ? s.sections : [],
-            }))
-            .filter((t) => t.id)
-          const archivedFilteredFallback = filterArchivedTemplates(rawFallback)
-          const visibleFallback = applyTemplateVisibility(archivedFilteredFallback, viewer)
-          const fallbackEsmTemplates = archivedFilteredFallback.filter(isEsmOrEstateInspectionCandidate)
-          const templates = patchCaretakerTemplatesList(
-            mergeTemplatesById(visibleFallback, fallbackEsmTemplates.length ? fallbackEsmTemplates : archivedFilteredFallback)
-          )
-          logEsmTemplateSections('template_versions_fallback', templates)
-          if (getEsmTemplateDiagnostics('template_versions_fallback', templates).length > 0) {
-            console.warn('Airtable failed; serving ESM fallback template.')
-          }
-          if (templates.length > 0) {
-            const diagnostics = getAirtableProductionDiagnostics({
-              failing_table: error.airtableTableName ?? null,
-              airtable_status_code: 401,
-              grading_first_attempt: getLastTemplatesNestedFetchMeta(),
-            })
-            return NextResponse.json(
-              {
-                templates,
-                diagnostics,
-                templateSource: buildTemplateSourceDiagnostics('template_versions_fallback', templates, {
-                  fallback_reason: 'Airtable returned 401 Unauthorized while fetching templates.',
-                  fallback_includes_esm: true,
-                  airtable_nested_fetch: getLastTemplatesNestedFetchMeta(),
-                }),
-                warning: 'Airtable returned 401; templates are temporarily loaded from latest Postgres snapshots. ESM may be stale until Airtable auth is fixed.',
-                source: 'template_versions_fallback',
-              },
-              { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
-            )
-          }
-        }
+        const fallbackResponse = await loadTemplatesFromPostgresFallback(viewer, {
+          airtableStatus,
+          reason,
+        })
+        if (fallbackResponse) return fallbackResponse
       } catch (fallbackErr) {
-        console.error('[api/templates] fallback failed:', fallbackErr)
+        console.error('[api/templates] Postgres fallback failed:', fallbackErr?.message || fallbackErr)
       }
     }
     const httpStatus =
