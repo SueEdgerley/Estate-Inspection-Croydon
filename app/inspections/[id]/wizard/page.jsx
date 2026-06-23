@@ -371,10 +371,19 @@ export default function InspectionWizardPage() {
 
   const handleAnswer = (questionId, value, sectionId, comment) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
-    const ext = extras[questionId] || {}
-    const merged = comment !== undefined ? { ...ext, comment } : ext
-    if (comment !== undefined) setExtras((prev) => ({ ...prev, [questionId]: { ...ext, comment } }))
-    saveAnswer(sectionId, questionId, value, comment !== undefined ? comment : ext.comment, merged)
+    setExtras((prev) => {
+      const nextQuestionExtras =
+        comment !== undefined ? { ...(prev[questionId] || {}), comment } : prev[questionId] || {}
+      const next = comment !== undefined ? { ...prev, [questionId]: nextQuestionExtras } : prev
+      saveAnswer(
+        sectionId,
+        questionId,
+        value,
+        comment !== undefined ? comment : nextQuestionExtras.comment,
+        nextQuestionExtras
+      )
+      return next
+    })
   }
 
   const handleExtras = (questionId, sectionId, updates) => {

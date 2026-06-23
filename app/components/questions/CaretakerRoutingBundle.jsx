@@ -9,6 +9,7 @@ export default function CaretakerRoutingBundle({
   question,
   answerExtras = {},
   onAnswerExtras,
+  onPendingLocalPhotoSaved,
   errorComment,
   errorPhotos,
   textareaStyle = {},
@@ -18,7 +19,7 @@ export default function CaretakerRoutingBundle({
 }) {
   const ex = answerExtras || {}
   const questionId = question?.id || 'caretaker-routing'
-  const set = (updates) => onAnswerExtras?.(questionId, { ...ex, ...updates })
+  const set = (updates) => onAnswerExtras?.(questionId, updates)
   const safePeopleOptions = []
   const seenPeopleOptionValues = new Set()
   for (const opt of Array.isArray(peopleOptions) ? peopleOptions : []) {
@@ -70,6 +71,7 @@ export default function CaretakerRoutingBundle({
         id={`route-photo-${questionId}`}
         value={Array.isArray(ex.photo_urls) ? ex.photo_urls : []}
         onChange={(urls) => set({ photo_urls: urls })}
+        onPendingLocalPhotoSaved={onPendingLocalPhotoSaved}
         label="Add photo"
         error={errorPhotos}
         multiple

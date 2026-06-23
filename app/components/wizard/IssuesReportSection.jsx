@@ -18,6 +18,7 @@ export default function IssuesReportSection({
   ext,
   onAnswer,
   onExtras,
+  onPendingLocalPhotoSaved,
   btnMinH,
   maxPhotos,
 }) {
@@ -161,6 +162,9 @@ export default function IssuesReportSection({
             id={`iss-photo-${q.id}`}
             value={(ext?.photo_urls || []).slice(0, maxPhotos)}
             onChange={(urls) => onExtras({ photo_urls: urls.slice(0, maxPhotos) })}
+            onPendingLocalPhotoSaved={(urls) =>
+              onPendingLocalPhotoSaved?.(urls.slice(0, maxPhotos))
+            }
             label="Add photo"
             multiple={maxPhotos > 1}
           />

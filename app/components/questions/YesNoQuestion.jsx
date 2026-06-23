@@ -42,9 +42,10 @@ export default function YesNoQuestion({
   }, [value])
 
   useEffect(() => {
-    const c = allAnswers?.[`${question.id}_comment`]
-    if (c !== undefined && c !== null && c !== '') setComment(String(c))
-  }, [question.id, allAnswers])
+    setComment(String(allAnswers?.[`${question.id}_comment`] || ''))
+    // Only reset when navigating to a different question — not on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question.id])
 
   useEffect(() => {
     let cancelled = false

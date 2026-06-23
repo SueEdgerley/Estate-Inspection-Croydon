@@ -22,6 +22,7 @@ export default function SignOffSection({
   prefillResidentName,
   handleExtras,
   handleAnswer,
+  onPendingLocalPhotoSaved,
 }) {
   const persistSecId = q._nv_answer_section_id || sec.id
   const answerId = q.id
@@ -99,6 +100,7 @@ export default function SignOffSection({
             id={`nv25-paper-photo-${q.id}`}
             value={paperPhotoUrls.slice(0, 1)}
             onChange={(urls) => setExtras({ paper_form_photo_urls: urls.slice(0, 1), photo_urls: urls.slice(0, 1) })}
+            onPendingLocalPhotoSaved={(urls) => onPendingLocalPhotoSaved?.(urls.slice(0, 1))}
             label="Add photo"
             multiple={false}
           />

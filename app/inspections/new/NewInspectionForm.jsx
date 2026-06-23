@@ -69,6 +69,12 @@ import {
 } from '@/lib/inspection-resume-draft'
 import ResumeInspectionDraftModal from '@/app/components/ResumeInspectionDraftModal'
 import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
+import { mergeInspectionAnswerExtras } from '@/lib/inspection-answer-extras'
+import {
+  flushInspectionDraftPayloadToLocalStorage,
+  mergeAnswerExtrasPatch,
+  mergeAnswerQuestionPhotoUrls,
+} from '@/lib/inspection-draft-immediate-flush'
 import {
   isBrowserOnline,
   readCachedTemplatesPayload,
@@ -586,6 +592,7 @@ function InspectionQuestion({
   lightCommentTextarea = false,
   section = null,
   onPhotoUploadStatusChange,
+  onPendingLocalPhotoDraftSaved,
 }) {
   const [estateApiCostCodes, setEstateApiCostCodes] = useState([])
   const expandedSectionRef = useRef(null)
@@ -986,7 +993,14 @@ function InspectionQuestion({
   }
 
   const setExtras = (updates) => {
-    if (onAnswerExtras) onAnswerExtras(question.id, { ...extras, ...updates })
+    if (onAnswerExtras) onAnswerExtras(question.id, updates)
+  }
+  const flushLocalPhotoDraft = (patch) => {
+    onPendingLocalPhotoDraftSaved?.({
+      target: 'answer_extras',
+      questionId: question.id,
+      patch,
+    })
   }
 
   const photoId = `photo-${question.id}`
@@ -996,6 +1010,7 @@ function InspectionQuestion({
         id={photoId}
         value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
+        onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
         onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
         required={photoRequired}
         error={errorPhotos}
@@ -1043,6 +1058,7 @@ function InspectionQuestion({
           id={`vehicle-photo-${question.id}`}
           value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
           onChange={(urls) => setExtras({ photo_urls: urls })}
+          onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
           onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(`${question.id}:vehicle`, uploading)}
           required
           error={errorPhotos}
@@ -1059,6 +1075,7 @@ function InspectionQuestion({
           id={`id-card-photo-${question.id}`}
           value={Array.isArray(extras.id_card_photo_urls) ? extras.id_card_photo_urls : []}
           onChange={(urls) => setExtras({ id_card_photo_urls: urls })}
+          onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ id_card_photo_urls: urls })}
           onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(`${question.id}:id-card`, uploading)}
           required
           error={errorPhotos && !hasEsmIdCardPhotos(extras) ? errorPhotos : undefined}
@@ -1078,6 +1095,7 @@ function InspectionQuestion({
         id={photoId}
         value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
         onChange={(urls) => setExtras({ photo_urls: urls })}
+        onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
         onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
         error={errorPhotos}
         label="Add photo"
@@ -1228,6 +1246,7 @@ function InspectionQuestion({
           question={question}
           answerExtras={answerExtras}
           onAnswerExtras={onAnswerExtras}
+          onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
           errorComment={errorComment}
           errorPhotos={errorPhotos}
           textareaStyle={textareaSurface}
@@ -1703,6 +1722,7 @@ function InspectionQuestion({
                 id={`g-photo-${question.id}`}
                 value={extras.photo_urls || []}
                 onChange={(urls) => setExtras({ photo_urls: urls })}
+                onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
                 onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
                 label="Add photo"
                 error={errorPhotos}
@@ -1720,6 +1740,7 @@ function InspectionQuestion({
               id={`nv-single-photo-${question.id}`}
               value={(extras.photo_urls || []).slice(0, 1)}
               onChange={(urls) => setExtras({ photo_urls: urls.slice(0, 1) })}
+              onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls.slice(0, 1) })}
               onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
               label="Add photo"
               multiple={false}
@@ -1840,6 +1861,13 @@ function InspectionQuestion({
           id={`photo-${question.id}`}
           value={urls}
           onChange={(next) => handleChange(stringifyPhotos(next.slice(0, 1)))}
+          onPendingLocalPhotoSaved={(next) =>
+            onPendingLocalPhotoDraftSaved?.({
+              target: 'answers',
+              questionId: question.id,
+              urls: next.slice(0, 1),
+            })
+          }
           onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
           label="Add photo"
           multiple={false}
@@ -1936,6 +1964,9 @@ function InspectionQuestion({
           onSelectGrade={(label) => onChange(question.id, label)}
           onComment={(text) => setExtras({ comment: text })}
           onPhotos={(urls) => setExtras({ photo_urls: urls })}
+          onPendingLocalPhotoSaved={(urls) =>
+            flushLocalPhotoDraft({ photo_urls: urls.slice(0, 1) })
+          }
         />
         {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
         {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
@@ -1957,7 +1988,10 @@ function InspectionQuestion({
           btnMinH={NV_INLINE.btnMinHeight}
           maxPhotos={3}
           onAnswer={(val) => onChange(question.id, val)}
-          onExtras={(updates) => setExtras({ ...extras, ...updates })}
+          onExtras={(updates) => setExtras(updates)}
+          onPendingLocalPhotoSaved={(urls) =>
+            flushLocalPhotoDraft({ photo_urls: urls.slice(0, 3) })
+          }
         />
       </div>
     )
@@ -2013,9 +2047,16 @@ function InspectionQuestion({
           prefillResidentName=""
           handleExtras={(questionId, sectionId, updates) => {
             void sectionId
-            onAnswerExtras(questionId, { ...(answerExtras || {}), ...updates })
+            onAnswerExtras(questionId, updates)
           }}
           handleAnswer={(questionId, answerValue) => onChange(questionId, answerValue)}
+          onPendingLocalPhotoSaved={(urls) => {
+            const capped = urls.slice(0, 1)
+            flushLocalPhotoDraft({
+              paper_form_photo_urls: capped,
+              photo_urls: capped,
+            })
+          }}
         />
         {error && <p style={{ marginTop: 8, fontSize: '0.875rem', color: '#ef4444' }}>{error}</p>}
         {errorPhotos && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorPhotos}</p>}
@@ -2660,6 +2701,53 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const noteDraftSaveResult = useCallback((saved) => {
     setDraftStorageWarning(saved ? '' : OFFLINE_DRAFT_STORAGE_FULL_MESSAGE)
   }, [])
+
+  const currentDraftPayloadRef = useRef(currentDraftPayload)
+  const offlineDraftIdRef = useRef(offlineDraftId)
+  const selectedBlockNameRef = useRef(selectedBlockName)
+
+  useEffect(() => {
+    currentDraftPayloadRef.current = currentDraftPayload
+  }, [currentDraftPayload])
+
+  useEffect(() => {
+    offlineDraftIdRef.current = offlineDraftId
+  }, [offlineDraftId])
+
+  useEffect(() => {
+    selectedBlockNameRef.current = selectedBlockName
+  }, [selectedBlockName])
+
+  const flushDraftAfterLocalPhoto = useCallback(
+    (update) => {
+      if (submitCompletedRef.current || submitSuccessMessage) return
+
+      const base = currentDraftPayloadRef.current
+      let submitBody = base.submitBody || {}
+      if (update?.target === 'answer_extras') {
+        submitBody = mergeAnswerExtrasPatch(submitBody, update.questionId, update.patch || {})
+      } else if (update?.target === 'answers') {
+        submitBody = mergeAnswerQuestionPhotoUrls(submitBody, update.questionId, update.urls || [])
+      }
+
+      const payload = { ...base, submitBody }
+      const { saved, offlineDraftId: nextId, drafts } = flushInspectionDraftPayloadToLocalStorage({
+        payload,
+        offlineDraftId: offlineDraftIdRef.current,
+        locationLabel: selectedBlockNameRef.current || base.locationLabel || base.location || '',
+      })
+
+      if (nextId && nextId !== offlineDraftIdRef.current) {
+        offlineDraftIdRef.current = nextId
+        setOfflineDraftId(nextId)
+      }
+      if (Array.isArray(drafts) && drafts.length) {
+        setOfflineDrafts(drafts)
+      }
+      noteDraftSaveResult(saved)
+    },
+    [noteDraftSaveResult, submitSuccessMessage]
+  )
 
   useEffect(() => {
     if (!submitSuccessMessage) return undefined
@@ -3873,7 +3961,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       errorAuthorisationName: validationErrors[`${q.id}_authorisation_name`],
                       errorCostCode: validationErrors[`${q.id}_cost_code`],
                       answerExtras: answerExtras[q.id],
-                      onAnswerExtras: (questionId, extras) => setAnswerExtras((prev) => ({ ...prev, [questionId]: extras })),
+                      onAnswerExtras: (questionId, updates) =>
+                        setAnswerExtras((prev) => ({
+                          ...prev,
+                          [questionId]: mergeInspectionAnswerExtras(prev[questionId], updates),
+                        })),
                       createActionOnNo: q.create_action_on_no,
                       isNvTemplate: isNVTemplate(selectedTemplate),
                       expandedByQuestionId,
@@ -3889,6 +3981,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                       lightCommentTextarea: lightCommentTextareaForTemplate,
                       section,
                       onPhotoUploadStatusChange: handlePhotoUploadStatusChange,
+                      onPendingLocalPhotoDraftSaved: flushDraftAfterLocalPhoto,
                     }
                     const questionWrapProps =
                       isCaretakerForm && !isNVTemplate(selectedTemplate)

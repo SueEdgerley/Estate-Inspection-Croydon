@@ -11,6 +11,11 @@ import {
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_IMAGE_DIMENSION = 1600
 const JPEG_QUALITY = 0.8
+const UPLOAD_TIMEOUT_MS = 45000
+const STALL_SIGNAL_MS = 8000
+const LOCAL_SAVE_NOTICE = 'Photo saved on this phone — waiting to upload'
+const WAITING_FOR_SIGNAL_NOTICE =
+  'Waiting for signal… photo will upload when connection improves.'
 
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve) => {
@@ -85,6 +90,7 @@ export default function PhotoUploadControl({
   multiple = true,
   mobileStacked = false,
   onUploadStatusChange,
+  onPendingLocalPhotoSaved,
 }) {
   const photoUrls = useMemo(
     () => (Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []),
@@ -94,10 +100,12 @@ export default function PhotoUploadControl({
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState(null)
   const [localSaveNotice, setLocalSaveNotice] = useState(null)
+  const [waitingForSignal, setWaitingForSignal] = useState(false)
   const inputRef = useRef(null)
   const pendingReplaceRef = useRef(null)
   const syncingRef = useRef(false)
   const photoUrlsRef = useRef(photoUrls)
+  const activeXhrRef = useRef(null)
 
   useEffect(() => {
     photoUrlsRef.current = photoUrls
@@ -106,6 +114,8 @@ export default function PhotoUploadControl({
   useEffect(() => {
     onUploadStatusChange?.(uploading)
   }, [onUploadStatusChange, uploading])
+
+  const hasPendingLocalPhotos = photoUrls.some(isPendingLocalPhotoUrl)
 
   const syncPendingUploads = useCallback(async () => {
     if (syncingRef.current || !isBrowserOnline()) return
@@ -117,18 +127,33 @@ export default function PhotoUploadControl({
     setUploading(true)
     setUploadError(null)
     setLocalSaveNotice(null)
+    setWaitingForSignal(false)
     setProgress(0)
+
+    let stallTimer = null
+    const stallTimerId = window.setTimeout(() => {
+      setWaitingForSignal(true)
+    }, STALL_SIGNAL_MS)
+
+    stallTimer = stallTimerId
 
     try {
       const { nextUrls, uploadedCount } = await uploadPendingLocalPhotoUrls(currentUrls, ({ uploadedCount: done }) => {
+        if (done > 0) setWaitingForSignal(false)
         setProgress(Math.round((done / pendingUrls.length) * 100))
       })
       if (uploadedCount > 0) {
         onChange(nextUrls)
+        setLocalSaveNotice(null)
+      } else if (pendingUrls.length > 0) {
+        setLocalSaveNotice(LOCAL_SAVE_NOTICE)
+        setWaitingForSignal(true)
       }
     } catch {
-      setLocalSaveNotice('Photo saved on this phone — waiting to upload')
+      setLocalSaveNotice(LOCAL_SAVE_NOTICE)
+      setWaitingForSignal(true)
     } finally {
+      if (stallTimer) window.clearTimeout(stallTimer)
       syncingRef.current = false
       setUploading(false)
       setProgress(100)
@@ -148,7 +173,8 @@ export default function PhotoUploadControl({
     const localUrl = await readImageFileAsDataUrl(photoForStorage)
     if (!localUrl) throw new Error('Could not save photo on this phone.')
     urlsToAdd.push(localUrl)
-    setLocalSaveNotice('Photo saved on this phone — waiting to upload')
+    setLocalSaveNotice(LOCAL_SAVE_NOTICE)
+    setWaitingForSignal(!isBrowserOnline())
     setUploadError(null)
   }
 
@@ -169,11 +195,29 @@ export default function PhotoUploadControl({
     }
 
     const xhr = new XMLHttpRequest()
+    activeXhrRef.current = xhr
     const fd = new FormData()
     fd.append('file', file, file.name || 'photo.jpg')
 
+    let completed = false
+    let stallTimer = null
+
+    const finish = (handler, ...args) => {
+      if (completed) return
+      completed = true
+      if (stallTimer) window.clearTimeout(stallTimer)
+      activeXhrRef.current = null
+      setWaitingForSignal(false)
+      handler(...args)
+    }
+
+    stallTimer = window.setTimeout(() => {
+      if (!completed) setWaitingForSignal(true)
+    }, STALL_SIGNAL_MS)
+
     xhr.upload.addEventListener('progress', (ev) => {
-      if (ev.lengthComputable) {
+      if (ev.lengthComputable && ev.total > 0) {
+        setWaitingForSignal(false)
         setProgress(Math.round((ev.loaded / ev.total) * 100))
       }
     })
@@ -183,19 +227,27 @@ export default function PhotoUploadControl({
         try {
           const data = JSON.parse(xhr.responseText)
           if (data?.url) {
-            onUploaded(data.url)
+            finish(onUploaded, data.url)
             return
           }
         } catch {}
       }
-      onFailed(null)
+      finish(onFailed, null)
     })
 
     xhr.addEventListener('error', () => {
-      onFailed(null)
+      finish(onFailed, null)
+    })
+
+    xhr.addEventListener('timeout', () => {
+      try {
+        xhr.abort()
+      } catch {}
+      finish(onFailed, null)
     })
 
     xhr.open('POST', '/api/upload/photo')
+    xhr.timeout = UPLOAD_TIMEOUT_MS
     xhr.send(fd)
   }
 
@@ -211,16 +263,23 @@ export default function PhotoUploadControl({
 
     setUploadError(null)
     setLocalSaveNotice(null)
+    setWaitingForSignal(false)
     const urlsToAdd = []
 
     const finishSelection = () => {
       setUploading(false)
       setProgress(100)
       e.target.value = ''
+      let nextUrls = photoUrls
       if (isReplace && urlsToAdd.length) {
-        onChange(photoUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u)))
+        nextUrls = photoUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u))
+        onChange(nextUrls)
       } else if (urlsToAdd.length) {
-        onChange([...photoUrls, ...urlsToAdd])
+        nextUrls = [...photoUrls, ...urlsToAdd]
+        onChange(nextUrls)
+      }
+      if (urlsToAdd.some(isPendingLocalPhotoUrl)) {
+        onPendingLocalPhotoSaved?.(nextUrls)
       }
     }
 
@@ -282,7 +341,10 @@ export default function PhotoUploadControl({
   const handleRemove = (urlToRemove) => {
     onChange(photoUrls.filter((u) => u !== urlToRemove))
     setUploadError(null)
-    setLocalSaveNotice(null)
+    if (!photoUrls.some((u) => u !== urlToRemove && isPendingLocalPhotoUrl(u))) {
+      setLocalSaveNotice(null)
+      setWaitingForSignal(false)
+    }
   }
 
   const handleReplace = (urlToReplace) => {
@@ -292,6 +354,30 @@ export default function PhotoUploadControl({
       inputRef.current.click()
     }
   }
+
+  const handleRetryUpload = () => {
+    if (uploading) return
+    if (hasPendingLocalPhotos) {
+      syncPendingUploads()
+      return
+    }
+    if (activeXhrRef.current) {
+      try {
+        activeXhrRef.current.abort()
+      } catch {}
+    }
+  }
+
+  const uploadButtonLabel = uploading
+    ? waitingForSignal && progress === 0
+      ? 'Waiting for signal…'
+      : `Uploading… ${progress}%`
+    : label
+
+  const statusMessage =
+    waitingForSignal && (uploading || hasPendingLocalPhotos)
+      ? WAITING_FOR_SIGNAL_NOTICE
+      : localSaveNotice
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
@@ -325,8 +411,28 @@ export default function PhotoUploadControl({
             cursor: disabled || uploading ? 'not-allowed' : 'pointer',
           }}
         >
-          {uploading ? `Uploading… ${progress}%` : label}
+          {uploadButtonLabel}
         </button>
+        {(hasPendingLocalPhotos || waitingForSignal) && !uploading ? (
+          <button
+            type="button"
+            onClick={handleRetryUpload}
+            disabled={disabled}
+            style={{
+              padding: mobileStacked ? '0.75rem 1rem' : '0.5rem 0.75rem',
+              minHeight: mobileStacked ? 48 : undefined,
+              backgroundColor: '#fff',
+              color: '#1d4ed8',
+              border: '1px solid #93c5fd',
+              borderRadius: '0.375rem',
+              fontSize: mobileStacked ? '1rem' : '0.875rem',
+              fontWeight: 500,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Retry upload
+          </button>
+        ) : null}
       </div>
       {uploading && (
         <div
@@ -341,15 +447,15 @@ export default function PhotoUploadControl({
           <div
             style={{
               height: '100%',
-              width: `${progress}%`,
-              background: '#3b82f6',
+              width: `${Math.max(progress, waitingForSignal && progress === 0 ? 8 : 0)}%`,
+              background: waitingForSignal && progress === 0 ? '#f59e0b' : '#3b82f6',
               transition: 'width 0.2s ease',
             }}
           />
         </div>
       )}
-      {localSaveNotice ? (
-        <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>{localSaveNotice}</p>
+      {statusMessage ? (
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>{statusMessage}</p>
       ) : null}
       {photoUrls.length > 0 && (
         <div

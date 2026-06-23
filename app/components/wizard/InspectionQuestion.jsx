@@ -18,6 +18,7 @@ export default function InspectionQuestion({
   onSelectGrade,
   onComment,
   onPhotos,
+  onPendingLocalPhotoSaved,
   btnMinH,
   maxPhotos = 1,
   commentFocusRef,
@@ -86,6 +87,9 @@ export default function InspectionQuestion({
           id={`nv-std-photo-${q.id}`}
           value={photos}
           onChange={(urls) => onPhotos(urls.slice(0, maxPhotos))}
+          onPendingLocalPhotoSaved={(urls) =>
+            onPendingLocalPhotoSaved?.(urls.slice(0, maxPhotos))
+          }
           label="Add photo"
           multiple={maxPhotos > 1}
         />

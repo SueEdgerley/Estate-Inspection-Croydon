@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
@@ -21,6 +21,11 @@ import {
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
 import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
+import {
+  flushInspectionDraftPayloadToLocalStorage,
+  mergeAnswerExtrasPatch,
+  mergeWalkaboutChecklistItemPhotoUrls,
+} from '@/lib/inspection-draft-immediate-flush'
 import { isBrowserOnline, safeFetch } from '@/lib/offline-browser'
 
 const EW = {
@@ -414,6 +419,26 @@ export default function EstateWalkaboutNewInspectionForm({
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
   const [inspectionEndTime, setInspectionEndTime] = useState('')
+  const [activePhotoUploads, setActivePhotoUploads] = useState({})
+
+  const hasActivePhotoUploads = useMemo(
+    () => Object.values(activePhotoUploads).some(Boolean),
+    [activePhotoUploads]
+  )
+
+  const handlePhotoUploadStatusChange = useCallback((uploadKey, uploading) => {
+    if (!uploadKey) return
+    setActivePhotoUploads((prev) => {
+      if (uploading) {
+        if (prev[uploadKey]) return prev
+        return { ...prev, [uploadKey]: true }
+      }
+      if (!prev[uploadKey]) return prev
+      const next = { ...prev }
+      delete next[uploadKey]
+      return next
+    })
+  }, [])
 
   const locationBlocks = useMemo(
     () => blocks.filter((b) => b != null && b.active !== false),
@@ -564,6 +589,59 @@ export default function EstateWalkaboutNewInspectionForm({
     [postgresBlockId, location, description, user, currentSubmitBody]
   )
 
+  const currentDraftPayloadRef = useRef(currentDraftPayload)
+  const offlineDraftIdRef = useRef(offlineDraftId)
+
+  useEffect(() => {
+    currentDraftPayloadRef.current = currentDraftPayload
+  }, [currentDraftPayload])
+
+  useEffect(() => {
+    offlineDraftIdRef.current = offlineDraftId
+  }, [offlineDraftId])
+
+  const noteDraftSaveResult = useCallback((saved) => {
+    setDraftStorageWarning(saved ? '' : OFFLINE_DRAFT_STORAGE_FULL_MESSAGE)
+  }, [])
+
+  const flushDraftAfterLocalPhoto = useCallback(
+    (update) => {
+      if (submitSuccessMessage) return
+
+      const base = currentDraftPayloadRef.current
+      let submitBody = base.submitBody || {}
+      if (update?.type === 'checklist') {
+        submitBody = mergeWalkaboutChecklistItemPhotoUrls(
+          submitBody,
+          ESTATE_WALKABOUT_CHECKLIST_QID,
+          update.itemId,
+          update.urls || []
+        )
+      } else {
+        submitBody = mergeAnswerExtrasPatch(submitBody, update.questionId, {
+          photo_urls: update.urls || [],
+        })
+      }
+
+      const payload = { ...base, submitBody }
+      const { saved, offlineDraftId: nextId, drafts } = flushInspectionDraftPayloadToLocalStorage({
+        payload,
+        offlineDraftId: offlineDraftIdRef.current,
+        locationLabel: base.location || '',
+      })
+
+      if (nextId && nextId !== offlineDraftIdRef.current) {
+        offlineDraftIdRef.current = nextId
+        setOfflineDraftId(nextId)
+      }
+      if (Array.isArray(drafts) && drafts.length) {
+        setOfflineDrafts(drafts)
+      }
+      noteDraftSaveResult(saved)
+    },
+    [noteDraftSaveResult, submitSuccessMessage]
+  )
+
   useEffect(() => {
     const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
     updateOnlineStatus()
@@ -575,10 +653,6 @@ export default function EstateWalkaboutNewInspectionForm({
       window.removeEventListener('offline', updateOnlineStatus)
     }
   }, [])
-
-  const noteDraftSaveResult = (saved) => {
-    setDraftStorageWarning(saved ? '' : OFFLINE_DRAFT_STORAGE_FULL_MESSAGE)
-  }
 
   useEffect(() => {
     if (!submitSuccessMessage) return undefined
@@ -604,7 +678,7 @@ export default function EstateWalkaboutNewInspectionForm({
       }
     }, 1000)
     return () => window.clearTimeout(timer)
-  }, [offlineDraftId, currentDraftPayload])
+  }, [offlineDraftId, currentDraftPayload, noteDraftSaveResult])
 
   const saveCurrentOfflineDraft = () => {
     try {
@@ -943,6 +1017,10 @@ export default function EstateWalkaboutNewInspectionForm({
               id={`ew-${qid}-photo`}
               value={getPhotos(qid)}
               onChange={(urls) => setPhotos(qid, urls)}
+              onPendingLocalPhotoSaved={(urls) =>
+                flushDraftAfterLocalPhoto({ type: 'extras', questionId: qid, urls })
+              }
+              onUploadStatusChange={(uploading) => handlePhotoUploadStatusChange(`ew-${qid}`, uploading)}
               label="Add photo"
               multiple={true}
             />
@@ -985,6 +1063,16 @@ export default function EstateWalkaboutNewInspectionForm({
               id="ew-bulk-refuse-photo"
               value={getPhotos('ew_it_bulk_refuse_removal')}
               onChange={(urls) => setPhotos('ew_it_bulk_refuse_removal', urls)}
+              onPendingLocalPhotoSaved={(urls) =>
+                flushDraftAfterLocalPhoto({
+                  type: 'extras',
+                  questionId: 'ew_it_bulk_refuse_removal',
+                  urls,
+                })
+              }
+              onUploadStatusChange={(uploading) =>
+                handlePhotoUploadStatusChange('ew_it_bulk_refuse_removal', uploading)
+              }
               label="Add bulk refuse photo"
               multiple={true}
             />
@@ -1045,6 +1133,10 @@ export default function EstateWalkaboutNewInspectionForm({
               id={`ph-${qid}`}
               value={getPhotos(qid).slice(0, maxSlot)}
               onChange={(urls) => setPhotos(qid, urls.slice(0, maxSlot))}
+              onPendingLocalPhotoSaved={(urls) =>
+                flushDraftAfterLocalPhoto({ type: 'extras', questionId: qid, urls: urls.slice(0, maxSlot) })
+              }
+              onUploadStatusChange={(uploading) => handlePhotoUploadStatusChange(`ph-${qid}`, uploading)}
               label="Add photo"
               multiple={maxSlot > 1}
             />
@@ -1476,6 +1568,16 @@ export default function EstateWalkaboutNewInspectionForm({
                           id={`ew-action-photo-${it.id}`}
                           value={(it.photo_urls || []).slice(0, 1)}
                           onChange={(urls) => updateItem(it.id, { photo_urls: urls.slice(0, 1) })}
+                          onPendingLocalPhotoSaved={(urls) =>
+                            flushDraftAfterLocalPhoto({
+                              type: 'checklist',
+                              itemId: it.id,
+                              urls: urls.slice(0, 1),
+                            })
+                          }
+                          onUploadStatusChange={(uploading) =>
+                            handlePhotoUploadStatusChange(`ew-action-${it.id}`, uploading)
+                          }
                           label="Add action photo"
                           multiple={false}
                         />
@@ -1512,7 +1614,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasActivePhotoUploads}
             style={{
               width: '100%',
               padding: '16px 24px',
@@ -1522,11 +1624,11 @@ export default function EstateWalkaboutNewInspectionForm({
               color: '#fff',
               border: 'none',
               borderRadius: EW.radius,
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              opacity: isSubmitting ? 0.85 : 1,
+              cursor: isSubmitting || hasActivePhotoUploads ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting || hasActivePhotoUploads ? 0.85 : 1,
             }}
           >
-            {isSubmitting ? 'Saving…' : 'Save inspection'}
+            {isSubmitting ? 'Saving…' : hasActivePhotoUploads ? 'Waiting for photos…' : 'Save inspection'}
           </button>
         </form>
         <BestPracticeGuideButton
