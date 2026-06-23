@@ -15,6 +15,7 @@ import {
   validateActionRecipientForInsert,
 } from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace } from '@/lib/access-trace'
+import { deduplicateActionRowsById } from '@/lib/deduplicate-actions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -391,7 +392,18 @@ export async function GET(request) {
       }
     }
 
-    return NextResponse.json(Array.isArray(result.rows) ? result.rows : result.rows || [])
+    const rows = Array.isArray(result.rows) ? result.rows : []
+    const dedupedRows = deduplicateActionRowsById(rows)
+    if (inspectionId && dedupedRows.length !== rows.length) {
+      console.warn(
+        '[Actions API] Deduped inflated action rows for inspection_id:',
+        inspectionId,
+        rows.length,
+        '->',
+        dedupedRows.length
+      )
+    }
+    return NextResponse.json(dedupedRows)
   } catch (error) {
     console.error('Error fetching actions:', {
       inspectionId: searchParams?.get?.('inspection_id'),

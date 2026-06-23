@@ -9,6 +9,7 @@ import {
   displayActionStatus,
   formatActionDate,
 } from '@/lib/action-display-formatter'
+import { deduplicateActions } from '@/lib/deduplicate-actions'
 import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 
 const STATUS_OPTIONS = [
@@ -50,41 +51,6 @@ function uniqueDisplayOptions(values) {
     options.push(label)
   })
   return options.sort((a, b) => a.localeCompare(b))
-}
-
-/**
- * Remove duplicate actions from the same inspection + question
- * Keeps only the most recent action for each unique inspection + question combination
- */
-function deduplicateActions(actions) {
-  const seen = new Map() // Key: "inspection_id::question_id", Value: action
-  
-  // Sort by created_at DESC so we keep the most recent one
-  const sorted = [...actions].sort((a, b) => {
-    const aTime = new Date(a.created_at).getTime()
-    const bTime = new Date(b.created_at).getTime()
-    return bTime - aTime
-  })
-  
-  for (const action of sorted) {
-    if (!action.inspection_id || !action.question_id) {
-      // If missing identifiers, include it anyway
-      if (!action.id || !seen.has(action.id)) {
-        const key = action.id || `${Math.random()}`
-        if (!seen.has(key)) {
-          seen.set(key, action)
-        }
-      }
-      continue
-    }
-    
-    const key = `${action.inspection_id}::${action.question_id}`
-    if (!seen.has(key)) {
-      seen.set(key, action)
-    }
-  }
-  
-  return Array.from(seen.values())
 }
 
 export default function ActionsPage() {
@@ -523,6 +489,11 @@ export default function ActionsPage() {
             ) : null}
             {filteredActions.map((a) => {
               const display = buildActionDisplay(a)
+              const headline = notRecorded(display.issue || display.comment)
+              const metaComment = notRecorded(display.comment || display.issue)
+              const showMetaComment =
+                metaComment &&
+                metaComment.toLowerCase().replace(/\s+/g, ' ') !== headline.toLowerCase().replace(/\s+/g, ' ')
               return (
                 <button
                   key={a.id}
@@ -546,11 +517,13 @@ export default function ActionsPage() {
                     <ContextItem label="Inspection date" value={display.inspectionDate} />
                   </div>
                   <div style={{ marginTop: '0.75rem', color: '#111827', fontSize: '0.95rem', fontWeight: 700 }}>
-                    {notRecorded(display.issue || display.comment)}
+                    {headline}
                   </div>
                   <div style={cardMetaGridStyle}>
                     <span><strong>Section/category:</strong> {notRecorded(display.section)}</span>
-                    <span><strong>Question/comment:</strong> {notRecorded(display.comment || display.issue)}</span>
+                    {showMetaComment ? (
+                      <span><strong>Question/comment:</strong> {metaComment}</span>
+                    ) : null}
                   </div>
                   <div style={{ marginTop: '0.35rem', color: '#334155', fontSize: '0.875rem' }}>
                     Assigned: {notRecorded(display.assignedTo)} | Priority: {notRecorded(display.priority)}
