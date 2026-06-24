@@ -754,6 +754,10 @@ export default function EstateWalkaboutNewInspectionForm({
   }
 
   const submitOfflineDraft = async (draft) => {
+    if (hasActivePhotoUploads) {
+      setSubmitError('Please wait for photo uploads to finish before saving this inspection.')
+      return
+    }
     if (!isOnline) {
       setSubmitError('Waiting for internet connection to submit this inspection.')
       return
@@ -880,6 +884,10 @@ export default function EstateWalkaboutNewInspectionForm({
     e.preventDefault()
     setSubmitError(null)
     setSubmitWarning(null)
+    if (hasActivePhotoUploads) {
+      setSubmitError('Please wait for photo uploads to finish before saving this inspection.')
+      return
+    }
     const errs = validate()
     if (Object.keys(errs).length > 0) return
 
@@ -1213,6 +1221,21 @@ export default function EstateWalkaboutNewInspectionForm({
             onSubmitDraft={submitOfflineDraft}
             style={{ maxWidth: 'none' }}
           />
+          {hasActivePhotoUploads && (
+            <div
+              style={{
+                padding: 12,
+                marginBottom: 20,
+                background: '#fffbeb',
+                border: '1px solid #f59e0b',
+                borderRadius: EW.radius,
+                color: '#92400e',
+                fontSize: 14,
+              }}
+            >
+              Photo upload in progress. Please wait until all photos finish uploading before saving this inspection.
+            </div>
+          )}
           {submitError && (
             <div
               style={{

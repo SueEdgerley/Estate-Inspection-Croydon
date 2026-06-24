@@ -1247,6 +1247,7 @@ function InspectionQuestion({
           answerExtras={answerExtras}
           onAnswerExtras={onAnswerExtras}
           onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
+          onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
           errorComment={errorComment}
           errorPhotos={errorPhotos}
           textareaStyle={textareaSurface}

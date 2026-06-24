@@ -10,6 +10,7 @@ export default function CaretakerRoutingBundle({
   answerExtras = {},
   onAnswerExtras,
   onPendingLocalPhotoSaved,
+  onUploadStatusChange,
   errorComment,
   errorPhotos,
   textareaStyle = {},
@@ -72,6 +73,7 @@ export default function CaretakerRoutingBundle({
         value={Array.isArray(ex.photo_urls) ? ex.photo_urls : []}
         onChange={(urls) => set({ photo_urls: urls })}
         onPendingLocalPhotoSaved={onPendingLocalPhotoSaved}
+        onUploadStatusChange={onUploadStatusChange}
         label="Add photo"
         error={errorPhotos}
         multiple
