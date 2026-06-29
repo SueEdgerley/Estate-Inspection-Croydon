@@ -3,6 +3,62 @@
 import { useState, useEffect } from 'react'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
+// Temporary admin tool: force-rebuild a cached full report PDF (e.g. after a
+// renderer fix) and open the freshly generated file. Safe to remove later.
+function RegeneratePdfButton({ inspectionId }) {
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState(null)
+
+  const handleRegenerate = async () => {
+    setBusy(true)
+    setStatus(null)
+    try {
+      const res = await fetch(`/api/inspections/${inspectionId}/report-pdf?regenerate=1`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.details || data.error || `Failed (${res.status})`)
+      }
+      const next = String(data.url || '').trim()
+      setStatus({ ok: true, url: next })
+      if (next) window.open(next, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      setStatus({ ok: false, message: e?.message || 'Regeneration failed' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <span style={{ marginLeft: 6, display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <button
+        type="button"
+        onClick={handleRegenerate}
+        disabled={busy}
+        title="Force-rebuild and overwrite the saved PDF"
+        style={{
+          background: '#0f766e',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 4,
+          padding: '2px 8px',
+          fontSize: '12px',
+          cursor: busy ? 'wait' : 'pointer',
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {busy ? 'Regenerating…' : 'Regenerate'}
+      </button>
+      {status?.ok && <span style={{ color: 'green' }} title={status.url || ''}>✓</span>}
+      {status && !status.ok && (
+        <span style={{ color: '#dc2626', cursor: 'help' }} title={status.message}>✕</span>
+      )}
+    </span>
+  )
+}
+
 export default function AdminInspectionsPage() {
   const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
@@ -62,6 +118,7 @@ export default function AdminInspectionsPage() {
                   <a href={i.poster_pdf_url} target="_blank" rel="noopener noreferrer">Poster</a>
                 )}
                 {!fullUrl && !i.poster_pdf_url && '—'}
+                <RegeneratePdfButton inspectionId={i.id} />
               </td>
             </tr>
             )
