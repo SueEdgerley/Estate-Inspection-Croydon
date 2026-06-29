@@ -42,6 +42,60 @@ function storeSubmitWarningForInspection(inspectionId, warning) {
   }
 }
 
+/**
+ * Answer keys carried over when an officer starts the next block of the same
+ * walkabout visit: the lead officer / role, estate area, inspection date and
+ * the attendees (staff present). Deliberately excludes block/address, grades,
+ * comments, photos, checklist items and signature — those are per-block.
+ */
+const WALKABOUT_CARRY_OVER_ANSWER_KEYS = [
+  'ew_q_responsible',
+  'ew_q_role',
+  'ew_q_area',
+  'ew_q_planned_date',
+  'ew_st_caretaker_present',
+  'ew_st_repairs_officer_present',
+  'ew_st_repairs_officer_select',
+  'ew_st_esm_present',
+  'ew_st_ward_cllr_present',
+  'ew_st_resident_rep_name',
+]
+
+const WALKABOUT_CARRYOVER_STORAGE_KEY = 'estate_walkabout_carryover_v1'
+
+function pickWalkaboutCarryOver(answers) {
+  const data = {}
+  if (!answers || typeof answers !== 'object') return data
+  for (const key of WALKABOUT_CARRY_OVER_ANSWER_KEYS) {
+    const value = answers[key]
+    if (value != null && value !== '') data[key] = value
+  }
+  return data
+}
+
+function saveWalkaboutCarryOver(answers) {
+  if (typeof window === 'undefined') return
+  try {
+    const data = pickWalkaboutCarryOver(answers)
+    window.sessionStorage.setItem(WALKABOUT_CARRYOVER_STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    // Non-blocking: carry-over is a convenience only.
+  }
+}
+
+function readWalkaboutCarryOver() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(WALKABOUT_CARRYOVER_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    return pickWalkaboutCarryOver(parsed)
+  } catch {
+    return null
+  }
+}
+
 const EW = {
   pageBg: '#f1f5f9',
   card: '#ffffff',
@@ -430,6 +484,8 @@ export default function EstateWalkaboutNewInspectionForm({
   const [offlineDraftId, setOfflineDraftId] = useState('')
   const [offlineDrafts, setOfflineDrafts] = useState([])
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
+  const [submittedInspection, setSubmittedInspection] = useState(null)
+  const [hasPreviousCarryOver, setHasPreviousCarryOver] = useState(false)
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
   const [inspectionEndTime, setInspectionEndTime] = useState('')
@@ -495,6 +551,11 @@ export default function EstateWalkaboutNewInspectionForm({
     }
   }, [])
 
+  useEffect(() => {
+    const carried = readWalkaboutCarryOver()
+    setHasPreviousCarryOver(Boolean(carried && Object.keys(carried).length > 0))
+  }, [])
+
   const setField = (id, val) => {
     setAnswers((prev) => ({ ...prev, [id]: val }))
     setValidationErrors((prev) => {
@@ -551,6 +612,56 @@ export default function EstateWalkaboutNewInspectionForm({
   }
 
   const getPhotos = (id) => (Array.isArray(answerExtras[id]?.photo_urls) ? answerExtras[id].photo_urls : [])
+
+  // Reset the form for the next block of the same visit, keeping only the
+  // carry-over fields (lead officer, role, area, date, attendees) and clearing
+  // block/address, grades, comments, photos, checklist items and signature.
+  const resetWalkaboutFormForNextBlock = (carryOver) => {
+    const carried = carryOver && typeof carryOver === 'object' ? carryOver : {}
+    setAnswers({ ...emptyAnswers(), ...carried })
+    setAnswerExtras({})
+    setChecklist([])
+    setPostgresBlockId('')
+    setLocation('')
+    setDescription('')
+    setValidationErrors({})
+    setSubmitError(null)
+    setSubmitWarning(null)
+    setSubmitSuccessMessage('')
+    setOfflineDraftId('')
+    setInspectionStartTime(toDatetimeLocalValue())
+    setInspectionEndTime('')
+  }
+
+  const startNextBlockWithSameAttendees = () => {
+    resetWalkaboutFormForNextBlock(readWalkaboutCarryOver() || {})
+    setSubmittedInspection(null)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    showToast('Started a new block with the same attendees. Choose the next location, then review the attendees.')
+  }
+
+  const copyAttendeesFromPreviousWalkabout = () => {
+    const carried = readWalkaboutCarryOver()
+    if (!carried || Object.keys(carried).length === 0) {
+      showToast('No previous walkabout attendees found on this device.')
+      return
+    }
+    setAnswers((prev) => {
+      const next = { ...prev }
+      for (const key of WALKABOUT_CARRY_OVER_ANSWER_KEYS) {
+        if (carried[key] != null && carried[key] !== '') next[key] = carried[key]
+      }
+      return next
+    })
+    setValidationErrors((prev) => {
+      const next = { ...prev }
+      for (const key of WALKABOUT_CARRY_OVER_ANSWER_KEYS) delete next[key]
+      return next
+    })
+    showToast('Attendees copied from your previous walkabout. Edit them if the group has changed.')
+  }
 
   const currentSubmitBody = useMemo(
     () => {
@@ -816,18 +927,26 @@ export default function EstateWalkaboutNewInspectionForm({
         ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
       ]
       // A submit that returns warnings (email/PDF/action issues) has still been
-      // recorded server-side. Treat it as success: clear the draft and navigate
-      // so the user cannot re-submit and create a duplicate; the warning is
-      // surfaced on the inspection page.
-      if (submitWarnings.length > 0) {
-        storeSubmitWarningForInspection(inspectionId, submitWarnings.join(' '))
+      // recorded server-side. Treat it as success: clear the draft so the user
+      // cannot re-submit and create a duplicate; the warning is shown on the
+      // success panel below (and on the inspection page if they open it).
+      const submitWarning = submitWarnings.length > 0 ? submitWarnings.join(' ') : ''
+      if (submitWarning) {
+        storeSubmitWarningForInspection(inspectionId, submitWarning)
       }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
       setDraftStorageWarning('')
       clearInspectionResumeDraft()
+      // Carry-over comes from the submitted draft's own answers (the live form
+      // state may differ from the resumed draft).
+      saveWalkaboutCarryOver(draft?.payload?.submitBody?.answers || body?.answers || {})
+      setHasPreviousCarryOver(true)
       setSubmitSuccessMessage('Inspection submitted successfully')
-      router.push(`/inspections/${inspectionId}`)
+      setSubmittedInspection({ id: inspectionId, warning: submitWarning })
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     } catch (err) {
       setSubmitError(err.message || 'Something went wrong')
     } finally {
@@ -964,11 +1083,12 @@ export default function EstateWalkaboutNewInspectionForm({
         ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
       ]
       // A submit that returns warnings (email/PDF/action issues) has still been
-      // recorded server-side. Treat it as success: clear the draft and navigate
-      // so the user cannot re-submit and create a duplicate; the warning is
-      // surfaced on the inspection page.
-      if (submitWarnings.length > 0) {
-        storeSubmitWarningForInspection(inspectionId, submitWarnings.join(' '))
+      // recorded server-side. Treat it as success: clear the draft so the user
+      // cannot re-submit and create a duplicate; the warning is shown on the
+      // success panel below (and on the inspection page if they open it).
+      const submitWarning = submitWarnings.length > 0 ? submitWarnings.join(' ') : ''
+      if (submitWarning) {
+        storeSubmitWarningForInspection(inspectionId, submitWarning)
       }
       if (offlineDraftId) {
         setOfflineDrafts(removeOfflineInspectionDraft(offlineDraftId))
@@ -976,8 +1096,15 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       setDraftStorageWarning('')
       clearInspectionResumeDraft()
+      // Remember the attendees/date/officer/area so the officer can start the
+      // next block of the same visit without re-entering them.
+      saveWalkaboutCarryOver(answers)
+      setHasPreviousCarryOver(true)
       setSubmitSuccessMessage('Inspection submitted successfully')
-      router.push(`/inspections/${inspectionId}`)
+      setSubmittedInspection({ id: inspectionId, warning: submitWarning })
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     } catch (err) {
       if (!isBrowserOnline()) {
         saveCurrentOfflineDraft()
@@ -1196,6 +1323,103 @@ export default function EstateWalkaboutNewInspectionForm({
     </div>
   )
 
+  if (submittedInspection) {
+    return (
+      <div
+        data-ew-walkabout-form="canon-2026-04"
+        style={{ background: EW.pageBg, minHeight: '100vh', padding: '1.5rem' }}
+      >
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <div
+            style={{
+              background: EW.card,
+              border: `1px solid ${EW.border}`,
+              borderRadius: EW.radius,
+              padding: '2rem',
+              boxShadow: '0 10px 24px rgba(15, 23, 42, 0.06)',
+            }}
+          >
+            <div style={{ fontSize: 40, lineHeight: 1, marginBottom: 12 }} aria-hidden="true">
+              ✓
+            </div>
+            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: EW.text }}>
+              Walkabout submitted
+            </h1>
+            <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 15, lineHeight: 1.5 }}>
+              Your Estate Walkabout has been submitted. Inspecting several blocks on the same visit?
+              Start the next block without re-entering the attendees — you can still edit them if the
+              group changes.
+            </p>
+
+            {submittedInspection.warning ? (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  background: '#fffbeb',
+                  border: '1px solid #f59e0b',
+                  borderRadius: EW.radius,
+                  color: '#92400e',
+                  fontSize: 13.5,
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong>Submitted with warnings:</strong> {submittedInspection.warning}
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={startNextBlockWithSameAttendees}
+                style={{
+                  padding: '14px 18px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: EW.accent,
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 16,
+                  cursor: 'pointer',
+                }}
+              >
+                Start next block with same attendees
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(`/inspections/${submittedInspection.id}`)}
+                style={{
+                  padding: '12px 18px',
+                  borderRadius: 10,
+                  border: `1px solid ${EW.border}`,
+                  background: '#fff',
+                  color: EW.text,
+                  fontWeight: 600,
+                  fontSize: 15,
+                  cursor: 'pointer',
+                }}
+              >
+                View submitted inspection
+              </button>
+              <Link
+                href="/"
+                style={{
+                  textAlign: 'center',
+                  color: EW.accent,
+                  textDecoration: 'none',
+                  fontSize: 14,
+                  paddingTop: 4,
+                }}
+              >
+                Back to Inspections
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       data-ew-walkabout-form="canon-2026-04"
@@ -1380,6 +1604,29 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>Visit details</h2>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>Lead officer and inspection details.</p>
+            {hasPreviousCarryOver && (
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  type="button"
+                  onClick={copyAttendeesFromPreviousWalkabout}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: `1px solid ${EW.accent}`,
+                    background: EW.accentMuted,
+                    color: '#065f46',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Copy attendees from previous walkabout
+                </button>
+                <p style={{ margin: '6px 0 0', fontSize: 12.5, color: EW.muted }}>
+                  Fills the lead officer, role, estate area, date and attendees from your last submitted walkabout on this device. You can edit them afterwards.
+                </p>
+              </div>
+            )}
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               <div>
                 <label htmlFor="ew_q_responsible" style={labelStyle}>Responsible Officer *</label>
