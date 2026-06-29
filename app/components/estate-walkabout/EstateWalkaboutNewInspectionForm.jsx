@@ -27,6 +27,20 @@ import {
   mergeWalkaboutChecklistItemPhotoUrls,
 } from '@/lib/inspection-draft-immediate-flush'
 import { isBrowserOnline, safeFetch } from '@/lib/offline-browser'
+import { clearInspectionResumeDraft } from '@/lib/inspection-resume-draft'
+
+/**
+ * Persist a post-submit warning so it can be surfaced on the inspection page
+ * after a successful submit (read by /inspections/[id]). Non-blocking.
+ */
+function storeSubmitWarningForInspection(inspectionId, warning) {
+  if (!inspectionId || !warning || typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(`inspection_submit_warning_${inspectionId}`, warning)
+  } catch {
+    // Non-blocking: warning persistence must not stop a completed submit.
+  }
+}
 
 const EW = {
   pageBg: '#f1f5f9',
@@ -773,7 +787,11 @@ export default function EstateWalkaboutNewInspectionForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...body, draft: true }),
+        body: JSON.stringify({
+          ...body,
+          draft: true,
+          client_inspection_id: draft?.payload?.offlineDraftId || draft?.id,
+        }),
       })
       if (!res) {
         setSubmitError('Waiting for internet connection to submit this inspection.')
@@ -797,13 +815,17 @@ export default function EstateWalkaboutNewInspectionForm({
         ...(Array.isArray(submitData.action_creation_warnings) ? submitData.action_creation_warnings : []),
         ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
       ]
+      // A submit that returns warnings (email/PDF/action issues) has still been
+      // recorded server-side. Treat it as success: clear the draft and navigate
+      // so the user cannot re-submit and create a duplicate; the warning is
+      // surfaced on the inspection page.
       if (submitWarnings.length > 0) {
-        setSubmitWarning(submitWarnings.join(' '))
-        return
+        storeSubmitWarningForInspection(inspectionId, submitWarnings.join(' '))
       }
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       setOfflineDraftId('')
       setDraftStorageWarning('')
+      clearInspectionResumeDraft()
       setSubmitSuccessMessage('Inspection submitted successfully')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {
@@ -905,11 +927,14 @@ export default function EstateWalkaboutNewInspectionForm({
       if (isOnline && submitBodyHasPendingPhotos(submitBody)) {
         submitBody = await prepareSubmitBodyForUpload(submitBody)
       }
+      // Stable submission id so a retry/duplicate submit converges on one record.
+      const clientInspectionId = offlineDraftId || createOfflineDraftId()
+      if (!offlineDraftId) setOfflineDraftId(clientInspectionId)
       const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...submitBody, draft: true }),
+        body: JSON.stringify({ ...submitBody, draft: true, client_inspection_id: clientInspectionId }),
       })
       if (!res) {
         saveCurrentOfflineDraft()
@@ -938,15 +963,19 @@ export default function EstateWalkaboutNewInspectionForm({
         ...(Array.isArray(submitData.action_creation_warnings) ? submitData.action_creation_warnings : []),
         ...(submitData.pdfError ? [`PDF warning: ${submitData.pdfError}`] : []),
       ]
+      // A submit that returns warnings (email/PDF/action issues) has still been
+      // recorded server-side. Treat it as success: clear the draft and navigate
+      // so the user cannot re-submit and create a duplicate; the warning is
+      // surfaced on the inspection page.
       if (submitWarnings.length > 0) {
-        setSubmitWarning(submitWarnings.join(' '))
-        return
+        storeSubmitWarningForInspection(inspectionId, submitWarnings.join(' '))
       }
       if (offlineDraftId) {
         setOfflineDrafts(removeOfflineInspectionDraft(offlineDraftId))
         setOfflineDraftId('')
       }
       setDraftStorageWarning('')
+      clearInspectionResumeDraft()
       setSubmitSuccessMessage('Inspection submitted successfully')
       router.push(`/inspections/${inspectionId}`)
     } catch (err) {

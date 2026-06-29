@@ -90,6 +90,20 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * Stable client-supplied inspection id (reused across retries/duplicate submits
+ * so repeats converge on one record). Accepts UUIDs and the offline-draft id
+ * format (`offline_<ts>_<rand>`); rejects anything else so we fall back to a
+ * server-generated UUID. This is the idempotency key for submissions.
+ */
+function sanitizeClientInspectionId(value) {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > 255) return null
+  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null
+  return trimmed
+}
+
 function collectPhotoUrlsFromExtras(extras) {
   if (!extras || typeof extras !== 'object') return []
   const urls = Array.isArray(extras.photo_urls)
@@ -1449,7 +1463,8 @@ export async function POST(request) {
     }
     const estateId = loc.estateId
     const blockId = loc.blockId
-    const inspectionId = crypto.randomUUID()
+    const clientInspectionId = sanitizeClientInspectionId(body?.client_inspection_id)
+    const inspectionId = clientInspectionId || crypto.randomUUID()
     const snapshot = buildTemplateVersionSnapshot(template)
     if (isEstateInspectionFormTemplate(template)) {
       logInspectionQuestionPipeline('template_version_snapshot_built_for_insert', {
@@ -1484,7 +1499,11 @@ export async function POST(request) {
       const displayTitle = (typeof title === 'string' && title.trim())
         ? title.trim()
         : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
-      await sql`
+      // Idempotent create: when the client reuses a stable id (offline draft id /
+      // submission key), a repeated submit/retry must converge on the existing
+      // record instead of inserting a duplicate. ON CONFLICT DO NOTHING also
+      // protects against a race between two near-simultaneous submits.
+      const insertResult = await sql`
         INSERT INTO inspections (
           id, legacy_inspection_id, type, title, description, location_label, due_date,
           template_id, template_name, template_version_id, template_version, status, submitted_at,
@@ -1516,13 +1535,49 @@ export async function POST(request) {
           ${sourceValue},
           ${workType}
         )
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
       `
+
+      if (insertResult.rows.length === 0 && clientInspectionId) {
+        // The inspection already exists (retry / duplicate submit). Do not create
+        // another row. Only refresh answers while it is still a draft owned by the
+        // same inspector, and never touch an already-submitted record.
+        const existing = await sql`
+          SELECT status, inspector_id FROM inspections WHERE id = ${inspectionId} LIMIT 1
+        `
+        const existingStatus = String(existing.rows[0]?.status || '').toLowerCase()
+        const sameInspector =
+          !existing.rows[0]?.inspector_id ||
+          !inspectorEmail ||
+          String(existing.rows[0].inspector_id).toLowerCase() === String(inspectorEmail).toLowerCase()
+        if (existingStatus === 'draft' && sameInspector) {
+          await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
+        }
+        console.log('[api/inspections] draft create converged on existing inspection', {
+          inspection_id: inspectionId,
+          existing_status: existingStatus,
+          same_inspector: sameInspector,
+        })
+        return NextResponse.json(
+          {
+            inspectionId,
+            deduped: true,
+            templateVersionId: templateVersion.id,
+            templateVersionHash: templateVersion.versionHash,
+            templateVersionReused: templateVersion.reused,
+          },
+          { status: 200 }
+        )
+      }
+
       await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
       console.log('[api/inspections] draft inspection created', {
         inspection_id: inspectionId,
         template_id,
         template_source: templateSource,
         block_id: blockId,
+        client_supplied_id: Boolean(clientInspectionId),
       })
       return NextResponse.json(
         {

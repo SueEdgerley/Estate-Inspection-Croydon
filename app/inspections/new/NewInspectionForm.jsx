@@ -2970,7 +2970,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...body, draft: true }),
+        body: JSON.stringify({
+          ...body,
+          draft: true,
+          client_inspection_id: draft?.payload?.offlineDraftId || draft?.id,
+        }),
       })
       if (!res) {
         setSubmitError('Waiting for internet connection to submit this inspection.')
@@ -3283,11 +3287,14 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       if (isOnline && submitBodyHasPendingPhotos(submitBody)) {
         submitBody = await prepareSubmitBodyForUpload(submitBody)
       }
+      // Stable submission id so a retry/duplicate submit converges on one record.
+      const clientInspectionId = offlineDraftId || createOfflineDraftId()
+      if (!offlineDraftId) setOfflineDraftId(clientInspectionId)
       const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ ...submitBody, draft: true }),
+        body: JSON.stringify({ ...submitBody, draft: true, client_inspection_id: clientInspectionId }),
       })
       if (!res) {
         saveCurrentOfflineDraft()

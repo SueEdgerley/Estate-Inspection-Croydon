@@ -44,6 +44,7 @@ import {
 } from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
+import { ensureFullInspectionPdf } from '@/lib/full-inspection-report-pdf'
 import { sendInspectionSubmissionConfirmationEmail } from '@/lib/inspection-submission-confirmation-email'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
@@ -1015,8 +1016,39 @@ export async function POST(request, { params }) {
       )
     }
 
-    // Full inspection report PDF is generated on demand (Home / report-pdf API), not on submit.
-    const fullPdfUrl = getInspectionFullReportPdfUrl(inspectionLive)
+    // Generate the full inspection report PDF at submit time so the Housing
+    // Officer confirmation email can link to the completed report. Previously
+    // the full report was only built on demand, leaving submit-time emails
+    // without a report link. ensureFullInspectionPdf handles its own errors and
+    // returns { ok, url }; the extra try/catch guarantees a PDF failure can
+    // never block an already-submitted inspection.
+    let fullPdfUrl = getInspectionFullReportPdfUrl(inspectionLive)
+    try {
+      const fullPdfResult = await ensureFullInspectionPdf(sql, { inspectionId: id })
+      if (fullPdfResult?.ok && fullPdfResult.url) {
+        fullPdfUrl = fullPdfResult.url
+        console.log('[inspections/submit] full report PDF ready', {
+          inspectionId: id,
+          generated: fullPdfResult.generated === true,
+        })
+      } else if (fullPdfResult && !fullPdfResult.ok) {
+        console.error('[inspections/submit] full report PDF generation failed', {
+          inspectionId: id,
+          error: fullPdfResult.error || 'unknown',
+        })
+        actionCreationWarnings.push(
+          `Full report PDF could not be generated: ${fullPdfResult.error || 'unknown error'}`
+        )
+      }
+    } catch (fullPdfErr) {
+      console.error('[inspections/submit] full report PDF generation threw', {
+        inspectionId: id,
+        error: fullPdfErr?.message || String(fullPdfErr),
+      })
+      actionCreationWarnings.push(
+        `Full report PDF could not be generated: ${fullPdfErr?.message || String(fullPdfErr)}`
+      )
+    }
     let posterPdfUrl = inspectionLive.poster_pdf_url || null
     let pdfError = null
     try {
