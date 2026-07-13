@@ -4,9 +4,39 @@ import { useState } from 'react'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 /**
+ * Inspections submitted on/after this day already get the current PDF layout on first generate,
+ * so Regenerate is only offered for older cached reports.
+ */
+export const PDF_REGENERATE_CUTOFF_ISO_DATE = '2026-07-13'
+
+function inspectionSubmittedAtMs(inspection) {
+  if (!inspection || typeof inspection !== 'object') return NaN
+  const raw =
+    inspection.submitted_at ||
+    inspection.submittedAt ||
+    inspection.completed_at ||
+    inspection.completedAt ||
+    inspection.created_at ||
+    inspection.createdAt ||
+    ''
+  const ms = Date.parse(String(raw))
+  return Number.isFinite(ms) ? ms : NaN
+}
+
+export function shouldShowPdfRegenerate(inspection, explicitShow) {
+  if (explicitShow === false) return false
+  if (explicitShow === true) return true
+  const submittedMs = inspectionSubmittedAtMs(inspection)
+  if (!Number.isFinite(submittedMs)) return true
+  const cutoffMs = Date.parse(`${PDF_REGENERATE_CUTOFF_ISO_DATE}T00:00:00.000Z`)
+  return submittedMs < cutoffMs
+}
+
+/**
  * Full inspection report PDF: open saved Blob URL, or POST to generate/upload then open.
  * Pass `savedPdfUrl` and/or `inspection` (row with nullable full_pdf_url / pdf_url / camelCase).
  * Optional Regenerate button force-rebuilds even when a saved URL exists (e.g. after layout fixes).
+ * Hidden automatically for inspections submitted on/after PDF_REGENERATE_CUTOFF_ISO_DATE.
  */
 export default function InspectionFullPdfControls({
   inspectionId,
@@ -17,7 +47,7 @@ export default function InspectionFullPdfControls({
   variant = 'links',
   linkStyle = {},
   forceRegenerate = false,
-  showRegenerate = true,
+  showRegenerate,
 }) {
   const [busy, setBusy] = useState(false)
   const [regenBusy, setRegenBusy] = useState(false)
@@ -25,7 +55,7 @@ export default function InspectionFullPdfControls({
     savedPdfUrl != null && String(savedPdfUrl).trim() !== '' ? String(savedPdfUrl).trim() : null
   const fromRow = inspection ? getInspectionFullReportPdfUrl(inspection) : null
   const url = fromProp ?? fromRow ?? ''
-
+  const allowRegenerate = shouldShowPdfRegenerate(inspection, showRegenerate)
   const openInBrowser = (href, download) => {
     const a = document.createElement('a')
     a.href = href
@@ -146,7 +176,7 @@ export default function InspectionFullPdfControls({
       : ''
 
   const regenerateControl =
-    showRegenerate && !forceRegenerate ? (
+    allowRegenerate && !forceRegenerate ? (
       <button
         type="button"
         title="Force-rebuild the PDF with the latest layout and open it"

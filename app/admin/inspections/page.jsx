@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
+import { shouldShowPdfRegenerate } from '@/app/components/InspectionFullPdfControls'
 
 // Temporary admin tool: force-rebuild a cached full report PDF (e.g. after a
-// renderer fix) and open the freshly generated file. Safe to remove later.
+// renderer fix) and open the freshly generated file. Only shown for inspections
+// submitted before the current PDF layout cutoff.
 function RegeneratePdfButton({ inspectionId }) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState(null)
@@ -118,7 +120,7 @@ export default function AdminInspectionsPage() {
                   <a href={i.poster_pdf_url} target="_blank" rel="noopener noreferrer">Poster</a>
                 )}
                 {!fullUrl && !i.poster_pdf_url && '—'}
-                <RegeneratePdfButton inspectionId={i.id} />
+                {shouldShowPdfRegenerate(i) ? <RegeneratePdfButton inspectionId={i.id} /> : null}
               </td>
             </tr>
             )
