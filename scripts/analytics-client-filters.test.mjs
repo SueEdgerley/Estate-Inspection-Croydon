@@ -12,12 +12,17 @@ import {
   clientFiltersEqual,
   filterPeopleOptions,
   queryHasNoRoleOrPersonParams,
+  queryUsesSeparateActionDates,
+  reconcilePersonAfterRoleChange,
+  resolveInspectionDatesFromClientState,
+  applyCustomInspectionDate,
 } from '../lib/analytics-client-filters.js'
 import {
   buildAnalyticsFilterArgs,
   prepareAnalyticsEffectiveParams,
 } from '../lib/analytics-filters.js'
 import { buildInspectionWhereConditions, joinSqlAnd } from '../lib/inspection-filters.js'
+import { resolveAnalyticsPresetDates } from '../lib/analytics-date-presets.js'
 
 const GROUNDS_MAINTENANCE = 'Grounds Maintenance'
 const PALMA = 'palma.muriel@croydon.gov.uk'
@@ -119,6 +124,82 @@ describe('filterPeopleOptions — role change refreshes people list', () => {
     const allPeople = filterPeopleOptions(PEOPLE, 'all')
     assert.ok(allPeople.length > esmOnly.length)
   })
+
+  it('selecting a named person adds the person parameter to the request', () => {
+    const qs = buildAnalyticsQueryString({ preset: 'month', personRole: 'all', person: PALMA })
+    assert.match(qs, /person=/)
+    assert.match(qs, /palma\.muriel/)
+  })
+
+  it('a person invalid for the new role is cleared', () => {
+    assert.equal(reconcilePersonAfterRoleChange('caretaker', PALMA, PEOPLE), 'all')
+    assert.equal(reconcilePersonAfterRoleChange('esm', PALMA, PEOPLE), PALMA)
+  })
+})
+
+describe('inspection period dates', () => {
+  it('This month uses the current-month inspection dates', () => {
+    const state = { preset: 'month', quarter: '2', year: '2026', customFrom: '', customTo: '' }
+    const resolved = resolveInspectionDatesFromClientState(state)
+    const today = new Date()
+    const monthPrefix = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`
+    assert.equal(resolved.preset, 'month')
+    assert.match(resolved.dateFrom, new RegExp(`^${monthPrefix}`))
+  })
+
+  it('manual inspection dates switch Period to Custom', () => {
+    const next = applyCustomInspectionDate({ preset: 'month' }, 'customFrom', '2026-06-01')
+    assert.equal(next.preset, 'custom')
+    assert.equal(next.customFrom, '2026-06-01')
+  })
+
+  it('manual inspection dates are sent only when Period is Custom', () => {
+    const customQs = buildAnalyticsQueryString({
+      preset: 'custom',
+      customFrom: '2026-06-01',
+      customTo: '2026-06-30',
+    })
+    assert.match(customQs, /dateFrom=2026-06-01/)
+    assert.match(customQs, /dateTo=2026-06-30/)
+
+    const monthQs = buildAnalyticsQueryString({
+      preset: 'month',
+      customFrom: '2026-06-01',
+      customTo: '2026-06-30',
+    })
+    assert.doesNotMatch(monthQs, /dateFrom=/)
+    assert.doesNotMatch(monthQs, /dateTo=/)
+  })
+
+  it('the active-window banner matches the actual query inspection dates', () => {
+    const state = {
+      preset: 'custom',
+      customFrom: '2026-06-01',
+      customTo: '2026-06-30',
+      personRole: 'all',
+      person: 'all',
+    }
+    const qs = buildAnalyticsQueryString(state)
+    const serverDates = resolveAnalyticsPresetDates(new URLSearchParams(qs))
+    const banner = buildAppliedBannerFromClientState(state)
+    assert.equal(banner.dateFrom, serverDates.dateFrom)
+    assert.equal(banner.dateTo, serverDates.dateTo)
+    assert.equal(banner.preset, 'Custom')
+  })
+
+  it('action-date filters remain separate from inspection-date filters', () => {
+    const qs = buildAnalyticsQueryString({
+      preset: 'month',
+      issueDateFrom: '2026-06-01',
+      issueDateTo: '2026-06-30',
+    })
+    const split = queryUsesSeparateActionDates(qs)
+    assert.equal(split.preset, 'month')
+    assert.equal(split.hasActionDates, true)
+    assert.equal(split.hasCustomInspectionDates, false)
+    assert.match(qs, /issueDateFrom=2026-06-01/)
+    assert.doesNotMatch(qs, /dateFrom=/)
+  })
 })
 
 describe('banner matches last applied client state', () => {
@@ -135,6 +216,8 @@ describe('banner matches last applied client state', () => {
     assert.equal(banner.gradeTemplateName, GROUNDS_MAINTENANCE)
     assert.equal(banner.personRoleLabel, null)
     assert.equal(banner.person, null)
+    assert.equal(banner.dateFrom, '2026-06-01')
+    assert.equal(banner.dateTo, '2026-06-30')
   })
 
   it('clientFiltersEqual detects pending role change before Apply', () => {

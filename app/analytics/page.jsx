@@ -11,6 +11,8 @@ import {
   captureClientFilterState,
   clientFiltersEqual,
   filterPeopleOptions,
+  reconcilePersonAfterRoleChange,
+  resolveInspectionDatesFromClientState,
 } from '@/lib/analytics-client-filters'
 import OverviewTab from '@/app/components/analytics/OverviewTab'
 
@@ -334,6 +336,11 @@ export default function AnalyticsPage() {
 
   const filtersPending = lastAppliedFilters != null && !clientFiltersEqual(clientFilterState, lastAppliedFilters)
 
+  const inspectionDatePreview = useMemo(
+    () => resolveInspectionDatesFromClientState(clientFilterState),
+    [clientFilterState]
+  )
+
   const buildQuery = useCallback(
     () => buildAnalyticsQueryString(clientFilterState),
     [clientFilterState]
@@ -397,9 +404,10 @@ export default function AnalyticsPage() {
     const fromClient = buildAppliedBannerFromClientState(lastAppliedFilters)
     return {
       ...fromClient,
-      preset: payload.applied?.preset ?? fromClient.preset,
       dateFrom: payload.applied?.dateFrom ?? fromClient.dateFrom,
       dateTo: payload.applied?.dateTo ?? fromClient.dateTo,
+      issueDateFrom: payload.applied?.issueDateFrom ?? fromClient.issueDateFrom,
+      issueDateTo: payload.applied?.issueDateTo ?? fromClient.issueDateTo,
     }
   }, [applied, lastAppliedFilters, payload])
   const peopleOptions = useMemo(() => {
@@ -617,7 +625,18 @@ export default function AnalyticsPage() {
           >
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
               <span style={{ fontWeight: 600, color: '#374151' }}>Period</span>
-              <select value={preset} onChange={(e) => setPreset(e.target.value)} style={{ padding: '0.4rem' }}>
+              <select
+                value={preset}
+                onChange={(e) => {
+                  const next = e.target.value
+                  setPreset(next)
+                  if (next !== 'custom') {
+                    setCustomFrom('')
+                    setCustomTo('')
+                  }
+                }}
+                style={{ padding: '0.4rem' }}
+              >
                 <option value="week">Last 7 days</option>
                 <option value="month">This month</option>
                 <option value="quarter">Quarter</option>
@@ -649,22 +668,45 @@ export default function AnalyticsPage() {
             {preset === 'custom' && (
               <>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-                  <span style={{ fontWeight: 600 }}>From</span>
-                  <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                  <span style={{ fontWeight: 600 }}>Inspection from</span>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => {
+                      setCustomFrom(e.target.value)
+                      setPreset('custom')
+                    }}
+                  />
                 </label>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-                  <span style={{ fontWeight: 600 }}>To</span>
-                  <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                  <span style={{ fontWeight: 600 }}>Inspection to</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => {
+                      setCustomTo(e.target.value)
+                      setPreset('custom')
+                    }}
+                  />
                 </label>
               </>
             )}
+            {preset !== 'custom' && (inspectionDatePreview.dateFrom || inspectionDatePreview.dateTo) ? (
+              <div style={{ gridColumn: '1 / -1', fontSize: '0.75rem', color: '#6b7280' }}>
+                Inspection dates for this period:{' '}
+                <strong style={{ color: '#374151' }}>
+                  {inspectionDatePreview.dateFrom || '…'} → {inspectionDatePreview.dateTo || '…'}
+                </strong>
+              </div>
+            ) : null}
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
               <span style={{ fontWeight: 600 }}>Role / type</span>
               <select
                 value={personRole}
                 onChange={(e) => {
-                  setPersonRole(e.target.value)
-                  setPerson('all')
+                  const nextRole = e.target.value
+                  setPersonRole(nextRole)
+                  setPerson(reconcilePersonAfterRoleChange(nextRole, person, filterOptions?.people || []))
                 }}
                 style={{ padding: '0.4rem' }}
               >
@@ -699,11 +741,11 @@ export default function AnalyticsPage() {
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>Issue from</span>
+              <span style={{ fontWeight: 600 }}>Action raised from</span>
               <input type="date" value={issueDateFrom} onChange={(e) => setIssueDateFrom(e.target.value)} />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
-              <span style={{ fontWeight: 600 }}>Issue to</span>
+              <span style={{ fontWeight: 600 }}>Action raised to</span>
               <input type="date" value={issueDateTo} onChange={(e) => setIssueDateTo(e.target.value)} />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
@@ -776,6 +818,9 @@ export default function AnalyticsPage() {
               {displayApplied.gradeBlockId ? ` · Block: ${displayApplied.gradeBlockId}` : ''}
               {displayApplied.gradeArea ? ` · Area: ${displayApplied.gradeArea}` : ''}
               {displayApplied.issueCategory ? ` · Issues: ${displayApplied.issueCategory}` : ''}
+              {displayApplied.issueDateFrom || displayApplied.issueDateTo
+                ? ` · Actions raised: ${displayApplied.issueDateFrom || '…'} → ${displayApplied.issueDateTo || '…'}`
+                : ''}
               {filtersPending ? (
                 <span style={{ color: '#b45309' }}> · Filter controls changed — click Apply filters to update results</span>
               ) : null}
