@@ -25,7 +25,8 @@
     "verify:estate-v2": "node scripts/verify-estate-inspection-v2.mjs",
     "test:analytics-filters": "node --test scripts/analytics-filters.test.mjs",
     "test:analytics-load-guard": "node --test scripts/analytics-load-guard.test.mjs",
-    "test:analytics": "node --test scripts/analytics-filters.test.mjs scripts/analytics-load-guard.test.mjs"
+    "test:analytics-client-filters": "node --test scripts/analytics-client-filters.test.mjs",
+    "test:analytics": "node --test scripts/analytics-filters.test.mjs scripts/analytics-load-guard.test.mjs scripts/analytics-client-filters.test.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.0.0",

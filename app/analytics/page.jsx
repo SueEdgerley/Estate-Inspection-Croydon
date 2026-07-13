@@ -5,6 +5,13 @@ import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '@/lib/photobook-theme'
 import { createAnalyticsLoadGuard } from '@/lib/analytics-load-guard'
+import {
+  buildAnalyticsQueryString,
+  buildAppliedBannerFromClientState,
+  captureClientFilterState,
+  clientFiltersEqual,
+  filterPeopleOptions,
+} from '@/lib/analytics-client-filters'
 import OverviewTab from '@/app/components/analytics/OverviewTab'
 
 const TABS = [
@@ -289,42 +296,48 @@ export default function AnalyticsPage() {
   const [gradeBlockId, setGradeBlockId] = useState('all')
   const [gradeArea, setGradeArea] = useState('all')
   const [gradeTemplateName, setGradeTemplateName] = useState('all')
+  const [lastAppliedFilters, setLastAppliedFilters] = useState(null)
 
-  const buildQuery = useCallback(() => {
-    const p = new URLSearchParams()
-    p.set('preset', preset)
-    if (preset === 'quarter') {
-      p.set('quarter', quarter)
-      p.set('year', year)
-    }
-    if (preset === 'custom') {
-      if (customFrom) p.set('dateFrom', customFrom)
-      if (customTo) p.set('dateTo', customTo)
-    }
-    if (personRole !== 'all') p.set('personRole', personRole)
-    if (person !== 'all') p.set('person', person)
-    if (issueCategory !== 'all') p.set('issueCategory', issueCategory)
-    if (issueDateFrom) p.set('issueDateFrom', issueDateFrom)
-    if (issueDateTo) p.set('issueDateTo', issueDateTo)
-    if (gradeBlockId !== 'all') p.set('gradeBlockId', gradeBlockId)
-    if (gradeArea !== 'all') p.set('gradeArea', gradeArea)
-    if (gradeTemplateName !== 'all') p.set('gradeTemplateName', gradeTemplateName)
-    return p.toString()
-  }, [
-    preset,
-    quarter,
-    year,
-    customFrom,
-    customTo,
-    personRole,
-    person,
-    issueCategory,
-    issueDateFrom,
-    issueDateTo,
-    gradeBlockId,
-    gradeArea,
-    gradeTemplateName,
-  ])
+  const clientFilterState = useMemo(
+    () =>
+      captureClientFilterState({
+        preset,
+        quarter,
+        year,
+        customFrom,
+        customTo,
+        personRole,
+        person,
+        issueCategory,
+        issueDateFrom,
+        issueDateTo,
+        gradeBlockId,
+        gradeArea,
+        gradeTemplateName,
+      }),
+    [
+      preset,
+      quarter,
+      year,
+      customFrom,
+      customTo,
+      personRole,
+      person,
+      issueCategory,
+      issueDateFrom,
+      issueDateTo,
+      gradeBlockId,
+      gradeArea,
+      gradeTemplateName,
+    ]
+  )
+
+  const filtersPending = lastAppliedFilters != null && !clientFiltersEqual(clientFilterState, lastAppliedFilters)
+
+  const buildQuery = useCallback(
+    () => buildAnalyticsQueryString(clientFilterState),
+    [clientFilterState]
+  )
 
   const load = useCallback(async () => {
     const seq = loadGuardRef.current.nextRequest()
@@ -353,6 +366,7 @@ export default function AnalyticsPage() {
       }
 
       setPayload(data)
+      setLastAppliedFilters(clientFilterState)
       if (data?.message) setMessage(data.message)
     } catch (e) {
       if (!loadGuardRef.current.isCurrentRequest(seq)) return
@@ -361,7 +375,7 @@ export default function AnalyticsPage() {
     } finally {
       if (loadGuardRef.current.isCurrentRequest(seq)) setLoading(false)
     }
-  }, [buildQuery])
+  }, [buildQuery, clientFilterState])
 
   useEffect(() => {
     if (isSignedIn) load()
@@ -378,9 +392,19 @@ export default function AnalyticsPage() {
   const gradeRisk = payload?.gradeRisk
   const filterOptions = payload?.filterOptions
   const applied = payload?.applied
+  const displayApplied = useMemo(() => {
+    if (!lastAppliedFilters || !payload) return applied
+    const fromClient = buildAppliedBannerFromClientState(lastAppliedFilters)
+    return {
+      ...fromClient,
+      preset: payload.applied?.preset ?? fromClient.preset,
+      dateFrom: payload.applied?.dateFrom ?? fromClient.dateFrom,
+      dateTo: payload.applied?.dateTo ?? fromClient.dateTo,
+    }
+  }, [applied, lastAppliedFilters, payload])
   const peopleOptions = useMemo(() => {
     const rows = filterOptions?.people || []
-    return personRole === 'all' ? rows : rows.filter((p) => p.role === personRole)
+    return filterPeopleOptions(rows, personRole)
   }, [filterOptions, personRole])
 
   useEffect(() => {
@@ -740,18 +764,21 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {applied && overview != null && (
+          {displayApplied && overview != null && (
             <p className="analytics-no-print" style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '1rem' }}>
-              Active window: <strong>{applied.preset}</strong>
-              {applied.dateFrom || applied.dateTo
-                ? ` (${applied.dateFrom || '…'} → ${applied.dateTo || '…'})`
+              Active window: <strong>{displayApplied.preset}</strong>
+              {displayApplied.dateFrom || displayApplied.dateTo
+                ? ` (${displayApplied.dateFrom || '…'} → ${displayApplied.dateTo || '…'})`
                 : ''}
-              {applied.personRoleLabel ? ` · Role: ${applied.personRoleLabel}` : ''}
-              {applied.person ? ` · Person: ${applied.person}` : ''}
-              {applied.gradeTemplateName ? ` · Form: ${applied.gradeTemplateName}` : ''}
-              {applied.gradeBlockId ? ` · Block: ${applied.gradeBlockId}` : ''}
-              {applied.gradeArea ? ` · Area: ${applied.gradeArea}` : ''}
-              {applied.issueCategory ? ` · Issues: ${applied.issueCategory}` : ''}
+              {displayApplied.personRoleLabel ? ` · Role: ${displayApplied.personRoleLabel}` : ''}
+              {displayApplied.person ? ` · Person: ${displayApplied.person}` : ''}
+              {displayApplied.gradeTemplateName ? ` · Form: ${displayApplied.gradeTemplateName}` : ''}
+              {displayApplied.gradeBlockId ? ` · Block: ${displayApplied.gradeBlockId}` : ''}
+              {displayApplied.gradeArea ? ` · Area: ${displayApplied.gradeArea}` : ''}
+              {displayApplied.issueCategory ? ` · Issues: ${displayApplied.issueCategory}` : ''}
+              {filtersPending ? (
+                <span style={{ color: '#b45309' }}> · Filter controls changed — click Apply filters to update results</span>
+              ) : null}
             </p>
           )}
 
