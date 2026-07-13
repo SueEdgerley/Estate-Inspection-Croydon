@@ -4,10 +4,13 @@ import { useState } from 'react'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 /**
- * Inspections submitted on/after this day already get the current PDF layout on first generate,
- * so Regenerate is only offered for older cached reports.
+ * Inspections submitted on/after this instant already get the redesigned layout
+ * on first generate. Regenerate is offered for anything submitted before then
+ * (ESM, Walkabout, Caretaker — same control on all full reports).
+ *
+ * Cutoff: start of 14 Jul 2026 London time = end of “tonight” 13 Jul.
  */
-export const PDF_REGENERATE_CUTOFF_ISO_DATE = '2026-07-13'
+export const PDF_REGENERATE_CUTOFF_ISO = '2026-07-13T23:00:00.000Z' // 14 Jul 00:00 BST
 
 function inspectionSubmittedAtMs(inspection) {
   if (!inspection || typeof inspection !== 'object') return NaN
@@ -28,7 +31,7 @@ export function shouldShowPdfRegenerate(inspection, explicitShow) {
   if (explicitShow === true) return true
   const submittedMs = inspectionSubmittedAtMs(inspection)
   if (!Number.isFinite(submittedMs)) return true
-  const cutoffMs = Date.parse(`${PDF_REGENERATE_CUTOFF_ISO_DATE}T00:00:00.000Z`)
+  const cutoffMs = Date.parse(PDF_REGENERATE_CUTOFF_ISO)
   return submittedMs < cutoffMs
 }
 
@@ -36,7 +39,7 @@ export function shouldShowPdfRegenerate(inspection, explicitShow) {
  * Full inspection report PDF: open saved Blob URL, or POST to generate/upload then open.
  * Pass `savedPdfUrl` and/or `inspection` (row with nullable full_pdf_url / pdf_url / camelCase).
  * Optional Regenerate button force-rebuilds even when a saved URL exists (e.g. after layout fixes).
- * Hidden automatically for inspections submitted on/after PDF_REGENERATE_CUTOFF_ISO_DATE.
+ * Shown for ESM / Walkabout / Caretaker inspections submitted before PDF_REGENERATE_CUTOFF_ISO.
  */
 export default function InspectionFullPdfControls({
   inspectionId,
