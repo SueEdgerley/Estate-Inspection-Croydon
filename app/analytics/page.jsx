@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs'
 import { photobook } from '@/lib/photobook-theme'
+import { createAnalyticsLoadGuard } from '@/lib/analytics-load-guard'
 import OverviewTab from '@/app/components/analytics/OverviewTab'
 
 const TABS = [
@@ -272,6 +273,8 @@ export default function AnalyticsPage() {
   const [message, setMessage] = useState(null)
   const [payload, setPayload] = useState(null)
   const [showAnalyticsHelp, setShowAnalyticsHelp] = useState(false)
+  const loadGuardRef = useRef(null)
+  if (!loadGuardRef.current) loadGuardRef.current = createAnalyticsLoadGuard()
 
   const [preset, setPreset] = useState('quarter')
   const [quarter, setQuarter] = useState(defQy.q)
@@ -324,6 +327,7 @@ export default function AnalyticsPage() {
   ])
 
   const load = useCallback(async () => {
+    const seq = loadGuardRef.current.nextRequest()
     setLoading(true)
     setError(null)
     setAuthCode(null)
@@ -332,6 +336,7 @@ export default function AnalyticsPage() {
       const qs = buildQuery()
       const res = await fetch(`/api/analytics?${qs}`, { credentials: 'include', cache: 'no-store' })
       const data = await res.json()
+      if (!loadGuardRef.current.isCurrentRequest(seq)) return
 
       if (res.status === 401) {
         setAuthCode('UNAUTHORIZED')
@@ -350,16 +355,19 @@ export default function AnalyticsPage() {
       setPayload(data)
       if (data?.message) setMessage(data.message)
     } catch (e) {
+      if (!loadGuardRef.current.isCurrentRequest(seq)) return
       setError(e?.message || 'Failed to load analytics')
       setPayload(null)
     } finally {
-      setLoading(false)
+      if (loadGuardRef.current.isCurrentRequest(seq)) setLoading(false)
     }
   }, [buildQuery])
 
   useEffect(() => {
     if (isSignedIn) load()
-  }, [isSignedIn, load])
+    // Initial load only — filter changes apply when the user clicks Apply filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn])
 
   const overview = payload?.overview
   const estates = payload?.estates ?? []
