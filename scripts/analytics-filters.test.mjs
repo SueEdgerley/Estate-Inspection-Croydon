@@ -223,3 +223,106 @@ describe('buildAnalyticsCompletedWhere', () => {
     assert.deepEqual(fromHelper, fromParts)
   })
 })
+
+/** Shape and values verified against production DB on 2026-07-13. */
+const DB_REALITY_FIXTURE = [
+  ...Array.from({ length: 318 }, (_, index) => ({
+    id: `caretaker-june-${index}`,
+    inspector_id: `caretaker${index}@croydon.gov.uk`,
+    template_name: 'Caretaker Inspection',
+    type: 'inspection',
+    template_id: 'recfCSreXsVPKZFux',
+    submitted_at: '2026-06-15',
+    status: 'submitted',
+  })),
+  ...Array.from({ length: 90 }, (_, index) => ({
+    id: `walkabout-june-${index}`,
+    inspector_id: `officer${index}@croydon.gov.uk`,
+    template_name: 'Estate Walkabout',
+    type: 'estate_walkabout',
+    template_id: 'tpl_estate_walkabout_v1',
+    submitted_at: '2026-06-20',
+    status: 'submitted',
+  })),
+  ...Array.from({ length: 8 }, (_, index) => ({
+    id: `esm-june-${index}`,
+    inspector_id: `esm${index}@croydon.gov.uk`,
+    template_name: 'ESM Inspection Form',
+    type: 'inspection',
+    template_id: 'recbBNZKtfSXPTjkt',
+    submitted_at: '2026-06-10',
+    status: 'submitted',
+  })),
+  ...Array.from({ length: 21 }, (_, index) => ({
+    id: `gm-july-${index}`,
+    inspector_id: 'palma.muriel@croydon.gov.uk',
+    template_name: 'Grounds Maintenance',
+    type: 'inspection',
+    template_id: 'recMOQSaY7Z16SYDM',
+    submitted_at: `2026-07-${String(1 + (index % 10)).padStart(2, '0')}`,
+    status: 'submitted',
+  })),
+]
+
+describe('integration — production DB-shaped records (submitted_at semantics)', () => {
+  it('June all people all forms returns 416 completed rows', () => {
+    const count = countMockInspections(
+      { preset: 'custom', dateFrom: '2026-06-01', dateTo: '2026-06-30' },
+      DB_REALITY_FIXTURE
+    )
+    assert.equal(count, 416)
+  })
+
+  it('June all people + Grounds Maintenance returns 0 (no GM submitted in June)', () => {
+    const count = countMockInspections(
+      {
+        preset: 'custom',
+        dateFrom: '2026-06-01',
+        dateTo: '2026-06-30',
+        gradeTemplateName: GROUNDS_MAINTENANCE,
+      },
+      DB_REALITY_FIXTURE
+    )
+    assert.equal(count, 0)
+  })
+
+  it('Jun–Jul all people + Grounds Maintenance returns 21', () => {
+    const count = countMockInspections(
+      {
+        preset: 'custom',
+        dateFrom: '2026-06-01',
+        dateTo: '2026-07-30',
+        gradeTemplateName: GROUNDS_MAINTENANCE,
+      },
+      DB_REALITY_FIXTURE
+    )
+    assert.equal(count, 21)
+  })
+
+  it('Palma + Grounds Maintenance + Jun–Jul returns 21', () => {
+    const count = countMockInspections(
+      {
+        preset: 'custom',
+        dateFrom: '2026-06-01',
+        dateTo: '2026-07-30',
+        person: PALMA,
+        gradeTemplateName: GROUNDS_MAINTENANCE,
+      },
+      DB_REALITY_FIXTURE
+    )
+    assert.equal(count, 21)
+  })
+
+  it('applied state includes gradeTemplateName when form filter is sent', () => {
+    const raw = searchParams({
+      preset: 'custom',
+      dateFrom: '2026-06-01',
+      dateTo: '2026-06-30',
+      gradeTemplateName: GROUNDS_MAINTENANCE,
+    })
+    const { eff } = prepareAnalyticsEffectiveParams(raw, true)
+    const appliedForm =
+      (eff.get('gradeTemplateName') || 'all') !== 'all' ? eff.get('gradeTemplateName') : null
+    assert.equal(appliedForm, GROUNDS_MAINTENANCE)
+  })
+})
