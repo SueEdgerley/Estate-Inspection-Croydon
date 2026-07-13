@@ -739,7 +739,10 @@ export default function AnalyticsPage() {
                 ? ` (${applied.dateFrom || '…'} → ${applied.dateTo || '…'})`
                 : ''}
               {applied.personRoleLabel ? ` · Role: ${applied.personRoleLabel}` : ''}
-              {applied.person ? ` · Person filter` : ''}
+              {applied.person ? ` · Person: ${applied.person}` : ''}
+              {applied.gradeTemplateName ? ` · Form: ${applied.gradeTemplateName}` : ''}
+              {applied.gradeBlockId ? ` · Block: ${applied.gradeBlockId}` : ''}
+              {applied.gradeArea ? ` · Area: ${applied.gradeArea}` : ''}
               {applied.issueCategory ? ` · Issues: ${applied.issueCategory}` : ''}
             </p>
           )}
