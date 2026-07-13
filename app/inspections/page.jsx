@@ -1203,7 +1203,6 @@ export default function InspectionsListPage() {
                               inspection={row}
                               pdfGenerationError={row.pdf_generation_error}
                               onAfterGenerate={reloadInspections}
-                              forceRegenerate
                             />
                             <Link
                               href={`/actions?inspection_id=${encodeURIComponent(row.id)}`}
