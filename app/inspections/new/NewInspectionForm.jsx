@@ -39,7 +39,6 @@ import { buildEstateInspectionFormSections } from '@/lib/estate-inspection-form-
 import {
   isEstateWalkaboutTemplate,
   ESTATE_WALKABOUT_TEMPLATE_ID,
-  buildEstateWalkaboutTemplate,
 } from '@/lib/estate-walkabout-template'
 import LocationBlockSelector from '@/app/components/LocationBlockSelector'
 import EstateWalkaboutNewInspectionForm from '@/app/components/estate-walkabout/EstateWalkaboutNewInspectionForm'
@@ -81,6 +80,10 @@ import {
   safeFetch,
   writeCachedTemplatesPayload,
 } from '@/lib/offline-browser'
+import {
+  formatInspectionSaveFailureMessage,
+  FORM_NOT_PERMITTED_MESSAGE,
+} from '@/lib/inspection-permission-messages'
 import { packNvWizardExtras } from '@/lib/nv-notes-pack'
 import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 import CaretakerInspectionModeSelector from '@/app/components/caretaker/CaretakerInspectionModeSelector'
@@ -2147,6 +2150,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [offlineDrafts, setOfflineDrafts] = useState([])
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
+  const [viewerAccess, setViewerAccess] = useState({ accessMessage: null, jobTitle: null })
   const [activePhotoUploads, setActivePhotoUploads] = useState({})
   const [dismissedDraftIds, setDismissedDraftIds] = useState([])
   const [resumeDraftPrompt, setResumeDraftPrompt] = useState(null)
@@ -2279,14 +2283,12 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         if (effectiveLockedTemplateId) {
           const hasRequestedTemplate = list.some((t) => t.id === effectiveLockedTemplateId)
           if (hasRequestedTemplate) setTemplateId(effectiveLockedTemplateId)
-          else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
-            setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
-          } else setTemplateId(defaultTemplateIdFor)
+          else setTemplateId(defaultTemplateIdFor)
         } else {
           setTemplateId(defaultTemplateIdFor)
         }
-      } else if (effectiveLockedTemplateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
-        setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
+      } else {
+        setTemplateId(effectiveLockedTemplateId || '')
       }
     }
 
@@ -2381,15 +2383,30 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
   }, [effectiveLockedTemplateId])
 
-  const templates = apiPayload.templates || []
-  const selectedTemplate = useMemo(() => {
-    const fromList = templates.find((t) => t.id === templateId)
-    if (fromList) return fromList
-    if (templateId === ESTATE_WALKABOUT_TEMPLATE_ID) {
-      return buildEstateWalkaboutTemplate()
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/me', { cache: 'no-store', credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((me) => {
+        if (cancelled) return
+        setViewerAccess({
+          accessMessage: me?.roleUi?.accessMessage || null,
+          jobTitle: me?.jobTitle || me?.roleUi?.jobTitle || null,
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
     }
-    return undefined
-  }, [templates, templateId])
+  }, [])
+
+  const templates = apiPayload.templates || []
+  const selectedTemplate = useMemo(() => templates.find((t) => t.id === templateId), [templates, templateId])
+  const requestedTemplateId = effectiveLockedTemplateId || templateId
+  const formPermissionBlocked = Boolean(
+    !loading && requestedTemplateId && !templates.some((t) => t.id === requestedTemplateId)
+  )
+  const formPermissionBlockedMessage = viewerAccess.accessMessage || FORM_NOT_PERMITTED_MESSAGE
   const locationRequiredForSelectedTemplate = Boolean(
     selectedTemplate &&
       !isNVTemplate(selectedTemplate) &&
@@ -2823,6 +2840,23 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }
   }, [currentDraftPayload, offlineDraftId, noteDraftSaveResult])
 
+  const handleFailedInspectionSave = useCallback(
+    (res, data) => {
+      const savedLocally = Boolean(saveCurrentOfflineDraft())
+      setSubmitError(
+        formatInspectionSaveFailureMessage({
+          status: res?.status,
+          serverError: data?.error || data?.details,
+          savedLocally,
+        })
+      )
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    },
+    [saveCurrentOfflineDraft]
+  )
+
   useEffect(() => {
     const hasDraftContent = hasInspectionDraftContent(currentDraftPayload)
     if (!isCaretakerForm || !hasDraftContent || submitSuccessMessage) return undefined
@@ -2982,7 +3016,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
       const data = await res.json().catch(() => ({}))
       if (!res?.ok || data.error) {
-        setSubmitError(data.error || data.details || `Request failed (${res?.status || 0})`)
+        handleFailedInspectionSave(res, data)
         return
       }
       const inspectionId = data.inspectionId ?? data.id
@@ -3303,10 +3337,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const msg = res.status === 401
-          ? 'Please sign in at the top of the page, then try submitting again.'
-          : (data.error || data.details || `Request failed (${res.status})`)
-        setSubmitError(msg)
+        handleFailedInspectionSave(res, data)
         return
       }
       if (debugTemplateVersion) {
@@ -3314,7 +3345,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         logInspectionTemplateDebug({ source: 'POST /api/inspections submit', body: data })
       }
       if (data.error) {
-        setSubmitError(data.error || data.details || 'Save failed')
+        handleFailedInspectionSave(res, data)
         return
       }
       const inspectionId = data.inspectionId ?? data.id
@@ -3359,6 +3390,32 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     return (
       <div>
         <p>Loading templates...</p>
+      </div>
+    )
+  }
+
+  if (formPermissionBlocked) {
+    return (
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '1.5rem' }}>
+        <Link href="/templates" style={{ color: '#0f766e', textDecoration: 'none', fontSize: 14 }}>
+          ← Back to Forms
+        </Link>
+        <div
+          style={{
+            marginTop: 16,
+            padding: '1.5rem',
+            borderRadius: 12,
+            border: '2px solid #f59e0b',
+            background: '#fffbeb',
+            color: '#92400e',
+          }}
+        >
+          <h1 style={{ margin: 0, fontSize: '1.35rem', color: '#78350f' }}>You cannot start this form yet</h1>
+          <p style={{ margin: '0.75rem 0 0', lineHeight: 1.55 }}>{formPermissionBlockedMessage}</p>
+          <p style={{ margin: '0.75rem 0 0', lineHeight: 1.55, fontWeight: 600 }}>
+            Do not fill in this inspection — it will not be saved until your role is assigned.
+          </p>
+        </div>
       </div>
     )
   }
@@ -3547,15 +3604,20 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       >
         {submitError && (
           <div
+            role="alert"
             style={{
-              padding: '0.75rem',
+              padding: '1rem 1.1rem',
               marginBottom: '1.5rem',
-              backgroundColor: '#fee2e2',
-              color: '#dc2626',
-              borderRadius: '0.375rem',
-              fontSize: '0.875rem',
+              backgroundColor: '#fef2f2',
+              color: '#991b1b',
+              border: '2px solid #dc2626',
+              borderRadius: '0.5rem',
+              fontSize: '0.9375rem',
+              lineHeight: 1.55,
+              fontWeight: 500,
             }}
           >
+            <strong style={{ display: 'block', marginBottom: 6, fontSize: '1rem' }}>Inspection not saved</strong>
             {submitError}
           </div>
         )}

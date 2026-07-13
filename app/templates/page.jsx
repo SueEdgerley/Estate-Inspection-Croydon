@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { isTemplateAdminViewer } from '@/lib/template-visibility'
 import { photobook } from '@/lib/photobook-theme'
 import { getGradePreviewChipStyle } from '@/lib/grading-button-styles'
+import { NO_FORMS_FOR_ROLE_MESSAGE } from '@/lib/inspection-permission-messages'
 
 // Match Airtable "Question Type" values that mean Yes/No/NA (e.g. "yes_no", "yes_no,photo")
 function normalizeQuestionType(v) {
@@ -109,7 +110,12 @@ export default function FormsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
-  const [viewer, setViewer] = useState({ normalizedRole: null, clerkIsAdmin: false })
+  const [viewer, setViewer] = useState({
+    normalizedRole: null,
+    clerkIsAdmin: false,
+    accessMessage: null,
+    jobTitle: null,
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -149,6 +155,8 @@ export default function FormsPage() {
         setViewer({
           normalizedRole: me?.roleUi?.normalizedRole || null,
           clerkIsAdmin: me?.clerkIsAdmin === true,
+          accessMessage: me?.roleUi?.accessMessage || null,
+          jobTitle: me?.jobTitle || me?.roleUi?.jobTitle || null,
         })
       })
       .catch((err) => {
@@ -220,10 +228,20 @@ export default function FormsPage() {
           padding: '2rem',
           borderRadius: '0.5rem',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          textAlign: 'center',
-          color: '#6b7280',
+          border: '1px solid #fde68a',
+          backgroundImage: 'linear-gradient(180deg, #fffbeb 0%, #ffffff 48%)',
+          color: '#92400e',
+          textAlign: 'left',
         }}>
-          No forms available for your account. Contact an admin if you need access.
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '1.0625rem', color: '#78350f' }}>
+            No forms available for your account
+          </p>
+          <p style={{ margin: '0.75rem 0 0', lineHeight: 1.55, color: '#92400e' }}>
+            {viewer.accessMessage || NO_FORMS_FOR_ROLE_MESSAGE}
+          </p>
+          <p style={{ margin: '0.75rem 0 0', lineHeight: 1.55, fontSize: '0.9375rem', color: '#a16207' }}>
+            Do not start filling an inspection until your role is set — otherwise your work may not be saved.
+          </p>
         </div>
       )}
 

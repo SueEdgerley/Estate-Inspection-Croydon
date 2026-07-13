@@ -56,6 +56,7 @@ import {
   resolveIssueRecipientForAction,
 } from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
+import { ROLE_CANNOT_SUBMIT_API_MESSAGE } from '@/lib/inspection-permission-messages'
 import { sendBulkRefuseWalkaboutEmail } from '@/lib/walkabout-email-notifications'
 
 export const runtime = 'nodejs'
@@ -581,7 +582,7 @@ export async function POST(request, { params }) {
         allowed: false,
       })
       return NextResponse.json(
-        { error: 'Forbidden: your role cannot submit this inspection type' },
+        { error: ROLE_CANNOT_SUBMIT_API_MESSAGE },
         { status: 403 }
       )
     }

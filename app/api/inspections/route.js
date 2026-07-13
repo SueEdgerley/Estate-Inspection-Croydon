@@ -66,6 +66,7 @@ import {
   resolveIssueRecipientForAction,
 } from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
+import { ROLE_CANNOT_USE_TEMPLATE_API_MESSAGE } from '@/lib/inspection-permission-messages'
 import {
   logBulkRefuseEmail,
   sendBulkRefuseWalkaboutEmail,
@@ -1429,7 +1430,7 @@ export async function POST(request) {
         failure_source: 'roleMayCreateInspectionWithTemplate',
       })
       return NextResponse.json(
-        { error: 'Forbidden: your role cannot use this form template' },
+        { error: ROLE_CANNOT_USE_TEMPLATE_API_MESSAGE },
         { status: 403 }
       )
     }

@@ -28,6 +28,7 @@ import {
 } from '@/lib/inspection-draft-immediate-flush'
 import { isBrowserOnline, safeFetch } from '@/lib/offline-browser'
 import { clearInspectionResumeDraft } from '@/lib/inspection-resume-draft'
+import { formatInspectionSaveFailureMessage } from '@/lib/inspection-permission-messages'
 
 /**
  * Persist a post-submit warning so it can be surfaced on the inspection page
@@ -816,8 +817,24 @@ export default function EstateWalkaboutNewInspectionForm({
       })
       setOfflineDrafts(next)
       noteDraftSaveResult(saved)
+      return id
     } catch {
       noteDraftSaveResult(false)
+      return offlineDraftId || ''
+    }
+  }
+
+  const handleFailedInspectionSave = (res, data) => {
+    const savedLocally = Boolean(saveCurrentOfflineDraft())
+    setSubmitError(
+      formatInspectionSaveFailureMessage({
+        status: res?.status,
+        serverError: data?.error || data?.details,
+        savedLocally,
+      })
+    )
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
 
@@ -910,12 +927,12 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) {
-        setSubmitError(data.error || data.details || `Request failed (${res.status})`)
+        handleFailedInspectionSave(res, data)
         return
       }
       const inspectionId = data.inspectionId ?? data.id
       if (!inspectionId) {
-        setSubmitError('Save reported success but no inspection ID was returned.')
+        setSubmitError('Save reported success but no inspection ID was returned. This inspection has not been saved.')
         return
       }
       const submitData = await submitPendingInspection(inspectionId)
@@ -1062,16 +1079,16 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setSubmitError(data?.error || data?.details || `Request failed (${res.status})`)
+        handleFailedInspectionSave(res, data)
         return
       }
       if (data.error) {
-        setSubmitError(data.error || data.details || 'Save failed')
+        handleFailedInspectionSave(res, data)
         return
       }
       const inspectionId = data.inspectionId ?? data.id
       if (!inspectionId) {
-        setSubmitError('Save reported success but no inspection ID was returned.')
+        setSubmitError('Save reported success but no inspection ID was returned. This inspection has not been saved.')
         return
       }
       const submitData = await submitPendingInspection(inspectionId)
@@ -1491,15 +1508,20 @@ export default function EstateWalkaboutNewInspectionForm({
           )}
           {submitError && (
             <div
+              role="alert"
               style={{
-                padding: 12,
+                padding: '14px 16px',
                 marginBottom: 20,
                 background: '#fef2f2',
-                color: '#b91c1c',
+                color: '#991b1b',
+                border: '2px solid #dc2626',
                 borderRadius: EW.radius,
                 fontSize: 14,
+                lineHeight: 1.55,
+                fontWeight: 500,
               }}
             >
+              <strong style={{ display: 'block', marginBottom: 6, fontSize: 15 }}>Inspection not saved</strong>
               {submitError}
             </div>
           )}
