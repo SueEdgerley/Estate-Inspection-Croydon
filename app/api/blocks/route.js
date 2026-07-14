@@ -21,7 +21,7 @@ export async function GET() {
       SELECT id, estate_id, name, postcode, active
       FROM blocks
       WHERE COALESCE(active, true) = true
-      ORDER BY name
+      ORDER BY LOWER(name), name
     `
     return NextResponse.json(
       { blocks: result.rows },

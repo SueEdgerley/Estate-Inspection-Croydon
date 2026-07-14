@@ -51,7 +51,10 @@ export default function LocationBlockSelector({
         .map((location) => ({
           id: String(location.id),
           name: String(location.name || '').trim() || String(location.id),
-        })),
+        }))
+        .sort((a, b) =>
+          a.name.localeCompare(b.name, 'en-GB', { sensitivity: 'base', numeric: true })
+        ),
     [locations]
   )
 

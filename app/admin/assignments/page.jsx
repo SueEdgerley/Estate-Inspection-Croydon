@@ -113,7 +113,14 @@ export default function AdminAssignmentsPage() {
         </select>
         <select value={form.block_id} onChange={(e) => setForm((f) => ({ ...f, block_id: e.target.value }))}>
           <option value="">No block</option>
-          {blocks.map((bl) => (
+          {[...blocks]
+            .sort((a, b) =>
+              String(a.name || '').localeCompare(String(b.name || ''), 'en-GB', {
+                sensitivity: 'base',
+                numeric: true,
+              })
+            )
+            .map((bl) => (
             <option key={bl.id} value={bl.id}>{bl.name}</option>
           ))}
         </select>

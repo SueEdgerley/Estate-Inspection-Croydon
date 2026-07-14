@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { getPgUrl } from '@/lib/db'
 import { isAdmin } from '@/lib/auth'
+import { upsertBlock } from '@/lib/blocks-repository'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,7 +25,7 @@ export async function GET() {
       SELECT b.id, b.estate_id, b.name, b.postcode, b.active, b.created_at, e.name as estate_name
       FROM blocks b
       LEFT JOIN estates e ON e.id = b.estate_id
-      ORDER BY b.active DESC, b.name
+      ORDER BY b.active DESC, LOWER(b.name), b.name
     `
     return NextResponse.json(result.rows)
   } catch (e) {
@@ -38,27 +39,17 @@ export async function POST(request) {
   if (err) return err
   try {
     const body = await request.json().catch(() => ({}))
-    const name = body.name && String(body.name).trim()
-    if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 })
-    const estateId = body.estate_id && String(body.estate_id).trim() ? String(body.estate_id).trim() : null
-    const active = body.active === false ? false : true
-    const postcode =
-      body.postcode != null && String(body.postcode).trim()
-        ? String(body.postcode).trim().slice(0, 20)
-        : null
-    const id = body.id && String(body.id).trim() ? String(body.id).trim() : `block_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
-    await sql`
-      INSERT INTO blocks (id, estate_id, name, postcode, active) VALUES (${id}, ${estateId}, ${name}, ${postcode}, ${active})
-      ON CONFLICT (id) DO UPDATE SET
-        estate_id = EXCLUDED.estate_id,
-        name = EXCLUDED.name,
-        postcode = EXCLUDED.postcode,
-        active = EXCLUDED.active,
-        updated_at = CURRENT_TIMESTAMP
-    `
-    return NextResponse.json({ id, estate_id: estateId, name, postcode, active })
+    const created = await upsertBlock({
+      name: body.name,
+      estateId: body.estate_id,
+      postcode: body.postcode,
+      active: body.active,
+      id: body.id,
+    })
+    return NextResponse.json(created)
   } catch (e) {
     console.error('Admin blocks POST:', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    const status = e?.message === 'name is required' ? 400 : 500
+    return NextResponse.json({ error: e.message }, { status })
   }
 }

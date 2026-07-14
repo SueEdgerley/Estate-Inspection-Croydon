@@ -31,7 +31,7 @@ export async function GET() {
       FROM blocks b
       LEFT JOIN estates e ON e.id = b.estate_id
       WHERE COALESCE(b.active, true) = true
-      ORDER BY COALESCE(e.name, ''), b.name
+      ORDER BY COALESCE(LOWER(e.name), ''), LOWER(b.name), b.name
     `
 
     const estates = await sql`

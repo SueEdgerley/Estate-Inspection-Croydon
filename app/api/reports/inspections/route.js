@@ -161,7 +161,7 @@ export async function GET(request) {
            FROM blocks b
            LEFT JOIN estates e ON e.id = b.estate_id
            WHERE b.active IS DISTINCT FROM FALSE
-           ORDER BY e.name NULLS LAST, b.name
+           ORDER BY LOWER(COALESCE(e.name, '')), LOWER(b.name), b.name
            LIMIT 8000`
         ),
         run(

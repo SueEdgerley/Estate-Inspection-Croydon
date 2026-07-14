@@ -82,12 +82,20 @@ export default function RepairsInspectorNewFormPage() {
       ? locations.filter((location) => location.estate_id === selectedLocation.estate_id)
       : [selectedLocation]
     const seen = new Set()
-    return sameEstate.filter((location) => {
-      const label = location.label || location.block_name || location.estate_name
-      if (!label || seen.has(label)) return false
-      seen.add(label)
-      return true
-    })
+    return sameEstate
+      .filter((location) => {
+        const label = location.label || location.block_name || location.estate_name
+        if (!label || seen.has(label)) return false
+        seen.add(label)
+        return true
+      })
+      .sort((a, b) =>
+        String(a.label || a.block_name || '').localeCompare(
+          String(b.label || b.block_name || ''),
+          'en-GB',
+          { sensitivity: 'base', numeric: true }
+        )
+      )
   }, [locations, selectedLocation])
   const inspectionDurationLabel = getInspectionDurationLabel(inspectionStartTime, inspectionEndTime)
 

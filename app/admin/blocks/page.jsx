@@ -38,7 +38,14 @@ export default function AdminBlocksPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
-      setBlocks((prev) => [...prev, data])
+      setBlocks((prev) =>
+        [...prev, data].sort((a, b) =>
+          String(a.name || '').localeCompare(String(b.name || ''), 'en-GB', {
+            sensitivity: 'base',
+            numeric: true,
+          })
+        )
+      )
       setName('')
       setEstateId('')
     } catch (e) {
