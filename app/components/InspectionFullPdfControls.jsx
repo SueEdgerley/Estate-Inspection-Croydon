@@ -4,42 +4,19 @@ import { useState } from 'react'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 
 /**
- * Inspections submitted on/after this instant already get the redesigned layout
- * on first generate. Regenerate is offered for anything submitted before then
- * (ESM, Walkabout, Caretaker — same control on all full reports).
- *
- * Cutoff: start of 14 Jul 2026 London time = end of “tonight” 13 Jul.
+ * Always offer regenerate for full inspection reports unless explicitly disabled.
+ * Needed after PDF layout/photo fixes so older saved Blob URLs can be rebuilt.
  */
-export const PDF_REGENERATE_CUTOFF_ISO = '2026-07-13T23:00:00.000Z' // 14 Jul 00:00 BST
-
-function inspectionSubmittedAtMs(inspection) {
-  if (!inspection || typeof inspection !== 'object') return NaN
-  const raw =
-    inspection.submitted_at ||
-    inspection.submittedAt ||
-    inspection.completed_at ||
-    inspection.completedAt ||
-    inspection.created_at ||
-    inspection.createdAt ||
-    ''
-  const ms = Date.parse(String(raw))
-  return Number.isFinite(ms) ? ms : NaN
-}
-
-export function shouldShowPdfRegenerate(inspection, explicitShow) {
+export function shouldShowPdfRegenerate(_inspection, explicitShow) {
   if (explicitShow === false) return false
-  if (explicitShow === true) return true
-  const submittedMs = inspectionSubmittedAtMs(inspection)
-  if (!Number.isFinite(submittedMs)) return true
-  const cutoffMs = Date.parse(PDF_REGENERATE_CUTOFF_ISO)
-  return submittedMs < cutoffMs
+  return true
 }
 
 /**
  * Full inspection report PDF: open saved Blob URL, or POST to generate/upload then open.
  * Pass `savedPdfUrl` and/or `inspection` (row with nullable full_pdf_url / pdf_url / camelCase).
- * Optional Regenerate button force-rebuilds even when a saved URL exists (e.g. after layout fixes).
- * Shown for ESM / Walkabout / Caretaker inspections submitted before PDF_REGENERATE_CUTOFF_ISO.
+ * Optional Regenerate button force-rebuilds even when a saved URL exists (e.g. after layout/photo fixes).
+ * Shown for all full reports unless `showRegenerate={false}`.
  */
 export default function InspectionFullPdfControls({
   inspectionId,
