@@ -54,10 +54,12 @@ export default function InspectionFullPdfControls({
 }) {
   const [busy, setBusy] = useState(false)
   const [regenBusy, setRegenBusy] = useState(false)
+  const [regeneratedUrl, setRegeneratedUrl] = useState('')
+  const [regenerateStatus, setRegenerateStatus] = useState(null)
   const fromProp =
     savedPdfUrl != null && String(savedPdfUrl).trim() !== '' ? String(savedPdfUrl).trim() : null
   const fromRow = inspection ? getInspectionFullReportPdfUrl(inspection) : null
-  const url = fromProp ?? fromRow ?? ''
+  const url = regeneratedUrl || fromProp || fromRow || ''
   const allowRegenerate = shouldShowPdfRegenerate(inspection, showRegenerate)
   const openInBrowser = (href, download) => {
     const a = document.createElement('a')
@@ -125,11 +127,17 @@ export default function InspectionFullPdfControls({
   const handleRegenerate = async (e) => {
     e.preventDefault()
     setRegenBusy(true)
+    setRegenerateStatus(null)
     try {
       const href = await requestPdf({ regenerate: true })
+      setRegeneratedUrl(href)
+      setRegenerateStatus({ ok: true, message: 'Report regenerated. The new PDF is ready.' })
       openInBrowser(href, false)
     } catch (err) {
-      window.alert(err?.message || 'Could not regenerate the inspection PDF.')
+      setRegenerateStatus({
+        ok: false,
+        message: err?.message || 'Could not regenerate the inspection PDF.',
+      })
     } finally {
       setRegenBusy(false)
     }
@@ -180,15 +188,34 @@ export default function InspectionFullPdfControls({
 
   const regenerateControl =
     allowRegenerate && !forceRegenerate ? (
-      <button
-        type="button"
-        title="Force-rebuild the PDF with the latest layout and open it"
-        onClick={handleRegenerate}
-        disabled={busy || regenBusy}
-        style={regenButtonStyle}
-      >
-        {regenBusy ? 'Regenerating…' : variant === 'icons' ? '↻' : 'Regenerate PDF'}
-      </button>
+      <>
+        <button
+          type="button"
+          title="Force-rebuild the PDF with the latest layout and open it"
+          onClick={handleRegenerate}
+          disabled={busy || regenBusy}
+          style={regenButtonStyle}
+        >
+          {regenBusy ? 'Regenerating…' : variant === 'icons' ? '↻' : 'Regenerate PDF'}
+        </button>
+        {regenerateStatus ? (
+          <span
+            role="status"
+            aria-live="polite"
+            title={regenerateStatus.message}
+            style={{
+              color: regenerateStatus.ok ? '#166534' : '#b91c1c',
+              fontSize: '0.75rem',
+            }}
+          >
+            {variant === 'icons'
+              ? regenerateStatus.ok
+                ? '✓'
+                : '✕'
+              : regenerateStatus.message}
+          </span>
+        ) : null}
+      </>
     ) : null
 
   if (url && !forceRegenerate) {
