@@ -1,0 +1,53 @@
+diff --git a/lib/estate-standard-inspection-template-patch.js b/lib/estate-standard-inspection-template-patch.js
+index b798589..c9b8e02 100644
+--- a/lib/estate-standard-inspection-template-patch.js
++++ b/lib/estate-standard-inspection-template-patch.js
+@@ -1,17 +1,14 @@
+ /**
+  * Estate inspection template only (`isEstateInspectionFormTemplate`).
+  *
+- * Main checklist rows ‘Â∆ `upgradeToGradedCondition` (A‘«ÙD‘«ÙNA + comment + photo), after stripping
+- * any mistaken NV scheme wording from labels. Supporting/admin/issue Y/N rows stay non-graded.
++ * Every question that can be shown as A‘«ÙD‘«ÙNA is upgraded via `upgradeToGradedCondition` (comment + photo),
++ * after stripping mistaken NV scheme wording from labels. Excluded: routing bundles and NV render rows
++ * (no graded control for those).
+  *
+  * Not applied to NV-only or non‘«Ùestate-inspection templates.
+  */
+ import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
+-import {
+-  isEstateSupportingDetailQuestion,
+-  isEstateIssueOrTriggerYesNo,
+-  stripNvGradingWordingFromQuestionCopy,
+-} from '@/lib/estate-inspection-question-rules'
++import { stripNvGradingWordingFromQuestionCopy } from '@/lib/estate-inspection-question-rules'
+ 
+ const DEFAULT_GRADING_OPTIONS = ['A', 'B', 'C', 'D', 'NA']
+ 
+@@ -71,6 +68,7 @@ function ensureGradedConditionFlags(q) {
+ 
+ function upgradeToGradedCondition(q) {
+   stripNvGradingWordingFromQuestionCopy(q)
++  delete q.standard_inspection_issue_row
+   q.question_type = 'graded'
+   q.answer_mode = 'graded'
+   q.grading_scheme_name = 'A‘«ÙD‘«ÙNA'
+@@ -94,16 +92,10 @@ function sortedQuestions(questions) {
+   return [...(questions || [])].sort((a, b) => sortOrderNum(a) - sortOrderNum(b))
+ }
+ 
+-/**
+- * Rows that stay out of the graded checklist: routing, NV widgets, explicit issue rows,
+- * supporting/admin fields, issue/trigger Y/N.
+- */
++/** Rows that cannot use the graded A‘«ÙD‘«ÙNA control (routing / NV-only widgets). */
+ function shouldPreserveNonGradedShape(q) {
+   if (!q) return true
+   if (q.caretaker_routing_bundle || q.nv_render_kind) return true
+-  if (q.standard_inspection_issue_row) return true
+-  if (isEstateSupportingDetailQuestion(q)) return true
+-  if (isEstateIssueOrTriggerYesNo(q)) return true
+   return false
+ }
+ 
+

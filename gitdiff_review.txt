@@ -1,0 +1,208 @@
+diff --git a/app/components/wizard/TextFeedbackSection.jsx b/app/components/wizard/TextFeedbackSection.jsx
+index d570bdf..72a8e0d 100644
+--- a/app/components/wizard/TextFeedbackSection.jsx
++++ b/app/components/wizard/TextFeedbackSection.jsx
+@@ -4,7 +4,8 @@ import PhotoUploadControl from '../questions/PhotoUploadControl'
+ import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+ 
+ /**
+- * Estate Feedback (Resident Insight): prompts, overall comment, optional photo ÔÇö no grading.
++ * Neighbourhood Voice estate feedback: prompt rows, overall comment, optional photo ÔÇö no grading.
++ * Question title comes from the parent (resident wording / question text), not duplicated here.
+  */
+ export default function TextFeedbackSection({
+   q,
+@@ -24,18 +25,6 @@ export default function TextFeedbackSection({
+ 
+   return (
+     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+-      <h2
+-        style={{
+-          fontSize: 18,
+-          fontWeight: 600,
+-          color: nv.text,
+-          margin: '8px 0 0',
+-          paddingTop: 16,
+-          borderTop: `3px solid ${nv.primary || '#1E3A8A'}`,
+-        }}
+-      >
+-        Estate Feedback (Resident Insight)
+-      </h2>
+       {lines.map((line, i) => (
+         <div key={i}>
+           <label htmlFor={`ef-row-${q.id}-${i}`} style={{ fontSize: nv.helperSize, fontWeight: 600, color: nv.text, display: 'block', marginBottom: 6 }}>
+diff --git a/app/inspections/[id]/wizard/page.jsx b/app/inspections/[id]/wizard/page.jsx
+index 96b1de5..8f75c32 100644
+--- a/app/inspections/[id]/wizard/page.jsx
++++ b/app/inspections/[id]/wizard/page.jsx
+@@ -10,6 +10,7 @@ import {
+   getNvQuestionStepLabel,
+   isNeighbourhoodVoiceQuestionRenderable,
+ } from '@/lib/neighbourhood-voice-template-patch'
++import { getEffectiveQuestionKind } from '@/lib/question-types'
+ import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+ 
+ // NV design system (wizard only): calm, modern, resident-friendly
+@@ -528,6 +529,8 @@ export default function InspectionWizardPage() {
+   if (currentFlatStep && currentQuestion && currentSectionForQuestion) {
+     const sec = currentSectionForQuestion
+     const q = currentQuestion
++    const hideEstateFeedbackTitleBlock = getEffectiveQuestionKind(q) === 'nv_estate_feedback'
++    const nvStepLabel = getNvQuestionStepLabel(q)
+     const value = normalizeVal(answers[q.id])
+     const isNo = value === 'No'
+     const globalStepIndex = flatSteps.findIndex((s) => s.question?.id === q.id)
+@@ -558,7 +561,7 @@ export default function InspectionWizardPage() {
+             </p>
+           </div>
+ 
+-          {getNvQuestionStepLabel(q) ? (
++          {nvStepLabel && !hideEstateFeedbackTitleBlock ? (
+             <p
+               style={{
+                 fontSize: nv.baseSize,
+@@ -568,14 +571,16 @@ export default function InspectionWizardPage() {
+                 letterSpacing: '0.02em',
+               }}
+             >
+-              {getNvQuestionStepLabel(q)}
++              {nvStepLabel}
+             </p>
+           ) : null}
+ 
+-          <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+-            <span>{getSectionIcon(sec.title)}</span>
+-            {sec.title}
+-          </h2>
++          {!hideEstateFeedbackTitleBlock && (
++            <h2 style={{ fontSize: '1rem', fontWeight: 600, color: nv.text, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
++              <span>{getSectionIcon(sec.title)}</span>
++              {sec.title}
++            </h2>
++          )}
+ 
+           {(sec.help_text || sec.what_to_look_for) && (
+             <details style={{ marginBottom: 16 }}>
+@@ -605,7 +610,11 @@ export default function InspectionWizardPage() {
+                 {q.category || q.action_category}
+               </span>
+             )}
+-            <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>{q.resident_wording || q.question_text}</p>
++            {!hideEstateFeedbackTitleBlock && (
++              <p style={{ fontSize: nv.questionSize, fontWeight: 500, color: nv.text, marginBottom: nv.spaceQuestionAnswers }}>
++                {q.resident_wording || q.question_text}
++              </p>
++            )}
+             {q.helper_text && <p style={{ fontSize: nv.helperSize, color: nv.helperColor, marginBottom: 16 }}>{q.helper_text}</p>}
+ 
+             <WizardQuestionFields
+diff --git a/app/inspections/new/NewInspectionForm.jsx b/app/inspections/new/NewInspectionForm.jsx
+index de22edc..fea4777 100644
+--- a/app/inspections/new/NewInspectionForm.jsx
++++ b/app/inspections/new/NewInspectionForm.jsx
+@@ -10,6 +10,7 @@ import {
+   NV_Q24_AIRTABLE_ROWS_188_192,
+   applyNeighbourhoodVoicePatchesToList,
+   getNvQuestionStepLabel,
++  isEstateFeedbackSection,
+   isNeighbourhoodVoiceQuestionRenderable,
+ } from '@/lib/neighbourhood-voice-template-patch'
+ import { NV_TEXT_INPUT_SURFACE, NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
+@@ -1343,9 +1344,11 @@ export default function NewInspectionForm({ initialEstates = [], initialBlocks =
+                   borderBottom: '1px solid #e5e7eb',
+                 }}
+               >
+-                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
+-                  {section.title}
+-                </h3>
++                {!(isNVTemplate(selectedTemplate) && isEstateFeedbackSection(section)) && (
++                  <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
++                    {section.title}
++                  </h3>
++                )}
+                 {section.help_text && (
+                   <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
+                 )}
+diff --git a/lib/estate-inspection-question-rules.js b/lib/estate-inspection-question-rules.js
+index b0c91bb..191e1b6 100644
+--- a/lib/estate-inspection-question-rules.js
++++ b/lib/estate-inspection-question-rules.js
+@@ -1,9 +1,8 @@
+ /**
+- * Rules for which Airtable rows are "main" graded checklist lines vs supporting/admin fields
+- * on the Estate Inspection form only (used by `applyEstateStandardInspectionGradingPatch`).
+- *
+- * Main graded: default for checklist items.
+- * Supporting: admin/detail follow-ups (not forced to AÔÇôDÔÇôNA).
++ * Helpers for estate inspection question copy and heuristics.
++ * `stripNvGradingWordingFromQuestionCopy` is used by `applyEstateStandardInspectionGradingPatch`.
++ * `isEstateSupportingDetailQuestion` / `isEstateIssueOrTriggerYesNo` are kept for callers or tests;
++ * the estate grading patch now upgrades all convertible rows to graded (except routing / NV widgets).
+  */
+ 
+ const NV_GRADING_TITLE_RE = /\s*[\(\[]?\s*Croydon\s+NV\s+Grading[^\)\]]*[\)\]]?\s*/gi
+diff --git a/lib/estate-standard-inspection-template-patch.js b/lib/estate-standard-inspection-template-patch.js
+index b798589..c9b8e02 100644
+--- a/lib/estate-standard-inspection-template-patch.js
++++ b/lib/estate-standard-inspection-template-patch.js
+@@ -1,17 +1,14 @@
+ /**
+  * Estate inspection template only (`isEstateInspectionFormTemplate`).
+  *
+- * Main checklist rows ÔåÆ `upgradeToGradedCondition` (AÔÇôDÔÇôNA + comment + photo), after stripping
+- * any mistaken NV scheme wording from labels. Supporting/admin/issue Y/N rows stay non-graded.
++ * Every question that can be shown as AÔÇôDÔÇôNA is upgraded via `upgradeToGradedCondition` (comment + photo),
++ * after stripping mistaken NV scheme wording from labels. Excluded: routing bundles and NV render rows
++ * (no graded control for those).
+  *
+  * Not applied to NV-only or nonÔÇôestate-inspection templates.
+  */
+ import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
+-import {
+-  isEstateSupportingDetailQuestion,
+-  isEstateIssueOrTriggerYesNo,
+-  stripNvGradingWordingFromQuestionCopy,
+-} from '@/lib/estate-inspection-question-rules'
++import { stripNvGradingWordingFromQuestionCopy } from '@/lib/estate-inspection-question-rules'
+ 
+ const DEFAULT_GRADING_OPTIONS = ['A', 'B', 'C', 'D', 'NA']
+ 
+@@ -71,6 +68,7 @@ function ensureGradedConditionFlags(q) {
+ 
+ function upgradeToGradedCondition(q) {
+   stripNvGradingWordingFromQuestionCopy(q)
++  delete q.standard_inspection_issue_row
+   q.question_type = 'graded'
+   q.answer_mode = 'graded'
+   q.grading_scheme_name = 'AÔÇôDÔÇôNA'
+@@ -94,16 +92,10 @@ function sortedQuestions(questions) {
+   return [...(questions || [])].sort((a, b) => sortOrderNum(a) - sortOrderNum(b))
+ }
+ 
+-/**
+- * Rows that stay out of the graded checklist: routing, NV widgets, explicit issue rows,
+- * supporting/admin fields, issue/trigger Y/N.
+- */
++/** Rows that cannot use the graded AÔÇôDÔÇôNA control (routing / NV-only widgets). */
+ function shouldPreserveNonGradedShape(q) {
+   if (!q) return true
+   if (q.caretaker_routing_bundle || q.nv_render_kind) return true
+-  if (q.standard_inspection_issue_row) return true
+-  if (isEstateSupportingDetailQuestion(q)) return true
+-  if (isEstateIssueOrTriggerYesNo(q)) return true
+   return false
+ }
+ 
+diff --git a/lib/neighbourhood-voice-template-patch.js b/lib/neighbourhood-voice-template-patch.js
+index f8dec6c..e7138b8 100644
+--- a/lib/neighbourhood-voice-template-patch.js
++++ b/lib/neighbourhood-voice-template-patch.js
+@@ -310,7 +310,7 @@ function isIssuesToReportSection(sec) {
+ }
+ 
+ /** Dedicated estate / resident insight block (not generic ÔÇ£estateÔÇØ inspection wording). */
+-function isEstateFeedbackSection(sec) {
++export function isEstateFeedbackSection(sec) {
+   const t = `${sec.title || ''} ${sec.name || ''}`.toLowerCase()
+   if (t.includes('resident insight')) return true
+   if (t.includes('estate feedback')) return true

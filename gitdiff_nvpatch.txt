@@ -1,0 +1,14 @@
+diff --git a/lib/neighbourhood-voice-template-patch.js b/lib/neighbourhood-voice-template-patch.js
+index f8dec6c..e7138b8 100644
+--- a/lib/neighbourhood-voice-template-patch.js
++++ b/lib/neighbourhood-voice-template-patch.js
+@@ -310,7 +310,7 @@ function isIssuesToReportSection(sec) {
+ }
+ 
+ /** Dedicated estate / resident insight block (not generic ‘«£estate‘«ÿ inspection wording). */
+-function isEstateFeedbackSection(sec) {
++export function isEstateFeedbackSection(sec) {
+   const t = `${sec.title || ''} ${sec.name || ''}`.toLowerCase()
+   if (t.includes('resident insight')) return true
+   if (t.includes('estate feedback')) return true
+
