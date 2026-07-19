@@ -11,6 +11,7 @@ import {
   NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
   getNvQuestionStepLabel,
+  isEstateFeedbackSection,
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
 import { NV_TEXTAREA_SURFACE } from '@/lib/nv-resident-field-surfaces'
@@ -2169,6 +2170,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const caretakerSectionRefs = useRef({})
   const caretakerQuestionRefs = useRef({})
   const submitCompletedRef = useRef(false)
+  const [caretakerMobileStep, setCaretakerMobileStep] = useState(0)
+  const caretakerQuestionCardRef = useRef(null)
   const selectedBlockName = useMemo(() => {
     if (!postgresBlockId) return ''
     const block = locationBlocks.find((b) => String(b?.id) === String(postgresBlockId))
@@ -3061,6 +3064,52 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         : null,
     [selectedTemplate]
   )
+  const mobileCaretakerGuided =
+    !!selectedTemplate &&
+    isMobile &&
+    isCaretakerTemplate(selectedTemplate) &&
+    !estateInspectionForm &&
+    !isNVTemplate(selectedTemplate)
+  const caretakerMobileSteps = useMemo(() => {
+    if (!mobileCaretakerGuided) return []
+    const steps = []
+    for (const section of selectedTemplate.sections || []) {
+      let caretakerRowIdx = 0
+      for (const question of section.questions || []) {
+        if (question.nv_hidden) continue
+        if (!isNeighbourhoodVoiceQuestionRenderable(question)) continue
+        if (!shouldShowQuestion(question, answers)) continue
+        steps.push({
+          section,
+          question,
+          label: caretakerRowDisplayLabel(indexToCaretakerRowLetter(caretakerRowIdx++), question),
+        })
+      }
+    }
+    return steps
+  }, [mobileCaretakerGuided, selectedTemplate, answers])
+  const currentCaretakerMobileStep = caretakerMobileSteps[caretakerMobileStep] || null
+  const showMobileCaretakerGuided = mobileCaretakerGuided && caretakerMobileSteps.length > 0
+  const isLastCaretakerMobileStep =
+    caretakerMobileSteps.length > 0 && caretakerMobileStep === caretakerMobileSteps.length - 1
+
+  useEffect(() => {
+    setCaretakerMobileStep(0)
+  }, [templateId])
+
+  useEffect(() => {
+    if (caretakerMobileStep >= caretakerMobileSteps.length && caretakerMobileSteps.length > 0) {
+      setCaretakerMobileStep(caretakerMobileSteps.length - 1)
+    }
+  }, [caretakerMobileStep, caretakerMobileSteps.length])
+
+  const moveCaretakerMobileStep = (nextStep) => {
+    const clamped = Math.max(0, Math.min(nextStep, caretakerMobileSteps.length - 1))
+    setCaretakerMobileStep(clamped)
+    window.requestAnimationFrame(() => {
+      caretakerQuestionCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   const handleAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
@@ -3305,7 +3354,15 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       return
     }
     const errs = validate()
-    if (Object.keys(errs).length > 0) return
+    if (Object.keys(errs).length > 0) {
+      if (showMobileCaretakerGuided) {
+        const firstInvalidStep = caretakerMobileSteps.findIndex(({ question }) =>
+          Object.keys(errs).some((key) => key === question.id || key.startsWith(`${question.id}_`))
+        )
+        if (firstInvalidStep >= 0) moveCaretakerMobileStep(firstInvalidStep)
+      }
+      return
+    }
 
     setIsSubmitting(true)
     try {
@@ -3883,223 +3940,327 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         ) : null}
 
         {selectedTemplate && inspectionRenderSections.length > 0 && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
-              Sections &amp; questions
-            </h2>
-            {isCaretakerForm &&
-            caretakerInspectionMode === CARETAKER_INSPECTION_MODE_SPECIFIC &&
-            !caretakerSpecificSectionId ? (
-              <p style={{ margin: '0 0 1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                Choose a section above to show the questions for today&apos;s task.
-              </p>
-            ) : null}
-            {estateInspectionForm ? (
-              <div style={{ margin: '-0.5rem 0 1rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowEstateFormGuidance((v) => !v)}
-                  style={{
-                    padding: '0.25rem 0.65rem',
-                    fontSize: '0.8125rem',
-                    fontWeight: 600,
-                    color: '#2563eb',
-                    background: '#fff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {showEstateFormGuidance ? 'Hide guidance' : 'View guidance'}
-                </button>
-                {showEstateFormGuidance ? (
-                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
-                    Sections follow your inspection template (order and titles). Grading is A–D–NA. Photo upload appears when
-                    the template is set to require or allow a photo for that question.
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-            {(isNVTemplate(selectedTemplate)
-              ? inspectionRenderSections.filter((s) => s.id !== 'nv-sec-remaining')
-              : isCaretakerForm
-                ? caretakerSectionsToRender
-                : inspectionRenderSections
-            ).map((section, sectionIdx) => (
-              <div
-                key={section.id}
-                ref={(el) => {
-                  if (isCaretakerForm) caretakerSectionRefs.current[section.id] = el
-                }}
-                id={isCaretakerForm ? `caretaker-section-${section.id}` : undefined}
-                style={{
-                  marginBottom: mobileStackedInspectionForm ? '1rem' : '2rem',
-                  padding: mobileStackedInspectionForm ? '1rem' : '0 0 1.5rem',
-                  border: mobileStackedInspectionForm ? '1px solid #e5e7eb' : 'none',
-                  borderBottom: mobileStackedInspectionForm ? '1px solid #e5e7eb' : '1px solid #e5e7eb',
-                  borderRadius: mobileStackedInspectionForm ? '0.75rem' : 0,
-                  backgroundColor: mobileStackedInspectionForm ? '#fff' : 'transparent',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
-                  {estateInspectionForm || esmInspectionForm ? (
-                    <>
-                      <span
-                        style={{
-                          fontWeight: 700,
-                          color: '#111827',
-                          marginRight: '0.35rem',
-                          fontVariantNumeric: 'tabular-nums',
-                        }}
-                      >
-                        {estateAirtableSectionDisplayNumber(section, sectionIdx + 1)}.
-                      </span>
-                      {stripLeadingOrderedNumber(section.title || section.name) || 'Section'}
-                    </>
-                  ) : (
-                    section.title
-                  )}
-                </h3>
-                {(estateInspectionForm || esmInspectionForm) && (section.what_to_look_for || section.help_text) ? (
+          showMobileCaretakerGuided && currentCaretakerMobileStep ? (
+            <div ref={caretakerQuestionCardRef} style={{ marginBottom: '1.5rem', scrollMarginTop: 12 }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8, fontSize: '0.8125rem', color: '#6b7280' }}>
+                  <span style={{ fontWeight: 600, color: '#111827' }}>
+                    Question {caretakerMobileStep + 1} of {caretakerMobileSteps.length}
+                  </span>
+                  <span>{Math.round(((caretakerMobileStep + 1) / caretakerMobileSteps.length) * 100)}%</span>
+                </div>
+                <div style={{ height: 6, overflow: 'hidden', borderRadius: 999, backgroundColor: '#e5e7eb' }}>
                   <div
                     style={{
-                      marginBottom: '1rem',
-                      padding: '0.75rem 1rem',
-                      backgroundColor: '#f9fafb',
-                      borderRadius: '0.375rem',
-                      border: '1px solid #e5e7eb',
-                      fontSize: '0.875rem',
-                      color: '#4b5563',
-                      lineHeight: 1.55,
+                      width: `${((caretakerMobileStep + 1) / caretakerMobileSteps.length) * 100}%`,
+                      height: '100%',
+                      borderRadius: 999,
+                      backgroundColor: '#2563eb',
+                      transition: 'width 150ms ease',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <section
+                style={{
+                  padding: '1rem',
+                  border: '1px solid #dbeafe',
+                  borderRadius: '0.75rem',
+                  backgroundColor: '#fff',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                }}
+              >
+                <p style={{ margin: '0 0 0.75rem', color: '#1d4ed8', fontSize: '0.8125rem', fontWeight: 600 }}>
+                  {currentCaretakerMobileStep.section.title}
+                </p>
+                {currentCaretakerMobileStep.section.help_text && (
+                  <details style={{ marginBottom: '0.75rem' }}>
+                    <summary style={{ color: '#6b7280', cursor: 'pointer', fontSize: '0.8125rem' }}>
+                      Guidance
+                    </summary>
+                    <p style={{ margin: '0.5rem 0 0', color: '#6b7280', fontSize: '0.8125rem' }}>
+                      {currentCaretakerMobileStep.section.help_text}
+                    </p>
+                  </details>
+                )}
+                <InspectionQuestion
+                  key={currentCaretakerMobileStep.question.id}
+                  question={currentCaretakerMobileStep.question}
+                  value={answers[currentCaretakerMobileStep.question.id]}
+                  onChange={handleAnswer}
+                  error={validationErrors[currentCaretakerMobileStep.question.id]}
+                  errorComment={validationErrors[`${currentCaretakerMobileStep.question.id}_comment`]}
+                  errorPhotos={validationErrors[`${currentCaretakerMobileStep.question.id}_photos`]}
+                  answerExtras={answerExtras[currentCaretakerMobileStep.question.id]}
+                  onAnswerExtras={(questionId, extras) =>
+                    setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))
+                  }
+                  createActionOnNo={currentCaretakerMobileStep.question.create_action_on_no}
+                  isNvTemplate={false}
+                  expandedByQuestionId={expandedByQuestionId}
+                  peopleOptions={peopleOptions}
+                  standardInspectionForm={usesStandardInspectionFormUI(selectedTemplate)}
+                  isEstateInspectionForm={false}
+                  caretakerPartLabel={currentCaretakerMobileStep.label}
+                />
+              </section>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => moveCaretakerMobileStep(caretakerMobileStep - 1)}
+                  disabled={caretakerMobileStep === 0}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.5rem',
+                    backgroundColor: caretakerMobileStep === 0 ? '#f3f4f6' : '#fff',
+                    color: caretakerMobileStep === 0 ? '#9ca3af' : '#374151',
+                    fontWeight: 600,
+                  }}
+                >
+                  Back
+                </button>
+                {!isLastCaretakerMobileStep && (
+                  <button
+                    type="button"
+                    onClick={() => moveCaretakerMobileStep(caretakerMobileStep + 1)}
+                    style={{
+                      flex: 1,
+                      minHeight: 48,
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      backgroundColor: '#2563eb',
+                      color: '#fff',
+                      fontWeight: 600,
                     }}
                   >
-                    {section.what_to_look_for ? (
-                      <>
-                        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#374151' }}>What to look for</p>
-                        <p style={{ margin: '0 0 0.75rem', whiteSpace: 'pre-wrap' }}>{section.what_to_look_for}</p>
-                      </>
-                    ) : null}
-                    {section.help_text && section.help_text !== section.what_to_look_for ? (
-                      <>
-                        <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#374151' }}>
-                          {section.what_to_look_for ? 'Additional help' : 'Help'}
-                        </p>
-                        <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{section.help_text}</p>
-                      </>
-                    ) : null}
-                  </div>
-                ) : (
-                  section.help_text && (
-                    <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
-                  )
+                    Next
+                  </button>
                 )}
-                {(() => {
-                  let caretakerRowIdx = 0
-                  let estateSectionSeq = 0
-                  const useEstateListLayout = estateInspectionForm || esmInspectionForm
-                  const seenEsmIssueQuestionKeys = new Set()
-                  const rows = (section.questions || []).filter((q, idx) => {
-                    const hidden = q.nv_hidden || q.esm_hidden
-                    const isDupFollowUp = esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)
-                    const isDupIssue = esmInspectionForm && isEsmDuplicateIssueQuestion(q, section, seenEsmIssueQuestionKeys)
-                    if (hidden || isDupFollowUp || isDupIssue) {
-                      return false
-                    }
-                    if (useEstateListLayout) return true
-                    if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
-                    return shouldShowQuestion(q, answers)
-                  })
-                  const items = rows.map((q) => {
-                    estateSectionSeq += 1
-                    const estateDisplayNumber = useEstateListLayout
-                      ? estateAirtableQuestionDisplayNumber(q, estateSectionSeq)
-                      : null
-                    const caretakerPartLabel =
-                      isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate)
-                        ? caretakerRowDisplayLabel(indexToCaretakerRowLetter(caretakerRowIdx++), q)
-                        : null
-                    const qProps = {
-                      question: q,
-                      value: answers[q.id],
-                      onChange: handleAnswer,
-                      error: validationErrors[q.id],
-                      errorComment: validationErrors[`${q.id}_comment`],
-                      errorPhotos: validationErrors[`${q.id}_photos`],
-                      errorRecipient: validationErrors[`${q.id}_recipient`],
-                      errorAuthorisation: validationErrors[`${q.id}_authorisation`],
-                      errorAuthorisationName: validationErrors[`${q.id}_authorisation_name`],
-                      errorCostCode: validationErrors[`${q.id}_cost_code`],
-                      answerExtras: answerExtras[q.id],
-                      onAnswerExtras: (questionId, updates) =>
-                        setAnswerExtras((prev) => ({
-                          ...prev,
-                          [questionId]: mergeInspectionAnswerExtras(prev[questionId], updates),
-                        })),
-                      createActionOnNo: q.create_action_on_no,
-                      isNvTemplate: isNVTemplate(selectedTemplate),
-                      expandedByQuestionId,
-                      peopleOptions,
-                      standardInspectionForm: usesStandardInspectionFormUI(selectedTemplate),
-                      caretakerPartLabel,
-                      caretakerTemplate: isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate),
-                      estateInspectionForm,
-                      esmInspectionForm,
-                      estateChecklistIndex: estateChecklistIndexByQid.get(q.id),
-                      estateDisplayNumber,
-                      mobileStackedForm: mobileStackedInspectionForm,
-                      lightCommentTextarea: lightCommentTextareaForTemplate,
-                      section,
-                      onPhotoUploadStatusChange: handlePhotoUploadStatusChange,
-                      onPendingLocalPhotoDraftSaved: flushDraftAfterLocalPhoto,
-                    }
-                    const questionWrapProps =
-                      isCaretakerForm && !isNVTemplate(selectedTemplate)
-                        ? {
-                            ref: (el) => {
-                              caretakerQuestionRefs.current[q.id] = el
-                            },
-                            id: `caretaker-question-${q.id}`,
-                          }
-                        : {}
-                    return useEstateListLayout ? (
-                      <li
-                        key={q.id}
-                        {...questionWrapProps}
-                        style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}
-                      >
-                        <InspectionQuestion {...qProps} />
-                      </li>
-                    ) : (
-                      <div key={q.id} {...questionWrapProps}>
-                        <InspectionQuestion {...qProps} />
-                      </div>
-                    )
-                  })
-                  if (estateInspectionForm || esmInspectionForm) {
-                    return (
-                      <ol
-                        style={{
-                          listStyle: 'none',
-                          margin: 0,
-                          padding: 0,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.25rem',
-                        }}
-                      >
-                        {items}
-                      </ol>
-                    )
-                  }
-                  return <>{items}</>
-                })()}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111827' }}>
+                Sections &amp; questions
+              </h2>
+              {isCaretakerForm &&
+              caretakerInspectionMode === CARETAKER_INSPECTION_MODE_SPECIFIC &&
+              !caretakerSpecificSectionId ? (
+                <p style={{ margin: '0 0 1rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                  Choose a section above to show the questions for today&apos;s task.
+                </p>
+              ) : null}
+              {estateInspectionForm ? (
+                <div style={{ margin: '-0.5rem 0 1rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEstateFormGuidance((v) => !v)}
+                    style={{
+                      padding: '0.25rem 0.65rem',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      color: '#2563eb',
+                      background: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {showEstateFormGuidance ? 'Hide guidance' : 'View guidance'}
+                  </button>
+                  {showEstateFormGuidance ? (
+                    <p style={{ margin: '0.5rem 0 0', fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.5 }}>
+                      Sections follow your inspection template (order and titles). Grading is A–D–NA. Photo upload appears when
+                      the template is set to require or allow a photo for that question.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {(isNVTemplate(selectedTemplate)
+                ? inspectionRenderSections.filter((s) => s.id !== 'nv-sec-remaining')
+                : isCaretakerForm
+                  ? caretakerSectionsToRender
+                  : inspectionRenderSections
+              ).map((section, sectionIdx) => (
+                <div
+                  key={section.id}
+                  ref={(el) => {
+                    if (isCaretakerForm) caretakerSectionRefs.current[section.id] = el
+                  }}
+                  id={isCaretakerForm ? `caretaker-section-${section.id}` : undefined}
+                  style={{
+                    marginBottom: mobileStackedInspectionForm ? '1rem' : '2rem',
+                    padding: mobileStackedInspectionForm ? '1rem' : '0 0 1.5rem',
+                    border: mobileStackedInspectionForm ? '1px solid #e5e7eb' : 'none',
+                    borderBottom: mobileStackedInspectionForm ? '1px solid #e5e7eb' : '1px solid #e5e7eb',
+                    borderRadius: mobileStackedInspectionForm ? '0.75rem' : 0,
+                    backgroundColor: mobileStackedInspectionForm ? '#fff' : 'transparent',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <h3 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.5rem', color: '#374151' }}>
+                    {estateInspectionForm || esmInspectionForm ? (
+                      <>
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            color: '#111827',
+                            marginRight: '0.35rem',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {estateAirtableSectionDisplayNumber(section, sectionIdx + 1)}.
+                        </span>
+                        {stripLeadingOrderedNumber(section.title || section.name) || 'Section'}
+                      </>
+                    ) : (
+                      section.title
+                    )}
+                  </h3>
+                  {(estateInspectionForm || esmInspectionForm) && (section.what_to_look_for || section.help_text) ? (
+                    <div
+                      style={{
+                        marginBottom: '1rem',
+                        padding: '0.75rem 1rem',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '0.375rem',
+                        border: '1px solid #e5e7eb',
+                        fontSize: '0.875rem',
+                        color: '#4b5563',
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {section.what_to_look_for ? (
+                        <>
+                          <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#374151' }}>What to look for</p>
+                          <p style={{ margin: '0 0 0.75rem', whiteSpace: 'pre-wrap' }}>{section.what_to_look_for}</p>
+                        </>
+                      ) : null}
+                      {section.help_text && section.help_text !== section.what_to_look_for ? (
+                        <>
+                          <p style={{ margin: '0 0 0.35rem', fontWeight: 600, color: '#374151' }}>
+                            {section.what_to_look_for ? 'Additional help' : 'Help'}
+                          </p>
+                          <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{section.help_text}</p>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : (
+                    section.help_text && (
+                      <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>{section.help_text}</p>
+                    )
+                  )}
+                  {(() => {
+                    let caretakerRowIdx = 0
+                    let estateSectionSeq = 0
+                    const useEstateListLayout = estateInspectionForm || esmInspectionForm
+                    const seenEsmIssueQuestionKeys = new Set()
+                    const rows = (section.questions || []).filter((q, idx) => {
+                      const hidden = q.nv_hidden || q.esm_hidden
+                      const isDupFollowUp = esmInspectionForm && isEsmDuplicateFollowUpRow(q, section)
+                      const isDupIssue = esmInspectionForm && isEsmDuplicateIssueQuestion(q, section, seenEsmIssueQuestionKeys)
+                      if (hidden || isDupFollowUp || isDupIssue) {
+                        return false
+                      }
+                      if (useEstateListLayout) return true
+                      if (!isNeighbourhoodVoiceQuestionRenderable(q)) return false
+                      return shouldShowQuestion(q, answers)
+                    })
+                    const items = rows.map((q) => {
+                      estateSectionSeq += 1
+                      const estateDisplayNumber = useEstateListLayout
+                        ? estateAirtableQuestionDisplayNumber(q, estateSectionSeq)
+                        : null
+                      const caretakerPartLabel =
+                        isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate)
+                          ? caretakerRowDisplayLabel(indexToCaretakerRowLetter(caretakerRowIdx++), q)
+                          : null
+                      const qProps = {
+                        question: q,
+                        value: answers[q.id],
+                        onChange: handleAnswer,
+                        error: validationErrors[q.id],
+                        errorComment: validationErrors[`${q.id}_comment`],
+                        errorPhotos: validationErrors[`${q.id}_photos`],
+                        errorRecipient: validationErrors[`${q.id}_recipient`],
+                        errorAuthorisation: validationErrors[`${q.id}_authorisation`],
+                        errorAuthorisationName: validationErrors[`${q.id}_authorisation_name`],
+                        errorCostCode: validationErrors[`${q.id}_cost_code`],
+                        answerExtras: answerExtras[q.id],
+                        onAnswerExtras: (questionId, updates) =>
+                          setAnswerExtras((prev) => ({
+                            ...prev,
+                            [questionId]: mergeInspectionAnswerExtras(prev[questionId], updates),
+                          })),
+                        createActionOnNo: q.create_action_on_no,
+                        isNvTemplate: isNVTemplate(selectedTemplate),
+                        expandedByQuestionId,
+                        peopleOptions,
+                        standardInspectionForm: usesStandardInspectionFormUI(selectedTemplate),
+                        caretakerPartLabel,
+                        caretakerTemplate: isCaretakerTemplate(selectedTemplate) && !isNVTemplate(selectedTemplate),
+                        estateInspectionForm,
+                        esmInspectionForm,
+                        estateChecklistIndex: estateChecklistIndexByQid.get(q.id),
+                        estateDisplayNumber,
+                        mobileStackedForm: mobileStackedInspectionForm,
+                        lightCommentTextarea: lightCommentTextareaForTemplate,
+                        section,
+                        onPhotoUploadStatusChange: handlePhotoUploadStatusChange,
+                        onPendingLocalPhotoDraftSaved: flushDraftAfterLocalPhoto,
+                      }
+                      const questionWrapProps =
+                        isCaretakerForm && !isNVTemplate(selectedTemplate)
+                          ? {
+                              ref: (el) => {
+                                caretakerQuestionRefs.current[q.id] = el
+                              },
+                              id: `caretaker-question-${q.id}`,
+                            }
+                          : {}
+                      return useEstateListLayout ? (
+                        <li
+                          key={q.id}
+                          {...questionWrapProps}
+                          style={{ margin: 0, padding: mobileStackedInspectionForm ? '0.75rem 0' : 0, listStyle: 'none' }}
+                        >
+                          <InspectionQuestion {...qProps} />
+                        </li>
+                      ) : (
+                        <div key={q.id} {...questionWrapProps}>
+                          <InspectionQuestion {...qProps} />
+                        </div>
+                      )
+                    })
+                    if (estateInspectionForm || esmInspectionForm) {
+                      return (
+                        <ol
+                          style={{
+                            listStyle: 'none',
+                            margin: 0,
+                            padding: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          {items}
+                        </ol>
+                      )
+                    }
+                    return <>{items}</>
+                  })()}
+                </div>
+              ))}
+            </div>
+          )
         )}
 
-        {!isNVTemplate(selectedTemplate) && (
+        {!isNVTemplate(selectedTemplate) && (!showMobileCaretakerGuided || isLastCaretakerMobileStep) && (
           <div style={{ marginBottom: '1.5rem' }}>
             <label
               htmlFor="description"
@@ -4129,6 +4290,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           </div>
         )}
 
+        {(!showMobileCaretakerGuided || isLastCaretakerMobileStep) && (
         <div
           style={{
             display: 'flex',
@@ -4177,6 +4339,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             {isSubmitting ? 'Submitting...' : hasActivePhotoUploads ? 'Waiting for photos...' : 'Submit Inspection'}
           </button>
         </div>
+        )}
       </form>
       {showBestPracticeGuide && (
         <BestPracticeGuideButton

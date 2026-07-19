@@ -10,6 +10,7 @@ import {
   getNvQuestionStepLabel,
   isNeighbourhoodVoiceQuestionRenderable,
 } from '@/lib/neighbourhood-voice-template-patch'
+import { getEffectiveQuestionKind } from '@/lib/question-types'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { applyTemplateDisplayPatches } from '@/lib/caretaker-fire-template-patch'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
@@ -607,6 +608,8 @@ export default function InspectionWizardPage() {
   if (currentFlatStep && currentQuestion && currentSectionForQuestion) {
     const sec = currentSectionForQuestion
     const q = currentQuestion
+    const hideEstateFeedbackTitleBlock = getEffectiveQuestionKind(q) === 'nv_estate_feedback'
+    const nvStepLabel = getNvQuestionStepLabel(q)
     const value = normalizeVal(answers[q.id])
     const isNo = value === 'No'
     const globalStepIndex = flatSteps.findIndex((s) => s.question?.id === q.id)
@@ -638,7 +641,7 @@ export default function InspectionWizardPage() {
             </p>
           </div>
 
-          {getNvQuestionStepLabel(q) ? (
+          {nvStepLabel && !hideEstateFeedbackTitleBlock ? (
             <p
               style={{
                 fontSize: '0.8125rem',
@@ -648,21 +651,23 @@ export default function InspectionWizardPage() {
                 letterSpacing: '0.02em',
               }}
             >
-              {getNvQuestionStepLabel(q)}
+              {nvStepLabel}
             </p>
           ) : null}
 
-          <h2
-            style={{
-              ...inspectionSectionHeadingStyle,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <span>{getSectionIcon(sec.title)}</span>
-            {sec.title}
-          </h2>
+          {!hideEstateFeedbackTitleBlock && (
+            <h2
+              style={{
+                ...inspectionSectionHeadingStyle,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span>{getSectionIcon(sec.title)}</span>
+              {sec.title}
+            </h2>
+          )}
 
           {(sec.help_text || sec.what_to_look_for) && (
             <div style={{ ...inspectionSectionGuidanceBoxStyle, marginBottom: 16 }}>
@@ -715,20 +720,18 @@ export default function InspectionWizardPage() {
                 {q.category || q.action_category}
               </span>
             )}
-            {q.nv_render_kind !== 'nv_plain_textarea' ? (
-              <>
-                <p
-                  style={{
-                    ...inspectionQuestionTitleStyle,
-                    marginBottom: nv.spaceQuestionAnswers,
-                  }}
-                >
-                  {q.resident_wording || q.question_text}
-                </p>
-                {q.helper_text ? (
-                  <p style={{ ...inspectionHelperParagraphStyle, marginBottom: 16 }}>{q.helper_text}</p>
-                ) : null}
-              </>
+            {q.nv_render_kind !== 'nv_plain_textarea' && !hideEstateFeedbackTitleBlock ? (
+              <p
+                style={{
+                  ...inspectionQuestionTitleStyle,
+                  marginBottom: nv.spaceQuestionAnswers,
+                }}
+              >
+                {q.resident_wording || q.question_text}
+              </p>
+            ) : null}
+            {q.helper_text ? (
+              <p style={{ ...inspectionHelperParagraphStyle, marginBottom: 16 }}>{q.helper_text}</p>
             ) : null}
 
             <WizardQuestionFields
