@@ -749,7 +749,7 @@ export async function POST(request, { params }) {
               const dbPhotoUrls = photosResult.rows.map((p) => p.blob_url).filter(Boolean)
               const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
-              if (!shouldAutocreateCaretakerAction(q, val, sec)) continue
+              if (!extras.raiseIssue && !shouldAutocreateCaretakerAction(q, val, sec)) continue
               const category = safeActionText(q.action_category || q.category, 'other', 50)
               const existing = await sql`
                 SELECT id FROM actions

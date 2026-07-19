@@ -4025,8 +4025,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   errorComment={validationErrors[`${currentCaretakerMobileStep.question.id}_comment`]}
                   errorPhotos={validationErrors[`${currentCaretakerMobileStep.question.id}_photos`]}
                   answerExtras={answerExtras[currentCaretakerMobileStep.question.id]}
-                  onAnswerExtras={(questionId, extras) =>
-                    setAnswerExtras((prev) => ({ ...prev, [questionId]: extras }))
+                  onAnswerExtras={(questionId, updates) =>
+                    setAnswerExtras((prev) => ({
+                      ...prev,
+                      [questionId]: mergeInspectionAnswerExtras(prev[questionId], updates),
+                    }))
                   }
                   createActionOnNo={currentCaretakerMobileStep.question.create_action_on_no}
                   isNvTemplate={false}
@@ -4036,6 +4039,52 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                   isEstateInspectionForm={false}
                   caretakerPartLabel={currentCaretakerMobileStep.label}
                 />
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: '0.75rem',
+                    marginTop: '0.75rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid #e5e7eb',
+                  }}
+                >
+                  {answerExtras[currentCaretakerMobileStep.question.id]?.raise_issue ? (
+                    <span style={{ fontSize: '0.8125rem', color: '#166534', fontWeight: 600 }}>
+                      Issue will be added
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const questionId = currentCaretakerMobileStep.question.id
+                      setAnswerExtras((prev) => ({
+                        ...prev,
+                        [questionId]: mergeInspectionAnswerExtras(prev[questionId], {
+                          raise_issue: !prev[questionId]?.raise_issue,
+                        }),
+                      }))
+                    }}
+                    aria-pressed={Boolean(answerExtras[currentCaretakerMobileStep.question.id]?.raise_issue)}
+                    style={{
+                      minHeight: 40,
+                      padding: '0.5rem 0.85rem',
+                      border: '1px solid #2563eb',
+                      borderRadius: '0.375rem',
+                      backgroundColor: answerExtras[currentCaretakerMobileStep.question.id]?.raise_issue
+                        ? '#eff6ff'
+                        : '#fff',
+                      color: '#1d4ed8',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {answerExtras[currentCaretakerMobileStep.question.id]?.raise_issue
+                      ? 'Remove issue'
+                      : 'Add issue'}
+                  </button>
+                </div>
               </section>
 
               <div style={{ display: 'flex', gap: 12, marginTop: '1rem' }}>
