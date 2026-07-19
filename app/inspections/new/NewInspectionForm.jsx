@@ -2167,6 +2167,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [inspectionEndTime, setInspectionEndTime] = useState('')
   const [caretakerInspectionMode, setCaretakerInspectionMode] = useState(CARETAKER_INSPECTION_MODE_FULL)
   const [caretakerSpecificSectionId, setCaretakerSpecificSectionId] = useState('')
+  const [caretakerGuidedView, setCaretakerGuidedView] = useState(false)
   const caretakerSectionRefs = useRef({})
   const caretakerQuestionRefs = useRef({})
   const submitCompletedRef = useRef(false)
@@ -3066,14 +3067,14 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   )
   const mobileCaretakerGuided =
     !!selectedTemplate &&
-    isMobile &&
+    caretakerGuidedView &&
     isCaretakerTemplate(selectedTemplate) &&
     !estateInspectionForm &&
     !isNVTemplate(selectedTemplate)
   const caretakerMobileSteps = useMemo(() => {
     if (!mobileCaretakerGuided) return []
     const steps = []
-    for (const section of selectedTemplate.sections || []) {
+    for (const section of caretakerSectionsToRender) {
       let caretakerRowIdx = 0
       for (const question of section.questions || []) {
         if (question.nv_hidden) continue
@@ -3087,7 +3088,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
     }
     return steps
-  }, [mobileCaretakerGuided, selectedTemplate, answers])
+  }, [mobileCaretakerGuided, caretakerSectionsToRender, answers])
   const currentCaretakerMobileStep = caretakerMobileSteps[caretakerMobileStep] || null
   const showMobileCaretakerGuided = mobileCaretakerGuided && caretakerMobileSteps.length > 0
   const isLastCaretakerMobileStep =
@@ -3851,6 +3852,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                 setAnswerExtras({})
                 setCaretakerInspectionMode(CARETAKER_INSPECTION_MODE_FULL)
                 setCaretakerSpecificSectionId('')
+                setCaretakerGuidedView(false)
                 setValidationErrors((prev) => {
                   const next = { ...prev }
                   delete next.template_id
@@ -3909,6 +3911,36 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             </button>
           </div>
         )}
+
+        {isCaretakerForm && !estateInspectionForm ? (
+          <div style={{ marginBottom: '1.5rem', padding: '1.25rem', backgroundColor: '#EFF6FF', border: '1px solid #1D4ED8', borderRadius: '0.5rem' }}>
+            <p style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', fontWeight: 500, color: '#1E3A8A' }}>
+              Caretaker guided inspection
+            </p>
+            <p style={{ margin: 0, fontSize: '0.9375rem', color: '#374151', marginBottom: '1rem' }}>
+              The full form is shown by default. You can switch to a guided view with one question at a time and a progress bar.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setCaretakerGuidedView((current) => !current)
+                setCaretakerMobileStep(0)
+              }}
+              style={{
+                padding: '0.75rem 1.25rem',
+                backgroundColor: '#1E3A8A',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '0.5rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontSize: '0.9375rem',
+              }}
+            >
+              {caretakerGuidedView ? 'Return to full form' : 'Start guided inspection'}
+            </button>
+          </div>
+        ) : null}
 
         {isCaretakerForm && selectedTemplate ? (
           <CaretakerInspectionModeSelector
