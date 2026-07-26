@@ -12,6 +12,8 @@ function resolveAtImport(specifier) {
     path.join(root, `${rel}.js`),
     path.join(root, `${rel}.jsx`),
     path.join(root, `${rel}.mjs`),
+    path.join(root, `${rel}.ts`),
+    path.join(root, `${rel}.tsx`),
     path.join(root, rel, 'index.js'),
   ]
   for (const candidate of candidates) {

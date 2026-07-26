@@ -165,7 +165,7 @@ export default function IssuesReportSection({
             onPendingLocalPhotoSaved={(urls) =>
               onPendingLocalPhotoSaved?.(urls.slice(0, maxPhotos))
             }
-            label="Add photo"
+            label={`Add photos (up to ${maxPhotos})`}
             multiple={maxPhotos > 1}
           />
         </div>

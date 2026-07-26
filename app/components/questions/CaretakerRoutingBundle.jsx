@@ -1,6 +1,7 @@
 'use client'
 
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
+import { capActionPhotoUrls, MAX_ACTION_PHOTOS } from '@/lib/action-photos'
 
 /**
  * Section footer: comment, photo, recipient — one block (canonical abandoned vehicles Q7).
@@ -67,14 +68,20 @@ export default function CaretakerRoutingBundle({
         }}
       />
       {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
-      <p style={{ fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>Photo</p>
+      <p style={{ fontSize: '0.875rem', marginBottom: '0.5rem', color: '#374151' }}>
+        Photos (up to {MAX_ACTION_PHOTOS})
+      </p>
       <PhotoUploadControl
         id={`route-photo-${questionId}`}
-        value={Array.isArray(ex.photo_urls) ? ex.photo_urls : []}
-        onChange={(urls) => set({ photo_urls: urls })}
-        onPendingLocalPhotoSaved={onPendingLocalPhotoSaved}
+        value={capActionPhotoUrls(ex.photo_urls)}
+        onChange={(urls) => set({ photo_urls: capActionPhotoUrls(urls) })}
+        onPendingLocalPhotoSaved={
+          onPendingLocalPhotoSaved
+            ? (urls) => onPendingLocalPhotoSaved(capActionPhotoUrls(urls))
+            : undefined
+        }
         onUploadStatusChange={onUploadStatusChange}
-        label="Add photo"
+        label={`Add photos (up to ${MAX_ACTION_PHOTOS})`}
         error={errorPhotos}
         multiple
         mobileStacked={mobileStacked}

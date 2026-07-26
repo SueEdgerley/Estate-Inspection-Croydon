@@ -107,9 +107,12 @@ export default function PhotoUploadControl({
   const photoUrlsRef = useRef(photoUrls)
   const activeXhrRef = useRef(null)
 
+  // Keep ref in sync with props, but never clobber mid-upload — a stale parent
+  // value (before the previous onChange re-renders) would drop just-added URLs.
   useEffect(() => {
+    if (uploading) return
     photoUrlsRef.current = photoUrls
-  }, [photoUrls])
+  }, [photoUrls, uploading])
 
   useEffect(() => {
     onUploadStatusChange?.(uploading)
@@ -143,6 +146,7 @@ export default function PhotoUploadControl({
         setProgress(Math.round((done / pendingUrls.length) * 100))
       })
       if (uploadedCount > 0) {
+        photoUrlsRef.current = nextUrls
         onChange(nextUrls)
         setLocalSaveNotice(null)
       } else if (pendingUrls.length > 0) {
@@ -270,12 +274,23 @@ export default function PhotoUploadControl({
       setUploading(false)
       setProgress(100)
       e.target.value = ''
-      let nextUrls = photoUrls
+      // Always append against the latest known list — render-time `photoUrls` can be
+      // stale if the parent has not re-rendered yet after a previous upload.
+      const currentUrls = photoUrlsRef.current
+      let nextUrls = currentUrls
       if (isReplace && urlsToAdd.length) {
-        nextUrls = photoUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u))
+        nextUrls = currentUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u))
+        photoUrlsRef.current = nextUrls
         onChange(nextUrls)
       } else if (urlsToAdd.length) {
-        nextUrls = [...photoUrls, ...urlsToAdd]
+        const seen = new Set(currentUrls)
+        nextUrls = [...currentUrls]
+        for (const url of urlsToAdd) {
+          if (!url || seen.has(url)) continue
+          seen.add(url)
+          nextUrls.push(url)
+        }
+        photoUrlsRef.current = nextUrls
         onChange(nextUrls)
       }
       if (urlsToAdd.some(isPendingLocalPhotoUrl)) {
@@ -339,9 +354,11 @@ export default function PhotoUploadControl({
   }
 
   const handleRemove = (urlToRemove) => {
-    onChange(photoUrls.filter((u) => u !== urlToRemove))
+    const nextUrls = photoUrlsRef.current.filter((u) => u !== urlToRemove)
+    photoUrlsRef.current = nextUrls
+    onChange(nextUrls)
     setUploadError(null)
-    if (!photoUrls.some((u) => u !== urlToRemove && isPendingLocalPhotoUrl(u))) {
+    if (!nextUrls.some((u) => isPendingLocalPhotoUrl(u))) {
       setLocalSaveNotice(null)
       setWaitingForSignal(false)
     }
@@ -386,7 +403,9 @@ export default function PhotoUploadControl({
         {...(id ? { id } : {})}
         type="file"
         accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
-        capture="environment"
+        // `capture` forces single-shot camera on many mobiles and fights multi-photo.
+        // Only use it for single-photo fields; multi-photo keeps gallery + camera chooser.
+        {...(multiple ? {} : { capture: 'environment' })}
         onChange={handleSelect}
         disabled={disabled || uploading}
         multiple={multiple}

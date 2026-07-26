@@ -29,6 +29,7 @@ import {
 import { isBrowserOnline, safeFetch } from '@/lib/offline-browser'
 import { clearInspectionResumeDraft } from '@/lib/inspection-resume-draft'
 import { formatInspectionSaveFailureMessage } from '@/lib/inspection-permission-messages'
+import { capActionPhotoUrls, MAX_ACTION_PHOTOS, normalizeActionPhotoUrls } from '@/lib/action-photos'
 
 /**
  * Persist a post-submit warning so it can be surfaced on the inspection page
@@ -240,6 +241,25 @@ function newChecklistItem() {
     action_summary: '',
     order_raised_number: '',
   }
+}
+
+/** Normalize checklist rows so legacy `photo_url` / mixed shapes become photo_urls[]. */
+function normalizeChecklistItem(item) {
+  if (!item || typeof item !== 'object') return item
+  const fromArrays = normalizeActionPhotoUrls(item.photo_urls)
+  const legacy =
+    fromArrays.length > 0
+      ? fromArrays
+      : item.photo_url || item.photoUrl || item.photoUrls
+  return {
+    ...item,
+    photo_urls: capActionPhotoUrls(legacy),
+  }
+}
+
+function normalizeChecklistItems(items) {
+  if (!Array.isArray(items)) return []
+  return items.map(normalizeChecklistItem).filter(Boolean)
 }
 
 function toDatetimeLocalValue(date = new Date()) {
@@ -608,11 +628,11 @@ export default function EstateWalkaboutNewInspectionForm({
     if (!PHOTO_EXTRA_IDS.has(id)) return
     setAnswerExtras((prev) => ({
       ...prev,
-      [id]: { ...(prev[id] || {}), photo_urls: urls },
+      [id]: { ...(prev[id] || {}), photo_urls: capActionPhotoUrls(urls) },
     }))
   }
 
-  const getPhotos = (id) => (Array.isArray(answerExtras[id]?.photo_urls) ? answerExtras[id].photo_urls : [])
+  const getPhotos = (id) => capActionPhotoUrls(answerExtras[id]?.photo_urls)
 
   // Reset the form for the next block of the same visit, keeping only the
   // carry-over fields (lead officer, role, area, date, attendees) and clearing
@@ -668,9 +688,7 @@ export default function EstateWalkaboutNewInspectionForm({
     () => {
       const extras = {}
       for (const id of PHOTO_EXTRA_IDS) {
-        const urls = Array.isArray(answerExtras[id]?.photo_urls)
-          ? answerExtras[id].photo_urls.filter((u) => typeof u === 'string' && u)
-          : []
+        const urls = capActionPhotoUrls(answerExtras[id]?.photo_urls)
         if (urls.length > 0) extras[id] = { photo_urls: urls }
       }
 
@@ -685,7 +703,7 @@ export default function EstateWalkaboutNewInspectionForm({
         answers: {
           ...answers,
           [ESTATE_WALKABOUT_CHECKLIST_QID]: JSON.stringify(
-            checklist.map((it) => ({
+            normalizeChecklistItems(checklist).map((it) => ({
               id: it.id,
               description: (it.description || '').trim(),
               photo_urls: Array.isArray(it.photo_urls) ? it.photo_urls : [],
@@ -741,11 +759,11 @@ export default function EstateWalkaboutNewInspectionForm({
           submitBody,
           ESTATE_WALKABOUT_CHECKLIST_QID,
           update.itemId,
-          update.urls || []
+          capActionPhotoUrls(update.urls || [])
         )
       } else {
         submitBody = mergeAnswerExtrasPatch(submitBody, update.questionId, {
-          photo_urls: update.urls || [],
+          photo_urls: capActionPhotoUrls(update.urls || []),
         })
       }
 
@@ -857,8 +875,17 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       delete restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID]
       setAnswers({ ...emptyAnswers(), ...restoredAnswers })
-      setAnswerExtras(body.answer_extras || {})
-      setChecklist(Array.isArray(restoredChecklist) ? restoredChecklist : [])
+      const restoredExtras = body.answer_extras && typeof body.answer_extras === 'object' ? body.answer_extras : {}
+      const normalizedExtras = {}
+      for (const [qid, ex] of Object.entries(restoredExtras)) {
+        if (!ex || typeof ex !== 'object') continue
+        normalizedExtras[qid] = {
+          ...ex,
+          photo_urls: capActionPhotoUrls(ex.photo_urls || ex.photoUrl || ex.photoUrls),
+        }
+      }
+      setAnswerExtras(normalizedExtras)
+      setChecklist(normalizeChecklistItems(restoredChecklist))
       setSubmitError(null)
     } catch {
       setSubmitError('Could not reopen the saved inspection on this phone.')
@@ -1199,11 +1226,15 @@ export default function EstateWalkaboutNewInspectionForm({
               value={getPhotos(qid)}
               onChange={(urls) => setPhotos(qid, urls)}
               onPendingLocalPhotoSaved={(urls) =>
-                flushDraftAfterLocalPhoto({ type: 'extras', questionId: qid, urls })
+                flushDraftAfterLocalPhoto({
+                  type: 'extras',
+                  questionId: qid,
+                  urls: capActionPhotoUrls(urls),
+                })
               }
               onUploadStatusChange={(uploading) => handlePhotoUploadStatusChange(`ew-${qid}`, uploading)}
-              label="Add photo"
-              multiple={true}
+              label={`Add photos (up to ${MAX_ACTION_PHOTOS})`}
+              multiple
             />
           </div>
         )}
@@ -1248,14 +1279,14 @@ export default function EstateWalkaboutNewInspectionForm({
                 flushDraftAfterLocalPhoto({
                   type: 'extras',
                   questionId: 'ew_it_bulk_refuse_removal',
-                  urls,
+                  urls: capActionPhotoUrls(urls),
                 })
               }
               onUploadStatusChange={(uploading) =>
                 handlePhotoUploadStatusChange('ew_it_bulk_refuse_removal', uploading)
               }
-              label="Add bulk refuse photo"
-              multiple={true}
+              label={`Add bulk refuse photos (up to ${MAX_ACTION_PHOTOS})`}
+              multiple
             />
           </div>
         )}
@@ -1273,7 +1304,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const gradeAbcdNa = (qid, label, sub, opts = {}) => {
     const withPhoto = !!opts.withPhoto
-    const maxSlot = typeof opts.maxPhotos === 'number' ? opts.maxPhotos : 3
+    const maxSlot = typeof opts.maxPhotos === 'number' ? opts.maxPhotos : MAX_ACTION_PHOTOS
     return (
       <div style={{ marginBottom: 18 }}>
         <span style={{ fontWeight: 600, display: 'block', marginBottom: 4, color: EW.text }}>{label}</span>
@@ -1312,13 +1343,17 @@ export default function EstateWalkaboutNewInspectionForm({
           <div style={{ marginTop: 10 }}>
             <PhotoUploadControl
               id={`ph-${qid}`}
-              value={getPhotos(qid).slice(0, maxSlot)}
-              onChange={(urls) => setPhotos(qid, urls.slice(0, maxSlot))}
+              value={capActionPhotoUrls(getPhotos(qid), maxSlot)}
+              onChange={(urls) => setPhotos(qid, capActionPhotoUrls(urls, maxSlot))}
               onPendingLocalPhotoSaved={(urls) =>
-                flushDraftAfterLocalPhoto({ type: 'extras', questionId: qid, urls: urls.slice(0, maxSlot) })
+                flushDraftAfterLocalPhoto({
+                  type: 'extras',
+                  questionId: qid,
+                  urls: capActionPhotoUrls(urls, maxSlot),
+                })
               }
               onUploadStatusChange={(uploading) => handlePhotoUploadStatusChange(`ph-${qid}`, uploading)}
-              label="Add photo"
+              label={`Add photos (up to ${maxSlot})`}
               multiple={maxSlot > 1}
             />
           </div>
@@ -1745,7 +1780,7 @@ export default function EstateWalkaboutNewInspectionForm({
             <h2 style={h2Style}>2. Estate care and communal repairs</h2>
             {gradeAbcdNa('ew_ec_paving_grade', 'What is the quality of the paving/potholes and signage?', 'Croydon NV Grading – Final', {
               withPhoto: true,
-              maxPhotos: 1,
+              maxPhotos: MAX_ACTION_PHOTOS,
             })}
             {commentTextOnly('ew_ec_comments', 'Comments')}
           </section>
@@ -1757,7 +1792,7 @@ export default function EstateWalkaboutNewInspectionForm({
               'ew_os_overall_grade',
               'What is the quality of the internal cleanliness?',
               'Croydon NV Grading – Final',
-              { withPhoto: true, maxPhotos: 1 }
+              { withPhoto: true, maxPhotos: MAX_ACTION_PHOTOS }
             )}
             {commentTextOnly('ew_os_comments', 'Comments')}
           </section>
@@ -1887,20 +1922,22 @@ export default function EstateWalkaboutNewInspectionForm({
                       <div style={{ marginTop: 12 }}>
                         <PhotoUploadControl
                           id={`ew-action-photo-${it.id}`}
-                          value={(it.photo_urls || []).slice(0, 1)}
-                          onChange={(urls) => updateItem(it.id, { photo_urls: urls.slice(0, 1) })}
+                          value={capActionPhotoUrls(it.photo_urls)}
+                          onChange={(urls) =>
+                            updateItem(it.id, { photo_urls: capActionPhotoUrls(urls) })
+                          }
                           onPendingLocalPhotoSaved={(urls) =>
                             flushDraftAfterLocalPhoto({
                               type: 'checklist',
                               itemId: it.id,
-                              urls: urls.slice(0, 1),
+                              urls: capActionPhotoUrls(urls),
                             })
                           }
                           onUploadStatusChange={(uploading) =>
                             handlePhotoUploadStatusChange(`ew-action-${it.id}`, uploading)
                           }
-                          label="Add action photo"
-                          multiple={false}
+                          label={`Add action photos (up to ${MAX_ACTION_PHOTOS})`}
+                          multiple
                         />
                       </div>
                       <div style={{ marginTop: 12 }}>

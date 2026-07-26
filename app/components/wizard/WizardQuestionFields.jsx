@@ -17,6 +17,7 @@ import {
   inspectionFollowUpNeutralStyle,
   inspectionTextareaFieldStyle,
 } from '@/lib/inspection-form-ui'
+import { capActionPhotoUrls, MAX_ACTION_PHOTOS } from '@/lib/action-photos'
 
 function parsePhotoAnswer(raw) {
   if (raw == null || raw === '') return []
@@ -59,7 +60,7 @@ export default function WizardQuestionFields({
   extras,
   handleAnswer,
   handleExtras,
-  maxPhotos = 3,
+  maxPhotos = MAX_ACTION_PHOTOS,
   commentFocusRef,
   prefillResidentName = '',
 }) {
@@ -248,8 +249,10 @@ export default function WizardQuestionFields({
                 </p>
                 <PhotoUploadControl
                   id={`g-photo-${q.id}`}
-                  value={(ext.photo_urls || []).slice(0, maxPhotos)}
-                  onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
+                  value={capActionPhotoUrls(ext.photo_urls, maxPhotos)}
+                  onChange={(urls) =>
+                    handleExtras(q.id, persistSecId, { photo_urls: capActionPhotoUrls(urls, maxPhotos) })
+                  }
                   label="Add photo"
                   multiple={maxPhotos > 1}
                 />
@@ -343,8 +346,8 @@ export default function WizardQuestionFields({
     return (
       <PhotoUploadControl
         id={`photo-${q.id}`}
-        value={urls.slice(0, maxPhotos)}
-        onChange={(next) => handleAnswer(q.id, stringifyPhotos(next), persistSecId)}
+        value={capActionPhotoUrls(urls, maxPhotos)}
+        onChange={(next) => handleAnswer(q.id, stringifyPhotos(capActionPhotoUrls(next, maxPhotos)), persistSecId)}
         label="Add photo"
         multiple={maxPhotos > 1}
       />
@@ -475,8 +478,10 @@ export default function WizardQuestionFields({
               <p style={inspectionFieldLabelStyle}>Photo (required when you answer Yes)</p>
               <PhotoUploadControl
                 id={`photo-always-${q.id}`}
-                value={(ext.photo_urls || []).slice(0, maxPhotos)}
-                onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
+                value={capActionPhotoUrls(ext.photo_urls, maxPhotos)}
+                onChange={(urls) =>
+                  handleExtras(q.id, persistSecId, { photo_urls: capActionPhotoUrls(urls, maxPhotos) })
+                }
                 label="Add photo"
                 multiple
               />
@@ -551,8 +556,10 @@ export default function WizardQuestionFields({
               <div style={{ width: '100%', minHeight: 52 }}>
                 <PhotoUploadControl
                   id={`photo-${q.id}`}
-                  value={(ext.photo_urls || []).slice(0, maxPhotos)}
-                  onChange={(urls) => handleExtras(q.id, persistSecId, { photo_urls: urls.slice(0, maxPhotos) })}
+                  value={capActionPhotoUrls(ext.photo_urls, maxPhotos)}
+                  onChange={(urls) =>
+                    handleExtras(q.id, persistSecId, { photo_urls: capActionPhotoUrls(urls, maxPhotos) })
+                  }
                   label="Add photo"
                   multiple={true}
                 />

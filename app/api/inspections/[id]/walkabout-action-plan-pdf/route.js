@@ -7,6 +7,10 @@ import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-templat
 import { buildWalkaboutActionPlanPdf } from '@/lib/pdf/buildWalkaboutActionPlanPdf'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { buildActionDisplay, cleanActionDisplayText } from '@/lib/action-display-formatter'
+import {
+  looksLikePersonId,
+  resolvePersonDisplayName,
+} from '@/lib/resolve-person-display-name'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -147,6 +151,11 @@ async function generate(request, { params }) {
       return NextResponse.json({ error: 'Walkabout action plan is only available for Walkabout inspections' }, { status: 400 })
     }
 
+    const raisedByRaw = String(inspection.inspector_name || inspection.inspector_id || '').trim()
+    const raisedByDisplay = looksLikePersonId(raisedByRaw)
+      ? await resolvePersonDisplayName(sql, raisedByRaw)
+      : raisedByRaw
+
     const answersResult = await sql`
       SELECT id, inspection_id, section_id, question_id, question_type,
         answer_value, answer_text, answer_number, answer_boolean, notes
@@ -220,7 +229,7 @@ async function generate(request, { params }) {
         location: action?.location || inspection.location_label || inspection.estate_block_name || '',
         status: action?.status || 'Open',
         jobNumber: actionJobNumber(action),
-        raisedBy: cleanActionDisplayText(inspection.inspector_name || inspection.inspector_id),
+        raisedBy: cleanActionDisplayText(raisedByDisplay),
         hasPhoto,
       })
     }
@@ -240,13 +249,16 @@ async function generate(request, { params }) {
         location: action.location || inspection.location_label || inspection.estate_block_name || '',
         status: action.status || 'Open',
         jobNumber: actionJobNumber(action),
-        raisedBy: cleanActionDisplayText(inspection.inspector_name || inspection.inspector_id),
+        raisedBy: cleanActionDisplayText(raisedByDisplay),
         hasPhoto: parsePhotoUrls(action.photo_urls).length > 0,
       })
     }
 
     const pdfBuffer = await buildWalkaboutActionPlanPdf({
-      inspection,
+      inspection: {
+        ...inspection,
+        inspector_name: raisedByDisplay || inspection.inspector_name,
+      },
       items: [...itemsByKey.values()],
     })
 

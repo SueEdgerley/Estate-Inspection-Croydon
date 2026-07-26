@@ -28,8 +28,9 @@ import {
   inspectionSectionHeadingStyle,
   inspectionGuidanceSubheadingStyle,
 } from '@/lib/inspection-form-ui'
+import { MAX_ACTION_PHOTOS } from '@/lib/action-photos'
 
-const MAX_PHOTOS_PER_QUESTION = 3
+const MAX_PHOTOS_PER_QUESTION = MAX_ACTION_PHOTOS
 
 const MOBILE_BREAKPOINT = 768
 
@@ -391,7 +392,7 @@ export default function InspectionWizardPage() {
     setExtras((prev) => {
       const next = { ...prev, [questionId]: { ...(prev[questionId] || {}), ...updates } }
       if (updates.photo_urls && Array.isArray(updates.photo_urls)) {
-        const cap = questionId === 'ew_os_overall_grade' ? 1 : MAX_PHOTOS_PER_QUESTION
+        const cap = MAX_PHOTOS_PER_QUESTION
         if (updates.photo_urls.length > cap) {
           next[questionId].photo_urls = updates.photo_urls.slice(0, cap)
         }
@@ -742,7 +743,7 @@ export default function InspectionWizardPage() {
               extras={extras}
               handleAnswer={handleAnswer}
               handleExtras={handleExtras}
-              maxPhotos={q.id === 'ew_os_overall_grade' ? 1 : MAX_PHOTOS_PER_QUESTION}
+              maxPhotos={MAX_PHOTOS_PER_QUESTION}
               commentFocusRef={commentFocusRef}
               prefillResidentName={prefillResidentName}
             />

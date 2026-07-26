@@ -7,6 +7,7 @@ import Link from 'next/link'
 import YesNoNaButtons from '@/app/components/questions/YesNoNaButtons'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 import BestPracticeGuideButton from '@/app/components/BestPracticeGuideButton'
+import { capActionPhotoUrls, MAX_ACTION_PHOTOS } from '@/lib/action-photos'
 import {
   NV_Q24_AIRTABLE_ROWS_188_192,
   applyNeighbourhoodVoicePatchesToList,
@@ -1012,13 +1013,20 @@ function InspectionQuestion({
     <div style={{ marginTop: '0.75rem' }}>
       <PhotoUploadControl
         id={photoId}
-        value={Array.isArray(extras.photo_urls) ? extras.photo_urls : []}
-        onChange={(urls) => setExtras({ photo_urls: urls })}
-        onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
+        value={capActionPhotoUrls(extras.photo_urls)}
+        onChange={(urls) => setExtras({ photo_urls: capActionPhotoUrls(urls) })}
+        onPendingLocalPhotoSaved={(urls) =>
+          flushLocalPhotoDraft({ photo_urls: capActionPhotoUrls(urls) })
+        }
         onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
         required={photoRequired}
         error={errorPhotos}
-        label={photoRequired ? 'Add photo *' : 'Add photo'}
+        label={
+          photoRequired
+            ? `Add photos (up to ${MAX_ACTION_PHOTOS}) *`
+            : `Add photos (up to ${MAX_ACTION_PHOTOS})`
+        }
+        multiple
         mobileStacked={mobileStackedForm}
       />
       {showCaretakerPhotoCommentUnderUpload && (
@@ -1725,11 +1733,14 @@ function InspectionQuestion({
             {needPhoto && (
               <PhotoUploadControl
                 id={`g-photo-${question.id}`}
-                value={extras.photo_urls || []}
-                onChange={(urls) => setExtras({ photo_urls: urls })}
-                onPendingLocalPhotoSaved={(urls) => flushLocalPhotoDraft({ photo_urls: urls })}
+                value={capActionPhotoUrls(extras.photo_urls)}
+                onChange={(urls) => setExtras({ photo_urls: capActionPhotoUrls(urls) })}
+                onPendingLocalPhotoSaved={(urls) =>
+                  flushLocalPhotoDraft({ photo_urls: capActionPhotoUrls(urls) })
+                }
                 onUploadStatusChange={(uploading) => onPhotoUploadStatusChange?.(question.id, uploading)}
-                label="Add photo"
+                label={`Add photos (up to ${MAX_ACTION_PHOTOS})`}
+                multiple
                 error={errorPhotos}
                 mobileStacked={mobileStackedForm}
               />

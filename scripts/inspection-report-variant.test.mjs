@@ -44,12 +44,28 @@ describe('inspection report variants', () => {
   it('uses walkabout column labels', () => {
     const labels = reportColumnLabels(REPORT_VARIANTS.WALKABOUT)
     assert.equal(labels.question, 'Question / Observation')
-    assert.equal(labels.middle, 'Rating')
+    assert.equal(labels.middle, 'Answer')
+    assert.equal(labels.photo, 'Photo / Evidence')
   })
 
   it('maps result modes without inventing grades', () => {
     assert.equal(resolvePdfResultMode({ grading_scheme_name: 'A-D' }, 'A'), 'grade')
     assert.equal(resolvePdfResultMode({ action_trigger_on: 'yes', question_type: 'yes_no' }, 'Yes'), 'issue_yes_no')
     assert.equal(resolvePdfResultMode({ question_type: 'yes_no' }, 'No'), 'task_yes_no')
+  })
+
+  it('walkabout yes/no prints Yes/No, not Completed/Not Completed', () => {
+    assert.equal(
+      resolvePdfResultMode({ question_type: 'yes_no' }, 'No', REPORT_VARIANTS.WALKABOUT),
+      'simple_yes_no'
+    )
+    assert.equal(
+      resolvePdfResultMode({ question_type: 'yes_no', action_trigger_on: 'yes' }, 'Yes', REPORT_VARIANTS.WALKABOUT),
+      'simple_yes_no'
+    )
+    assert.equal(
+      resolvePdfResultMode({ question_type: 'yes_no' }, '', REPORT_VARIANTS.WALKABOUT),
+      'walkabout_unanswered'
+    )
   })
 })

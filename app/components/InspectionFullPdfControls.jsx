@@ -13,9 +13,14 @@ export function shouldShowPdfRegenerate(_inspection, explicitShow) {
 }
 
 /**
- * Full inspection report PDF: open saved Blob URL, or POST to generate/upload then open.
+ * Full inspection report PDF: POST to generate/upload then open.
+ *
+ * View/Download always rebuild with ?regenerate=1 so a stale Blob URL is never
+ * treated as the "current" report after layout/content fixes. Cached full_pdf_url
+ * alone is not sufficient for View/Download.
+ *
  * Pass `savedPdfUrl` and/or `inspection` (row with nullable full_pdf_url / pdf_url / camelCase).
- * Optional Regenerate button force-rebuilds even when a saved URL exists (e.g. after layout/photo fixes).
+ * Optional Regenerate button force-rebuilds and opens (same rebuild path).
  * Shown for all full reports unless `showRegenerate={false}`.
  */
 export default function InspectionFullPdfControls({
@@ -49,7 +54,8 @@ export default function InspectionFullPdfControls({
     document.body.removeChild(a)
   }
 
-  const requestPdf = async ({ regenerate = false } = {}) => {
+  const requestPdf = async ({ regenerate = true } = {}) => {
+    // Always rebuild by default — never serve a stale saved Blob as "current".
     const qs = regenerate || forceRegenerate ? '?regenerate=1' : ''
     const res = await fetch(`/api/inspections/${inspectionId}/report-pdf${qs}`, {
       method: 'POST',
@@ -61,6 +67,7 @@ export default function InspectionFullPdfControls({
     }
     const next = String(data.url || '').trim()
     if (!next) throw new Error('No PDF URL returned')
+    setRegeneratedUrl(next)
     if (onAfterGenerate) {
       try {
         await onAfterGenerate()
@@ -71,11 +78,10 @@ export default function InspectionFullPdfControls({
     return next
   }
 
-  const ensurePdfUrl = async () => {
-    if (url && !forceRegenerate) return url
+  const ensureFreshPdfUrl = async () => {
     setBusy(true)
     try {
-      return await requestPdf({ regenerate: Boolean(forceRegenerate) })
+      return await requestPdf({ regenerate: true })
     } finally {
       setBusy(false)
     }
@@ -84,7 +90,7 @@ export default function InspectionFullPdfControls({
   const handleView = async (e) => {
     e.preventDefault()
     try {
-      const href = await ensurePdfUrl()
+      const href = await ensureFreshPdfUrl()
       openInBrowser(href, false)
     } catch (err) {
       window.alert(err?.message || 'Could not open the inspection PDF.')
@@ -94,7 +100,7 @@ export default function InspectionFullPdfControls({
   const handleDownload = async (e) => {
     e.preventDefault()
     try {
-      const href = await ensurePdfUrl()
+      const href = await ensureFreshPdfUrl()
       openInBrowser(href, true)
     } catch (err) {
       window.alert(err?.message || 'Could not download the inspection PDF.')
@@ -107,7 +113,6 @@ export default function InspectionFullPdfControls({
     setRegenerateStatus(null)
     try {
       const href = await requestPdf({ regenerate: true })
-      setRegeneratedUrl(href)
       setRegenerateStatus({ ok: true, message: 'Report regenerated. The new PDF is ready.' })
       openInBrowser(href, false)
     } catch (err) {
@@ -195,44 +200,7 @@ export default function InspectionFullPdfControls({
       </>
     ) : null
 
-  if (url && !forceRegenerate) {
-    if (variant === 'icons') {
-      return (
-        <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="View saved full PDF"
-            style={{ ...baseLink, fontSize: '1.25rem' }}
-          >
-            👁️
-          </a>
-          <a
-            href={url}
-            download={`inspection-${inspectionId}.pdf`}
-            title="Download saved full PDF"
-            style={{ ...baseLink, fontSize: '0.8125rem', fontWeight: 600 }}
-          >
-            ⬇
-          </a>
-          {regenerateControl}
-        </span>
-      )
-    }
-    return (
-      <span style={{ display: 'inline-flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <a href={url} target="_blank" rel="noopener noreferrer" style={baseLink}>
-          View PDF
-        </a>
-        <a href={url} download={`inspection-${inspectionId}.pdf`} style={baseLink}>
-          Download PDF
-        </a>
-        {regenerateControl}
-      </span>
-    )
-  }
-
+  // Always use buttons that rebuild — never raw <a href={savedBlob}> (stale cache).
   if (variant === 'icons') {
     return (
       <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
@@ -243,7 +211,7 @@ export default function InspectionFullPdfControls({
         ) : null}
         <button
           type="button"
-          title="Generate and open full inspection PDF"
+          title={url ? 'Rebuild and open full inspection PDF' : 'Generate and open full inspection PDF'}
           onClick={handleView}
           disabled={busy || regenBusy}
           style={{
@@ -258,7 +226,7 @@ export default function InspectionFullPdfControls({
         </button>
         <button
           type="button"
-          title="Generate and download full inspection PDF"
+          title={url ? 'Rebuild and download full inspection PDF' : 'Generate and download full inspection PDF'}
           onClick={handleDownload}
           disabled={busy || regenBusy}
           style={{
@@ -289,14 +257,16 @@ export default function InspectionFullPdfControls({
         onClick={handleView}
         disabled={busy || regenBusy}
         style={{ ...baseLink, background: 'none', border: 'none', padding: 0 }}
+        title="Rebuild the PDF with the latest layout and open it"
       >
-        {busy ? 'Generating…' : 'Open PDF'}
+        {busy ? 'Generating…' : 'View PDF'}
       </button>
       <button
         type="button"
         onClick={handleDownload}
         disabled={busy || regenBusy}
         style={{ ...baseLink, background: 'none', border: 'none', padding: 0 }}
+        title="Rebuild the PDF with the latest layout and download it"
       >
         {busy ? '…' : 'Download PDF'}
       </button>
