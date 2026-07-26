@@ -22,6 +22,8 @@ import {
   isEstateWalkaboutTemplate,
   ESTATE_WALKABOUT_CHECKLIST_QID,
   getCanonicalEstateWalkaboutTemplateForInsert,
+  isWalkaboutSatelliteAnswerId,
+  walkaboutSatelliteParentId,
 } from '@/lib/estate-walkabout-template'
 import {
   createEstateWalkaboutActionsFromPayload,
@@ -901,15 +903,30 @@ async function persistInspectionResponses({ inspectionId, template, answers = {}
     for (const [questionId, answer] of Object.entries(answers)) {
       if (answer === undefined || answer === null) continue
       const question = questionsById.get(questionId)
-      if (!question) continue
+      const isWalkaboutSatellite =
+        !question &&
+        isEstateWalkaboutTemplate(template) &&
+        isWalkaboutSatelliteAnswerId(questionId)
+
+      // Walkabout investigation text lives on sibling keys (qid_comment) that are
+      // not template questions — still persist them under their full question_id.
+      if (!question && !isWalkaboutSatellite) continue
+
+      const parentId = isWalkaboutSatellite ? walkaboutSatelliteParentId(questionId) : null
+      const parentQuestion = parentId ? questionsById.get(parentId) : null
+      const sectionId =
+        question?.sectionId || parentQuestion?.sectionId || 'ew_sec_item_inspections'
+
       const extras = answer_extras[questionId] || {}
       const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
       const packedNotes = typeof extras.notes === 'string' && extras.notes.trim()
         ? extras.notes.trim()
         : packNvWizardExtras(extras)
 
-      const questionType = question.question_type || 'text'
+      const questionType = isWalkaboutSatellite ? 'text' : question.question_type || 'text'
       const rawValue = typeof answer === 'string' ? answer : String(answer)
+      if (isWalkaboutSatellite && !rawValue.trim()) continue
+
       const lower = String(answer).toLowerCase()
       const answerBoolean =
         questionType === 'yes_no'
@@ -931,14 +948,14 @@ async function persistInspectionResponses({ inspectionId, template, answers = {}
         VALUES (
           ${answerId},
           ${inspectionId},
-          ${question.sectionId},
+          ${sectionId},
           ${questionId},
           ${questionType},
           ${rawValue},
           ${rawValue},
           ${answerNumber},
           ${answerBoolean},
-          ${packedNotes || comment || null}
+          ${isWalkaboutSatellite ? null : packedNotes || comment || null}
         )
         ON CONFLICT (inspection_id, question_id) DO UPDATE SET
           answer_value = EXCLUDED.answer_value,

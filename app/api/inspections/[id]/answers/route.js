@@ -4,6 +4,7 @@ import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { findQuestionInTemplate } from '@/lib/template-question-lookup'
 import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
 import { mergeNvNotes } from '@/lib/nv-notes-pack'
+import { isWalkaboutSatelliteAnswerId, walkaboutSatelliteParentId } from '@/lib/estate-walkabout-template'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -96,12 +97,16 @@ export async function POST(request, { params }) {
     for (const [questionId, answerValue] of Object.entries(answers)) {
       const answerId = `answer_${id}_${section_id}_${questionId}_${Date.now()}`
       
-      // Handle special fields (comment, priority for Yes/No questions)
+      // Sibling keys (qid_comment / qid_priority / walkabout satellites) keep their
+      // full question_id. Collapsing onto the parent QID overwrote Yes/No answers.
       const isCommentField = questionId.endsWith('_comment')
       const isPriorityField = questionId.endsWith('_priority')
-      const baseQuestionId = isCommentField || isPriorityField 
+      const isWalkaboutSatellite = isWalkaboutSatelliteAnswerId(questionId)
+      const baseQuestionId = isCommentField || isPriorityField
         ? questionId.replace(/_comment$/, '').replace(/_priority$/, '')
-        : questionId
+        : walkaboutSatelliteParentId(questionId) || questionId
+      const storedQuestionId =
+        isCommentField || isPriorityField || isWalkaboutSatellite ? questionId : questionId
       
       // Determine answer type and store appropriately
       let answerValueField = null
@@ -112,16 +117,18 @@ export async function POST(request, { params }) {
       let questionType = 'text'
 
       const qdef =
-        !isCommentField && !isPriorityField ? findQuestionInTemplate(templateVersion, baseQuestionId) : null
+        !isCommentField && !isPriorityField && !isWalkaboutSatellite
+          ? findQuestionInTemplate(templateVersion, baseQuestionId)
+          : null
 
-      if (isCommentField) {
-        notes = String(answerValue)
+      if (isCommentField || isWalkaboutSatellite) {
         answerText = String(answerValue)
-        questionType = 'yesno'
+        answerValueField = String(answerValue)
+        questionType = 'text'
       } else if (isPriorityField) {
         answerText = String(answerValue)
         answerValueField = String(answerValue)
-        questionType = 'yesno'
+        questionType = 'text'
       } else if (qdef) {
         questionType = resolveStoredQuestionType(qdef)
         if (questionType === 'graded') {
@@ -162,7 +169,7 @@ export async function POST(request, { params }) {
           id, inspection_id, section_id, question_id, question_type,
           answer_value, answer_text, answer_number, answer_boolean, notes
         ) VALUES (
-          ${answerId}, ${id}, ${section_id}, ${baseQuestionId}, ${questionType},
+          ${answerId}, ${id}, ${section_id}, ${storedQuestionId}, ${questionType},
           ${answerValueField}, ${answerText}, ${answerNumber}, ${answerBoolean}, ${notes}
         )
         ON CONFLICT (inspection_id, question_id) 

@@ -1212,6 +1212,9 @@ export default function EstateWalkaboutNewInspectionForm({
           >
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Comments</label>
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: EW.muted, lineHeight: 1.45 }}>
+                Add investigation details and evidence here. An action will be created automatically where follow-up is required.
+              </p>
               <textarea
                 className="inspection-comment-textarea"
                 value={answers[`${qid}_comment`] || ''}
@@ -1262,6 +1265,9 @@ export default function EstateWalkaboutNewInspectionForm({
             </div>
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Comments for bulk refuse removal</label>
+              <p style={{ margin: '0 0 8px', fontSize: 13, color: EW.muted, lineHeight: 1.45 }}>
+                Add investigation details and evidence here. An action will be created automatically where follow-up is required.
+              </p>
               <textarea
                 className="inspection-comment-textarea"
                 value={answers.ew_it_bulk_refuse_comments || ''}
@@ -1486,8 +1492,8 @@ export default function EstateWalkaboutNewInspectionForm({
             Estate Walkabout
           </h1>
           <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 16, maxWidth: 720 }}>
-            Structured walkabout sections. Some questions will automatically create actions when issues are identified and supported by comments or photos. Use{' '}
-            <strong>Additional items &amp; action plan</strong> to log any further follow-up actions not already captured.
+            Structured walkabout sections. Some questions automatically create actions when a problem response is selected. Use{' '}
+            <strong>Additional items &amp; action plan</strong> only for issues that are not already covered by the checklist.
           </p>
         </header>
 
@@ -1801,7 +1807,7 @@ export default function EstateWalkaboutNewInspectionForm({
           <section style={cardStyle}>
             <h2 style={h2Style}>4. Item inspections</h2>
             <p style={{ margin: '0 0 16px', fontSize: 14, color: EW.muted }}>
-              Select Yes/No/NA for each item. Comments and photos are collected when issues are marked (Yes for tripping hazards, abandoned vehicles, overflows, and graffiti; No for other items). Use <strong>Additional items &amp; action plan</strong> below to log follow-up actions.
+              Select Yes/No/NA for each item. Comments and photos are collected when issues are marked (Yes for tripping hazards, abandoned vehicles, overflows, and graffiti; No for other items). Add investigation details and evidence here. An action will be created automatically where follow-up is required. Use <strong>Additional items &amp; action plan</strong> only for issues not already covered above.
             </p>
             {itemInspectionsQuestion()}
           </section>
@@ -1841,7 +1847,8 @@ export default function EstateWalkaboutNewInspectionForm({
               <div>
                 <h2 style={{ ...h2Style, marginBottom: 8 }}>Additional items &amp; action plan</h2>
                 <p style={{ margin: 0, fontSize: 14, color: EW.muted }}>
-                  Optional extra rows. Actions are only created when Action Required is checked.
+                  Use this section only for issues that are not already covered by the checklist above.
+                  Actions are only created when Action Required is checked.
                 </p>
               </div>
               <button

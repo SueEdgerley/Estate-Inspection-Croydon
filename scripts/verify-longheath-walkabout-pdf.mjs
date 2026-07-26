@@ -264,6 +264,68 @@ async function main() {
     )
   }
 
+  // Walkabout: Issues Raised should not repeat findings / additional items.
+  fail(
+    'Walkabout payload has no redundant Issues Raised actions',
+    (pdfData.actions || []).length === 0 ||
+      (pdfData.actions || []).every((a) => {
+        const qid = String(a.questionId || '')
+        if (!qid) return true
+        return !(pdfData.sections || [])
+          .flatMap((s) => s.questions || [])
+          .some((q) => String(q.id) === qid)
+      }),
+    `actions=${(pdfData.actions || []).length}`
+  )
+
+  const findingsWithComments = (pdfData.sections || [])
+    .flatMap((s) => s.questions || [])
+    .filter((q) => q.comment && String(q.comment).trim())
+  console.log(
+    `[INFO] payloadCommentCount=${findingsWithComments.length} sample=${
+      findingsWithComments
+        .slice(0, 3)
+        .map((q) => `${q.id}:${String(q.comment).slice(0, 40)}`)
+        .join(' | ') || '(none)'
+    }`
+  )
+
+  const commentAnswersRes = await sql`
+    SELECT question_id, LEFT(COALESCE(answer_text, answer_value, notes, ''), 80) AS preview
+    FROM inspection_answers
+    WHERE inspection_id = ${inspectionId}
+      AND (
+        question_id LIKE 'ew_it_%_comment'
+        OR question_id IN ('ew_it_bulk_refuse_comments', 'ew_it_bulk_refuse_exact_location')
+      )
+      AND COALESCE(NULLIF(TRIM(COALESCE(answer_text, '')), ''), NULLIF(TRIM(COALESCE(answer_value, '')), ''), NULLIF(TRIM(COALESCE(notes, '')), '')) IS NOT NULL
+  `
+  const actionCommentsRes = await sql`
+    SELECT question_id, LEFT(COALESCE(comment, ''), 80) AS preview
+    FROM actions
+    WHERE inspection_id = ${inspectionId}
+      AND question_id LIKE 'ew_it_%'
+      AND comment IS NOT NULL
+      AND TRIM(comment) <> ''
+      AND comment !~* '^Response:\\s*(Yes|No|NA|N/A)\\s*$'
+      AND comment !~* '^(Yes|No|NA|N/A)$'
+  `
+  const dbSiblingComments = commentAnswersRes.rows?.length || 0
+  const dbActionComments = actionCommentsRes.rows?.length || 0
+  console.log(
+    `[INFO] DB sibling qid_comment rows=${dbSiblingComments}; useful action comments=${dbActionComments}`
+  )
+  if (dbSiblingComments > 0 || dbActionComments > 0) {
+    fail(
+      'payloadCommentCount non-zero when DB has investigation text',
+      findingsWithComments.length > 0,
+      `payloadCommentCount=${findingsWithComments.length} dbSibling=${dbSiblingComments} dbAction=${dbActionComments}`
+    )
+  }
+
+  const latin1PreviewNote =
+    'PDF bytes scanned below for literal "Issues Raised" heading when actions already in findings'
+
   const multiPhotoFindings = (pdfData.sections || []).flatMap((s) =>
     (s.questions || [])
       .map((q) => {
@@ -303,8 +365,19 @@ async function main() {
   const latin1 = Buffer.from(bytes).toString('latin1')
   const hasNotCompleted = /Not Completed/.test(latin1)
   const hasLiteralNo = /\(No\)|No\0| Tj[^\n]{0,40}No|\/No/.test(latin1) || latin1.includes('No')
+  const hasIssuesRaisedHeading = /Issues Raised/.test(latin1)
+  const findingsCoverActions =
+    (pdfData.actions || []).length === 0 &&
+    (pdfData.sections || []).some((s) => (s.questions || []).some((q) => q.hasIssue || String(q.id || '').startsWith('ew_')))
+  if (findingsCoverActions || (pdfData.actions || []).length === 0) {
+    fail(
+      'PDF omits redundant Issues Raised heading for Walkabout',
+      !hasIssuesRaisedHeading,
+      `hasIssuesRaised=${hasIssuesRaisedHeading}; ${latin1PreviewNote}`
+    )
+  }
   console.log(
-    `[INFO] PDF byte scan: Not Completed=${hasNotCompleted} (may appear for unanswered only); literal No present=${hasLiteralNo}`
+    `[INFO] PDF byte scan: Not Completed=${hasNotCompleted} (may appear for unanswered only); literal No present=${hasLiteralNo}; Issues Raised=${hasIssuesRaisedHeading}`
   )
 
   // Soft Blob regenerate — Node can't execute uploadPdf.ts without a TS loader;
