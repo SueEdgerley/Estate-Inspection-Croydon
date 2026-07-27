@@ -7,6 +7,7 @@ import {
   readImageFileAsDataUrl,
   uploadPendingLocalPhotoUrls,
 } from '@/lib/offline-photo-upload'
+import { getPhotoUploadInputAttrs } from '@/lib/photo-upload-input-attrs'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_IMAGE_DIMENSION = 1600
@@ -87,6 +88,8 @@ export default function PhotoUploadControl({
   error,
   disabled,
   label = 'Add photo',
+  cameraLabel = 'Take a picture',
+  galleryLabel = 'Choose from gallery',
   multiple = true,
   mobileStacked = false,
   onUploadStatusChange,
@@ -96,12 +99,14 @@ export default function PhotoUploadControl({
     () => (Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []),
     [value]
   )
+  const inputAttrs = useMemo(() => getPhotoUploadInputAttrs({ multiple }), [multiple])
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState(null)
   const [localSaveNotice, setLocalSaveNotice] = useState(null)
   const [waitingForSignal, setWaitingForSignal] = useState(false)
-  const inputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
   const pendingReplaceRef = useRef(null)
   const syncingRef = useRef(false)
   const photoUrlsRef = useRef(photoUrls)
@@ -364,12 +369,16 @@ export default function PhotoUploadControl({
     }
   }
 
+  const openFileInput = (ref) => {
+    if (!ref?.current) return
+    ref.current.value = ''
+    ref.current.click()
+  }
+
   const handleReplace = (urlToReplace) => {
     pendingReplaceRef.current = urlToReplace
-    if (inputRef.current) {
-      inputRef.current.value = ''
-      inputRef.current.click()
-    }
+    // Retake via camera by default; user can still Remove + Choose from gallery.
+    openFileInput(cameraInputRef)
   }
 
   const handleRetryUpload = () => {
@@ -385,52 +394,82 @@ export default function PhotoUploadControl({
     }
   }
 
-  const uploadButtonLabel = uploading
-    ? waitingForSignal && progress === 0
-      ? 'Waiting for signal…'
-      : `Uploading… ${progress}%`
-    : label
+  const busyLabel =
+    waitingForSignal && progress === 0 ? 'Waiting for signal…' : `Uploading… ${progress}%`
+  const cameraButtonLabel = uploading ? busyLabel : cameraLabel
+  const galleryButtonLabel = uploading ? busyLabel : galleryLabel
 
   const statusMessage =
     waitingForSignal && (uploading || hasPendingLocalPhotos)
       ? WAITING_FOR_SIGNAL_NOTICE
       : localSaveNotice
 
+  const actionButtonStyle = {
+    padding: mobileStacked ? '0.75rem 1rem' : '0.5rem 1rem',
+    minHeight: mobileStacked ? 48 : undefined,
+    width: mobileStacked ? '100%' : undefined,
+    color: 'white',
+    border: 'none',
+    borderRadius: '0.375rem',
+    fontSize: mobileStacked ? '1rem' : '0.875rem',
+    fontWeight: 500,
+    cursor: disabled || uploading ? 'not-allowed' : 'pointer',
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+    <div
+      role="group"
+      aria-label={label || 'Photo upload'}
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+    >
+      {/* Camera: capture opens rear camera on mobile. Gallery: no capture → photo library. Both append via handleSelect. */}
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         {...(id ? { id } : {})}
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
-        // `capture` forces single-shot camera on many mobiles and fights multi-photo.
-        // Only use it for single-photo fields; multi-photo keeps gallery + camera chooser.
-        {...(multiple ? {} : { capture: 'environment' })}
+        accept={inputAttrs.camera.accept}
+        capture={inputAttrs.camera.capture}
+        multiple={inputAttrs.camera.multiple}
         onChange={handleSelect}
         disabled={disabled || uploading}
-        multiple={multiple}
         style={{ display: 'none' }}
-        aria-label={label}
+        aria-label={cameraLabel}
+        data-photo-source="camera"
+      />
+      <input
+        ref={galleryInputRef}
+        {...(id ? { id: `${id}-gallery` } : {})}
+        type="file"
+        accept={inputAttrs.gallery.accept}
+        multiple={inputAttrs.gallery.multiple}
+        onChange={handleSelect}
+        disabled={disabled || uploading}
+        style={{ display: 'none' }}
+        aria-label={galleryLabel}
+        data-photo-source="gallery"
       />
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => openFileInput(cameraInputRef)}
           disabled={disabled || uploading}
           style={{
-            padding: mobileStacked ? '0.75rem 1rem' : '0.5rem 1rem',
-            minHeight: mobileStacked ? 48 : undefined,
-            width: mobileStacked ? '100%' : undefined,
+            ...actionButtonStyle,
             backgroundColor: uploading ? '#9ca3af' : '#3b82f6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '0.375rem',
-            fontSize: mobileStacked ? '1rem' : '0.875rem',
-            fontWeight: 500,
-            cursor: disabled || uploading ? 'not-allowed' : 'pointer',
           }}
         >
-          {uploadButtonLabel}
+          {cameraButtonLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => openFileInput(galleryInputRef)}
+          disabled={disabled || uploading}
+          style={{
+            ...actionButtonStyle,
+            backgroundColor: uploading ? '#9ca3af' : '#2563eb',
+          }}
+        >
+          {galleryButtonLabel}
         </button>
         {(hasPendingLocalPhotos || waitingForSignal) && !uploading ? (
           <button
