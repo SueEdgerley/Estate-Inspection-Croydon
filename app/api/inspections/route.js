@@ -2030,24 +2030,28 @@ export async function POST(request) {
     let posterPdfUrl = null
     let pdfErrorMessage = null
     try {
-      const posterLocRes = await sql`
-        SELECT COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS location_line
-        FROM inspections i
-        LEFT JOIN estates e ON e.id = i.estate_id
-        LEFT JOIN blocks b ON b.id = i.block_id
-        WHERE i.id = ${inspectionId}
-        LIMIT 1
-      `
-      const posterEstateBlockName = String(
-        posterLocRes.rows[0]?.location_line || location || displayTitle || ''
-      ).trim()
       const inspectionForPoster = {
         id: inspectionId,
         title: displayTitle,
         location_label: location || null,
-        estate_block_name: posterEstateBlockName,
         submitted_at: new Date(),
         inspector_name: inspectorName || '',
+        type: isEstateWalkaboutTemplate(template) ? 'estate_walkabout' : inspectionRowType,
+        template_id: template_id || template?.id || null,
+        template_name: template?.name || null,
+      }
+      if (isEstateWalkaboutTemplate(template)) {
+        const posterLocRes = await sql`
+          SELECT COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS location_line
+          FROM inspections i
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = i.block_id
+          WHERE i.id = ${inspectionId}
+          LIMIT 1
+        `
+        inspectionForPoster.estate_block_name = String(
+          posterLocRes.rows[0]?.location_line || location || displayTitle || ''
+        ).trim()
       }
       if (actionsForPoster.length > 0) {
         const posterPdfBytes = await generatePosterPdfBuffer(inspectionForPoster, actionsForPoster)

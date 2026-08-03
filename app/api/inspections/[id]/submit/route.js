@@ -1055,11 +1055,14 @@ export async function POST(request, { params }) {
     try {
       if (allActions.length > 0) {
         try {
+          const isWalkaboutPoster = isEstateWalkaboutTemplateVersion(templateVersion)
           const posterPdfBytes = await generatePosterPdfBuffer(
-            {
-              ...inspectionLive,
-              estate_block_name: estateBlockLine,
-            },
+            isWalkaboutPoster
+              ? {
+                  ...inspectionLive,
+                  estate_block_name: estateBlockLine,
+                }
+              : inspectionLive,
             allActions
           )
           posterPdfUrl = await uploadInspectionPdfToBlob({
