@@ -1055,7 +1055,13 @@ export async function POST(request, { params }) {
     try {
       if (allActions.length > 0) {
         try {
-          const posterPdfBytes = await generatePosterPdfBuffer(inspectionLive, allActions)
+          const posterPdfBytes = await generatePosterPdfBuffer(
+            {
+              ...inspectionLive,
+              estate_block_name: estateBlockLine,
+            },
+            allActions
+          )
           posterPdfUrl = await uploadInspectionPdfToBlob({
             inspectionId: id,
             pdfBytes: posterPdfBytes,
