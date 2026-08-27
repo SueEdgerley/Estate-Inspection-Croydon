@@ -10,6 +10,10 @@ import LocationBlockSelector from '@/app/components/LocationBlockSelector'
 import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
+  EW_IT_PRIVATE_GARDENS_MAINTAINED_QID,
+  EW_IT_PRIVATE_GARDENS_OVERGROWN_QID,
+  isWalkaboutPrivateGardensOvergrownVisible,
+  omitHiddenWalkaboutPrivateGardensOvergrown,
 } from '@/lib/estate-walkabout-template'
 import {
   createOfflineDraftId,
@@ -120,6 +124,16 @@ const STAFF_YN = [
 ]
 
 const ITEM_YN = [
+  ['ew_it_communal_areas_clear', 'Are the communal areas clear / free from obstruction?'],
+  ['ew_it_mobility_scooters', 'Are there any mobility scooters in the communal areas?'],
+  [
+    EW_IT_PRIVATE_GARDENS_MAINTAINED_QID,
+    'Are the private gardens (front and back) properly maintained?',
+  ],
+  [
+    'ew_it_discarded_items_gardens',
+    'Are there any discarded furniture, excessive rubbish or combustible items within private gardens / balconies that can be seen without entering the property?',
+  ],
   ['ew_it_roof_access', 'Is the roof access secure?'],
   ['ew_it_tank_secure', 'Is the tank room secure?'],
   ['ew_it_electricity_intakes', 'Are the electricity intakes secure?'],
@@ -152,6 +166,9 @@ const ITEM_YN = [
 
 /** Question ids that show comment/photo conditionally when Yes is selected. */
 const ITEM_YN_PHOTO_ON_YES = new Set([
+  'ew_it_mobility_scooters',
+  EW_IT_PRIVATE_GARDENS_OVERGROWN_QID,
+  'ew_it_discarded_items_gardens',
   'ew_it_tripping_hazards',
   'ew_it_abandoned_vehicles',
   'ew_it_overflows',
@@ -602,6 +619,27 @@ export default function EstateWalkaboutNewInspectionForm({
   }, [])
 
   const setYesNoNaField = (qid, value) => {
+    if (qid === EW_IT_PRIVATE_GARDENS_MAINTAINED_QID && value !== 'No') {
+      setAnswers((prev) => ({
+        ...prev,
+        [qid]: value,
+        [EW_IT_PRIVATE_GARDENS_OVERGROWN_QID]: '',
+        [`${EW_IT_PRIVATE_GARDENS_OVERGROWN_QID}_comment`]: '',
+      }))
+      setAnswerExtras((prev) => {
+        if (!prev[EW_IT_PRIVATE_GARDENS_OVERGROWN_QID]) return prev
+        const next = { ...prev }
+        delete next[EW_IT_PRIVATE_GARDENS_OVERGROWN_QID]
+        return next
+      })
+      setValidationErrors((prev) => {
+        const next = { ...prev }
+        delete next[qid]
+        delete next[EW_IT_PRIVATE_GARDENS_OVERGROWN_QID]
+        return next
+      })
+      return
+    }
     setField(qid, value)
     if (qid !== 'ew_it_bulk_refuse_removal') return
     if (value === 'Yes') {
@@ -687,7 +725,9 @@ export default function EstateWalkaboutNewInspectionForm({
   const currentSubmitBody = useMemo(
     () => {
       const extras = {}
+      const gardensOvergrownVisible = isWalkaboutPrivateGardensOvergrownVisible(answers)
       for (const id of PHOTO_EXTRA_IDS) {
+        if (id === EW_IT_PRIVATE_GARDENS_OVERGROWN_QID && !gardensOvergrownVisible) continue
         const urls = capActionPhotoUrls(answerExtras[id]?.photo_urls)
         if (urls.length > 0) extras[id] = { photo_urls: urls }
       }
@@ -701,7 +741,7 @@ export default function EstateWalkaboutNewInspectionForm({
         inspection_start_time: datetimeLocalToIso(inspectionStartTime),
         inspection_end_time: datetimeLocalToIso(inspectionEndTime),
         answers: {
-          ...answers,
+          ...omitHiddenWalkaboutPrivateGardensOvergrown(answers),
           [ESTATE_WALKABOUT_CHECKLIST_QID]: JSON.stringify(
             normalizeChecklistItems(checklist).map((it) => ({
               id: it.id,
@@ -1044,6 +1084,12 @@ export default function EstateWalkaboutNewInspectionForm({
       const v = String(answers[id] || '').trim()
       if (!['Yes', 'No', 'NA'].includes(v)) errs[id] = 'Select Yes, No, or NA'
     }
+    if (isWalkaboutPrivateGardensOvergrownVisible(answers)) {
+      const v = String(answers[EW_IT_PRIVATE_GARDENS_OVERGROWN_QID] || '').trim()
+      if (!['Yes', 'No', 'NA'].includes(v)) {
+        errs[EW_IT_PRIVATE_GARDENS_OVERGROWN_QID] = 'Select Yes, No, or NA'
+      }
+    }
 
     if (!String(answers.ew_sig_signature || '').trim()) {
       errs.ew_sig_signature = 'Enter a signature or signatory name'
@@ -1303,7 +1349,15 @@ export default function EstateWalkaboutNewInspectionForm({
   const itemInspectionsQuestion = () => (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'grid', gap: 18 }}>
-        {ITEM_YN.map(([id, lab]) => yna(id, lab))}
+        {ITEM_YN.map(([id, lab]) => (
+          <div key={id}>
+            {yna(id, lab)}
+            {id === EW_IT_PRIVATE_GARDENS_MAINTAINED_QID &&
+            isWalkaboutPrivateGardensOvergrownVisible(answers)
+              ? yna(EW_IT_PRIVATE_GARDENS_OVERGROWN_QID, 'Are the private gardens overgrown?')
+              : null}
+          </div>
+        ))}
       </div>
     </div>
   )
