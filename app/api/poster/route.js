@@ -24,7 +24,14 @@ export async function POST(request) {
     await ensureDatabase()
 
     const inspectionResult = await sql`
-      SELECT * FROM inspections WHERE id = ${inspectionId}
+      SELECT
+        i.*,
+        COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
+      FROM inspections i
+      LEFT JOIN estates e ON e.id = i.estate_id
+      LEFT JOIN blocks b ON b.id = i.block_id
+      WHERE i.id = ${inspectionId}
+      LIMIT 1
     `
     if (inspectionResult.rows.length === 0) {
       return new NextResponse('Inspection not found', { status: 404 })
