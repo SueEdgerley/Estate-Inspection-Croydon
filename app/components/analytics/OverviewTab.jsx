@@ -17,6 +17,10 @@ function formatWeekLabel(iso) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+function formatPct(value) {
+  return value == null ? '—' : `${value}%`
+}
+
 /** Line chart — completed inspections per week */
 function WeeklyTrendLine({ points }) {
   const w = 560
@@ -106,16 +110,18 @@ function cardStyle(accent = photobook.primary) {
   }
 }
 
-export default function OverviewTab({ overview, trends, issues }) {
+export default function OverviewTab({ overview, trends, management }) {
   const weekPoints = trends?.volumeByWeek ?? []
-
-  const topIssues =
-    issues?.categories?.slice(0, 5).map((c) => `${c.category} (${c.cnt})`).join(' · ') || 'None in period'
+  const grades = management?.grades || overview?.grades || {}
+  const topIssues = management?.topIssues || []
+  const attention = management?.attentionBlocks || []
+  const byForm = management?.inspectionsByForm || []
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       <p style={{ margin: 0, fontSize: '0.875rem', color: C.muted, lineHeight: 1.5 }}>
-        Figures use the same filters as the rest of Analytics and focus on submitted inspections.
+        Management figures use the selected Analytics period only. A–D percentages are question-level
+        graded checks (NA excluded). Caretaker Yes/No answers are not grades.
       </p>
 
       <div
@@ -125,22 +131,127 @@ export default function OverviewTab({ overview, trends, issues }) {
           gap: '0.85rem',
         }}
       >
-        <div style={cardStyle()}>
+        <div style={cardStyle('#16a34a')}>
           <div style={{ fontSize: '0.78rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
-            Overall score (A–D avg.)
+            A+B performance
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: 700, color: photobook.heading, lineHeight: 1.2 }}>
-            {overview.overallScore != null ? Number(overview.overallScore).toFixed(2) : '—'}
-            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: '#6b7280' }}> / 4</span>
+            {formatPct(grades.abPct)}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>
+            {grades.abcd ? `${grades.ab} of ${grades.abcd} graded checks` : 'No graded checks in period'}
+          </div>
+        </div>
+        <div style={cardStyle('#dc2626')}>
+          <div style={{ fontSize: '0.78rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
+            C+D
+          </div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: photobook.heading, lineHeight: 1.2 }}>
+            {formatPct(grades.cdPct)}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>
+            {grades.abcd ? `${grades.cd} of ${grades.abcd} graded checks` : 'No graded checks in period'}
           </div>
         </div>
         <div style={cardStyle()}>
           <div style={{ fontSize: '0.78rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
             Completed inspections
           </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: photobook.heading }}>{overview.completedInspections ?? overview.totalInspections}</div>
-          <div style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: 4 }}>Submitted (matches filters)</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: photobook.heading }}>
+            {management?.inspectionsCompleted ?? overview?.completedInspections ?? overview?.totalInspections}
+          </div>
         </div>
+        <div style={cardStyle()}>
+          <div style={{ fontSize: '0.78rem', color: photobook.primaryMuted, fontWeight: 600, marginBottom: '0.35rem' }}>
+            Blocks inspected
+          </div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: photobook.heading }}>
+            {management?.blocksInspected ?? overview?.blocksInspected ?? '—'}
+          </div>
+        </div>
+      </div>
+
+      <div style={cardStyle()}>
+        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: photobook.heading, marginBottom: '0.5rem' }}>
+          A / B / C / D grades
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: '0.75rem' }}>
+          {[
+            ['A', grades.a, grades.aPct, '#16a34a'],
+            ['B', grades.b, grades.bPct, '#65a30d'],
+            ['C', grades.c, grades.cPct, '#d97706'],
+            ['D', grades.d, grades.dPct, '#dc2626'],
+          ].map(([label, count, pct, color]) => (
+            <div key={label}>
+              <div style={{ fontSize: '0.75rem', color: C.muted, fontWeight: 600 }}>{label}</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color }}>{count ?? 0}</div>
+              <div style={{ fontSize: '0.75rem', color: C.muted }}>{formatPct(pct)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={cardStyle()}>
+        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: photobook.heading, marginBottom: '0.35rem' }}>
+          Top issues
+        </div>
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: C.muted }}>
+          Actual findings for the selected period, not form or technical labels.
+        </p>
+        {topIssues.length === 0 ? (
+          <p style={{ margin: 0, color: C.muted, fontSize: '0.875rem' }}>No issues in period.</p>
+        ) : (
+          <ul style={{ margin: 0, paddingLeft: '1.2rem', color: C.text, fontSize: '0.875rem', lineHeight: 1.6 }}>
+            {topIssues.slice(0, 8).map((row) => (
+              <li key={row.theme}>
+                <strong>{row.theme}</strong> — {row.count}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div style={cardStyle('#dc2626')}>
+        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: photobook.heading, marginBottom: '0.35rem' }}>
+          Three blocks requiring most attention
+        </div>
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: C.muted }}>
+          Ranked by C/D percentage of graded A–D checks. A block needs at least 10 graded checks in
+          the selected period. Raw C/D count is shown as the numerator.
+        </p>
+        {attention.length === 0 ? (
+          <p style={{ margin: 0, color: C.muted, fontSize: '0.875rem' }}>
+            No blocks with at least 10 graded A–D checks in this period.
+          </p>
+        ) : (
+          <ol style={{ margin: 0, paddingLeft: '1.2rem', color: C.text, fontSize: '0.875rem', lineHeight: 1.7 }}>
+            {attention.map((row) => (
+              <li key={row.blockId || row.blockName}>
+                <strong>{row.blockName}</strong> — {row.display}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      <div style={cardStyle()}>
+        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: photobook.heading, marginBottom: '0.35rem' }}>
+          Inspections by form
+        </div>
+        <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: C.muted }}>
+          Activity by inspection form for the same period. Separate from Top Issues.
+        </p>
+        {byForm.length === 0 ? (
+          <p style={{ margin: 0, color: C.muted, fontSize: '0.875rem' }}>No inspections in period.</p>
+        ) : (
+          <ul style={{ margin: 0, paddingLeft: '1.2rem', color: C.text, fontSize: '0.875rem', lineHeight: 1.6 }}>
+            {byForm.map((row) => (
+              <li key={row.form}>
+                <strong>{row.form}</strong> — {row.inspections}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div style={cardStyle()}>
@@ -156,13 +267,6 @@ export default function OverviewTab({ overview, trends, issues }) {
           <WeeklyTrendLine points={weekPoints} />
         )}
         <p style={{ margin: '0.75rem 0 0', fontSize: '0.8125rem', color: C.muted, lineHeight: 1.5 }}>{overview.trend?.label}</p>
-      </div>
-
-      <div style={cardStyle()}>
-        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: photobook.heading, marginBottom: '0.35rem' }}>
-          Top issue categories
-        </div>
-        <p style={{ margin: 0, fontSize: '0.875rem', color: C.text, lineHeight: 1.5 }}>{topIssues}</p>
       </div>
     </div>
   )

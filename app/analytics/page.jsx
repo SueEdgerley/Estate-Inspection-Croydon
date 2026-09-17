@@ -18,7 +18,7 @@ import OverviewTab from '@/app/components/analytics/OverviewTab'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'estates', label: 'Estates & blocks' },
+  { id: 'estates', label: 'Blocks' },
   { id: 'issues', label: 'Issues & hotspots' },
   { id: 'trends', label: 'Trends' },
   { id: 'performance', label: 'Performance' },
@@ -391,7 +391,7 @@ export default function AnalyticsPage() {
   }, [isSignedIn])
 
   const overview = payload?.overview
-  const estates = payload?.estates ?? []
+  const management = payload?.management || payload?.directorHosReport
   const blocks = payload?.blocks ?? []
   const issues = payload?.issues
   const trends = payload?.trends
@@ -426,7 +426,28 @@ export default function AnalyticsPage() {
     lines.push(['Section', 'Key', 'Value'].map(escapeCsvCell).join(','))
     if (overview) {
       lines.push(['Overview', 'completed_inspections', overview.completedInspections].map(escapeCsvCell).join(','))
-      lines.push(['Overview', 'overall_score', overview.overallScore ?? ''].map(escapeCsvCell).join(','))
+    }
+    if (management) {
+      lines.push(['Management', 'period', management.period?.label || management.period?.preset || ''].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'date_from', management.period?.dateFrom || ''].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'date_to', management.period?.dateTo || ''].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'inspections_completed', management.inspectionsCompleted].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'blocks_inspected', management.blocksInspected].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'grade_a', management.grades?.a].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'grade_b', management.grades?.b].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'grade_c', management.grades?.c].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'grade_d', management.grades?.d].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'a_plus_b_pct', management.grades?.abPct].map(escapeCsvCell).join(','))
+      lines.push(['Management', 'c_plus_d_pct', management.grades?.cdPct].map(escapeCsvCell).join(','))
+      ;(management.topIssues || []).forEach((row) => {
+        lines.push(['Top issue', row.theme, row.count].map(escapeCsvCell).join(','))
+      })
+      ;(management.attentionBlocks || []).forEach((row) => {
+        lines.push(['Attention block', row.blockName, row.display].map(escapeCsvCell).join(','))
+      })
+      ;(management.inspectionsByForm || []).forEach((row) => {
+        lines.push(['Inspections by form', row.form, row.inspections].map(escapeCsvCell).join(','))
+      })
     }
     ;(performance?.personCompleted || []).forEach((r) => {
       lines.push(['Person completed', r.personLabel, r.completedCount].map(escapeCsvCell).join(','))
@@ -545,7 +566,7 @@ export default function AnalyticsPage() {
                 Analytics
               </h1>
               <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.9375rem', lineHeight: 1.5 }}>
-                Manager and HOS: caretaker throughput, issue hotspots, C/D graded answers, and trends.
+                Manager and HOS: A/B and C/D performance, actual top issues, blocks requiring attention, and inspections by form.
               </p>
             </div>
             {!loading && !authCode && overview != null && (
@@ -837,12 +858,10 @@ export default function AnalyticsPage() {
               }}
             >
               {[
-                { label: 'Completed inspections', value: overview.completedInspections },
-                { label: 'Overall score (A–D avg)', value: overview.overallScore != null ? overview.overallScore.toFixed(2) : '—' },
-                {
-                  label: 'C/D answers (period)',
-                  value: gradeRisk && !gradeRisk.error ? gradeRisk.cdAnswerCount : '—',
-                },
+                { label: 'Completed inspections', value: management?.inspectionsCompleted ?? overview.completedInspections },
+                { label: 'Blocks inspected', value: management?.blocksInspected ?? overview.blocksInspected ?? '—' },
+                { label: 'A+B', value: management?.grades?.abPct != null ? `${management.grades.abPct}%` : '—' },
+                { label: 'C+D', value: management?.grades?.cdPct != null ? `${management.grades.cdPct}%` : '—' },
               ].map((c) => (
                 <div
                   key={c.label}
@@ -983,47 +1002,15 @@ export default function AnalyticsPage() {
 
               <section role="tabpanel" aria-label={TABS.find((x) => x.id === tab)?.label} style={{ minHeight: '12rem' }}>
                 {tab === 'overview' && (
-                  <OverviewTab overview={overview} trends={trends} issues={issues} />
+                  <OverviewTab overview={overview} trends={trends} management={management} />
                 )}
 
                 {tab === 'estates' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-                      Compare average grades (1–4) and volumes by estate and block. Higher scores indicate better letter grades on average.
+                      Inspection volumes by block for the selected period. Estate totals are not shown as a
+                      reliable management figure because block–estate linkage is currently incomplete.
                     </p>
-                    <div>
-                      <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>By estate</h2>
-                      <div style={{ overflowX: 'auto', border: `1px solid ${photobook.softBorder}`, borderRadius: '0.5rem' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                          <thead>
-                            <tr style={{ backgroundColor: photobook.soft, textAlign: 'left' }}>
-                              <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Estate</th>
-                              <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Inspections</th>
-                              <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Avg. score</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {estates.length === 0 ? (
-                              <tr>
-                                <td colSpan={3} style={{ padding: '1rem', color: '#6b7280' }}>
-                                  No data for this filter.
-                                </td>
-                              </tr>
-                            ) : (
-                              estates.map((row) => (
-                                <tr key={row.estate_id || row.estate_name} style={{ borderTop: '1px solid #e5e7eb' }}>
-                                  <td style={{ padding: '0.6rem 0.75rem' }}>{row.estate_name}</td>
-                                  <td style={{ padding: '0.6rem 0.75rem' }}>{row.inspection_count}</td>
-                                  <td style={{ padding: '0.6rem 0.75rem' }}>
-                                    {row.avg_grade != null ? Number(row.avg_grade).toFixed(2) : '—'}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
                     <div>
                       <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>By block</h2>
                       <div style={{ overflowX: 'auto', border: `1px solid ${photobook.softBorder}`, borderRadius: '0.5rem' }}>
@@ -1031,15 +1018,13 @@ export default function AnalyticsPage() {
                           <thead>
                             <tr style={{ backgroundColor: photobook.soft, textAlign: 'left' }}>
                               <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Block</th>
-                              <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Estate</th>
                               <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Inspections</th>
-                              <th style={{ padding: '0.65rem 0.75rem', fontWeight: 600 }}>Avg. score</th>
                             </tr>
                           </thead>
                           <tbody>
                             {blocks.length === 0 ? (
                               <tr>
-                                <td colSpan={4} style={{ padding: '1rem', color: '#6b7280' }}>
+                                <td colSpan={2} style={{ padding: '1rem', color: '#6b7280' }}>
                                   No data for this filter.
                                 </td>
                               </tr>
@@ -1047,11 +1032,7 @@ export default function AnalyticsPage() {
                               blocks.map((row) => (
                                 <tr key={row.block_id || row.block_name} style={{ borderTop: '1px solid #e5e7eb' }}>
                                   <td style={{ padding: '0.6rem 0.75rem' }}>{row.block_name}</td>
-                                  <td style={{ padding: '0.6rem 0.75rem', color: '#6b7280' }}>{row.estate_name || '—'}</td>
                                   <td style={{ padding: '0.6rem 0.75rem' }}>{row.inspection_count}</td>
-                                  <td style={{ padding: '0.6rem 0.75rem' }}>
-                                    {row.avg_grade != null ? Number(row.avg_grade).toFixed(2) : '—'}
-                                  </td>
                                 </tr>
                               ))
                             )}
@@ -1072,14 +1053,17 @@ export default function AnalyticsPage() {
                     {issues && (
                       <>
                         <div>
-                          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Most common categories</h2>
+                          <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Top issues</h2>
+                          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#6b7280' }}>
+                            Themes derived from the actual finding. Form names and technical categories are not listed.
+                          </p>
                           <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#374151', fontSize: '0.9375rem', lineHeight: 1.6 }}>
-                            {(issues.categories || []).map((c) => (
-                              <li key={c.category}>
-                                <strong>{c.category}</strong> — {c.cnt}
+                            {(management?.topIssues || issues.categories || []).map((c) => (
+                              <li key={c.theme || c.category}>
+                                <strong>{c.theme || c.category}</strong> — {c.count ?? c.cnt}
                               </li>
                             ))}
-                            {(!issues.categories || issues.categories.length === 0) && (
+                            {(!(management?.topIssues || []).length && (!issues.categories || issues.categories.length === 0)) && (
                               <li style={{ listStyle: 'none', marginLeft: '-1.2rem', color: '#6b7280' }}>No actions in period.</li>
                             )}
                           </ul>
@@ -1149,31 +1133,6 @@ export default function AnalyticsPage() {
                       valueKey="inspection_count"
                       labelFormatter={(row) => formatMonthLabel(row.month_start)}
                     />
-                    <div>
-                      <h2 style={{ margin: '0 0 0.75rem', fontSize: '1.05rem', color: photobook.heading }}>Average score by month</h2>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {(trends.scoresByMonth || []).length === 0 && (
-                          <p style={{ color: '#6b7280', fontSize: '0.9375rem' }}>No monthly data in range.</p>
-                        )}
-                        {(trends.scoresByMonth || []).map((m) => (
-                          <div
-                            key={String(m.month_start)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.75rem',
-                              fontSize: '0.875rem',
-                              flexWrap: 'wrap',
-                            }}
-                          >
-                            <span style={{ minWidth: '5.5rem', color: '#6b7280' }}>{formatMonthLabel(m.month_start)}</span>
-                            <span style={{ fontWeight: 600, color: photobook.heading, minWidth: '2.5rem' }}>
-                              {m.avg_grade != null ? Number(m.avg_grade).toFixed(2) : '—'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
                     <div>
                       <h2 style={{ margin: '0 0 0.75rem', fontSize: '1.05rem', color: photobook.heading }}>Inspection volume by month</h2>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
