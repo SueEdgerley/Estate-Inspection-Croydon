@@ -3215,6 +3215,22 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           if (commentRequired && !(extras.comment || '').trim()) {
             errs[`${q.id}_comment`] = 'Comment is required'
           }
+          if (
+            !commentRequired &&
+            isYes &&
+            (q.require_comment_on_yes === true || q.caretaker_comment_on_yes === true) &&
+            !(extras.comment || '').trim()
+          ) {
+            errs[`${q.id}_comment`] = 'Comment is required'
+          }
+          if (
+            !commentRequired &&
+            isNo &&
+            q.require_comment_on_no === true &&
+            !(extras.comment || '').trim()
+          ) {
+            errs[`${q.id}_comment`] = 'Comment is required'
+          }
           const photoUrls = Array.isArray(extras.photo_urls) ? extras.photo_urls.filter((u) => typeof u === 'string' && u) : []
           if (photoRequired && photoUrls.length === 0) {
             errs[`${q.id}_photos`] = 'At least one photo is required'

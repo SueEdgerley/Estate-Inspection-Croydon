@@ -750,6 +750,24 @@ export async function POST(request, { params }) {
               const photoUrlsArr = [...new Set([...dbPhotoUrls, ...extras.extraPhotoUrls, ...collectEsmIdCardPhotoUrlsFromExtras(extras)])]
               const photoRefs = photoUrlsArr.join('; ')
               if (!extras.raiseIssue && !shouldAutocreateCaretakerAction(q, val, sec)) continue
+              if (
+                !extras.raiseIssue &&
+                ((q.require_comment_on_yes === true || q.comment_required_when === 'on_yes') &&
+                  norm === 'yes' &&
+                  !String(comment || '').trim())
+              ) {
+                actionCreationWarnings.push(`Comment is required to raise an issue for: ${qText}`)
+                continue
+              }
+              if (
+                !extras.raiseIssue &&
+                ((q.require_comment_on_no === true || q.comment_required_when === 'on_no') &&
+                  norm === 'no' &&
+                  !String(comment || '').trim())
+              ) {
+                actionCreationWarnings.push(`Comment is required to raise an issue for: ${qText}`)
+                continue
+              }
               const category = safeActionText(q.action_category || q.category, 'other', 50)
               const existing = await sql`
                 SELECT id FROM actions
