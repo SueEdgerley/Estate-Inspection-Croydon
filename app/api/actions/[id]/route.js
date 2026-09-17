@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import { ensureIssueNumberFields } from '@/lib/issue-number-fields'
 import {
   ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
   isRecipientPersonFkError,
@@ -73,6 +74,7 @@ export async function GET(request, { params }) {
     }
     const { id } = await params
     await ensureRepairActionFields(sql)
+    await ensureIssueNumberFields(sql)
     const availableInspectionColumns = await getAvailableInspectionColumns()
     const inspectionFormName = optionalInspectionColumn(availableInspectionColumns, 'form_name')
     const inspectionCompletedByName = optionalInspectionColumn(availableInspectionColumns, 'completed_by_name')
@@ -87,6 +89,7 @@ export async function GET(request, { params }) {
         a.category, a.priority, a.title, a.description, a.location, a.status,
         a.comment, a.recipient_person_id, a.auto_created, a.photo_urls, a.issue_pdf_url,
         a.job_number, a.expected_completion_date, a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+        a.issue_number,
         a.created_at, a.updated_at,
         COALESCE(
           CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END,

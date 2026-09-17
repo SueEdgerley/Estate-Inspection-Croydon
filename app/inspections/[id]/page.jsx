@@ -139,7 +139,7 @@ export default function InspectionDetail() {
     if (!quiet) setActionsLoading(true)
     setActionsError(null)
     try {
-      const response = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}`, {
+      const response = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}&status=all&include_false=1`, {
         cache: 'no-store',
         credentials: 'include',
       })

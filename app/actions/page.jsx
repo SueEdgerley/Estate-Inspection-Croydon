@@ -9,7 +9,7 @@ import {
   displayActionStatus,
   formatActionDate,
 } from '@/lib/action-display-formatter'
-import { deduplicateActions } from '@/lib/deduplicate-actions'
+import { deduplicateActionRowsById } from '@/lib/deduplicate-actions'
 import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 
 const STATUS_OPTIONS = [
@@ -18,6 +18,23 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'closed', label: 'Closed' },
 ]
+
+const LIST_STATUS_FILTERS = [
+  { value: 'active', label: 'Active' },
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'all', label: 'All' },
+]
+
+function buildActionsListUrl({ inspectionId, status, q }) {
+  const params = new URLSearchParams()
+  if (inspectionId) params.set('inspection_id', inspectionId)
+  params.set('status', status || 'active')
+  if (q) params.set('q', q)
+  return `/api/actions?${params.toString()}`
+}
 
 const PRIORITY_OPTIONS = ['', 'low', 'medium', 'high', 'urgent']
 
@@ -64,6 +81,10 @@ export default function ActionsPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [inspectionId, setInspectionId] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('active')
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusTotal, setStatusTotal] = useState(0)
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: '',
@@ -72,7 +93,7 @@ export default function ActionsPage() {
   })
 
   // Deduplicate actions first
-  const uniqueActions = useMemo(() => deduplicateActions(actions), [actions])
+  const uniqueActions = useMemo(() => deduplicateActionRowsById(actions), [actions])
 
   const filteredActions = useMemo(() => {
     return uniqueActions.filter((action) => {
@@ -185,17 +206,35 @@ export default function ActionsPage() {
   }, [])
 
   useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim())
+    }, 400)
+    return () => window.clearTimeout(handle)
+  }, [searchInput])
+
+  useEffect(() => {
     if (inspectionId === null) return
     const loadActions = async () => {
       try {
-        const url = inspectionId ? `/api/actions?inspection_id=${encodeURIComponent(inspectionId)}` : '/api/actions'
+        const url = buildActionsListUrl({
+          inspectionId,
+          status: statusFilter,
+          q: searchQuery,
+        })
         const res = await fetch(url, { cache: 'no-store', credentials: 'include' })
         const data = await res.json().catch(() => [])
-        const deduped = deduplicateActions(Array.isArray(data) ? data : [])
+        const rows = Array.isArray(data) ? data : []
+        const headerTotal = Number(res.headers.get('X-Total-Count'))
+        setStatusTotal(Number.isFinite(headerTotal) && headerTotal >= 0 ? headerTotal : rows.length)
+        const deduped = deduplicateActionRowsById(rows)
         setActions(deduped)
-        if (deduped.length > 0 && window.innerWidth >= 900) {
-          setSelectedId(deduped[0].id)
-        }
+        setSelectedId((current) => {
+          if (current && deduped.some((row) => row.id === current)) return current
+          if (deduped.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 900) {
+            return deduped[0].id
+          }
+          return ''
+        })
       } catch (error) {
         console.error('Error loading actions:', error)
       } finally {
@@ -204,7 +243,7 @@ export default function ActionsPage() {
     }
 
     loadActions()
-  }, [inspectionId])
+  }, [inspectionId, statusFilter, searchQuery])
 
   useEffect(() => {
     let cancelled = false
@@ -247,13 +286,21 @@ export default function ActionsPage() {
   }
 
   const reloadActions = async (nextSelectedId = selectedId) => {
-    const url = inspectionId ? `/api/actions?inspection_id=${encodeURIComponent(inspectionId)}` : '/api/actions'
+    const url = buildActionsListUrl({
+      inspectionId,
+      status: statusFilter,
+      q: searchQuery,
+    })
     const res = await fetch(url, { cache: 'no-store', credentials: 'include' })
     const data = await res.json().catch(() => [])
     const rows = Array.isArray(data) ? data : []
+    const headerTotal = Number(res.headers.get('X-Total-Count'))
+    setStatusTotal(Number.isFinite(headerTotal) && headerTotal >= 0 ? headerTotal : rows.length)
     setActions(rows)
     if (nextSelectedId && rows.some((row) => row.id === nextSelectedId)) {
       setSelectedId(nextSelectedId)
+    } else {
+      setSelectedId(rows[0]?.id || '')
     }
   }
 
@@ -372,6 +419,39 @@ export default function ActionsPage() {
         <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: 'bold', color: '#111827' }}>
           Filter Issues
         </h3>
+
+        <div style={statusTabRowStyle}>
+          {LIST_STATUS_FILTERS.map((option) => {
+            const active = statusFilter === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setLoading(true)
+                  setStatusFilter(option.value)
+                }}
+                style={statusTabStyle(active)}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div style={filterGroupStyle}>
+          <label htmlFor="issue-search" style={filterLabelStyle}>
+            Search issue number
+          </label>
+          <input
+            id="issue-search"
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="ISS-000123, ISS-123, or 123"
+            style={{ ...filterInputStyle, marginBottom: '1rem' }}
+          />
+        </div>
         
         <div style={filtersGridStyle}>
           <div style={filterGroupStyle}>
@@ -459,7 +539,7 @@ export default function ActionsPage() {
         )}
         
         <p style={{ margin: '1rem 0 0', color: '#64748b', fontSize: '0.875rem' }}>
-          Showing {filteredActions.length} of {uniqueActions.length} issues
+          Showing {filteredActions.length} of {statusTotal || uniqueActions.length} issues
         </p>
       </div>
 
@@ -507,7 +587,10 @@ export default function ActionsPage() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={cardEyebrowStyle}>{notRecorded(display.inspectionTemplateName)}</div>
+                      <div style={cardEyebrowStyle}>
+                        {display.issueReference ? `${display.issueReference} · ` : ''}
+                        {notRecorded(display.inspectionTemplateName)}
+                      </div>
                       <strong style={{ color: '#111827', fontSize: '1rem' }}>{notRecorded(display.contextLocation)}</strong>
                     </div>
                     <span style={statusBadgeStyle}>{display.status}</span>
@@ -563,7 +646,7 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
         <div>
           <p style={{ margin: '0 0 0.35rem', color: '#64748b', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Action detail
+            {display.issueReference || 'Action detail'}
           </p>
           <h2 style={{ margin: 0, color: '#111827', fontSize: '1.35rem' }}>
             {notRecorded(display.issue || display.comment)}
@@ -582,6 +665,7 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
 
       <section style={sectionStyle}>
         <h3 style={sectionHeadingStyle}>Issue</h3>
+        {display.issueReference ? <DetailRow label="Issue number" value={display.issueReference} /> : null}
         <DetailRow label="Section/category" value={display.section} />
         <DetailRow label="Issue/question summary" value={display.issue} />
         {display.rating ? <DetailRow label="Rating" value={display.rating} /> : null}
@@ -919,6 +1003,24 @@ const filtersWrapStyle = {
   padding: '1rem',
   boxShadow: '0 1px 3px rgba(15, 23, 42, 0.08)',
 }
+
+const statusTabRowStyle = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '0.5rem',
+  marginBottom: '1rem',
+}
+
+const statusTabStyle = (active) => ({
+  border: active ? '1px solid #1d4ed8' : '1px solid #e5e7eb',
+  background: active ? '#eff6ff' : '#fff',
+  color: active ? '#1d4ed8' : '#374151',
+  borderRadius: '999px',
+  padding: '0.35rem 0.85rem',
+  fontWeight: 700,
+  fontSize: '0.875rem',
+  cursor: 'pointer',
+})
 
 const filtersGridStyle = {
   display: 'grid',

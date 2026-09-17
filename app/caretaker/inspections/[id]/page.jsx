@@ -69,7 +69,7 @@ export default function CaretakerInspectionReportPage() {
     setActionsLoading(true)
     setActionsError('')
     try {
-      const res = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/actions?inspection_id=${encodeURIComponent(id)}&status=all&include_false=1`, {
         credentials: 'include',
         cache: 'no-store',
       })

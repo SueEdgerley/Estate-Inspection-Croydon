@@ -16,6 +16,8 @@ import {
 } from '@/lib/validate-issue-recipient'
 import { getRequestTrace, logAccessTrace, roleTrace } from '@/lib/access-trace'
 import { deduplicateActionRowsById } from '@/lib/deduplicate-actions'
+import { ensureIssueNumberFields } from '@/lib/issue-number-fields'
+import { buildActionListWhere, normalizeActionListStatus } from '@/lib/action-list-filters'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -65,14 +67,14 @@ function buildActionsSelect({ where = '', limit = '', availableInspectionColumns
   const inspectionAddress = optionalInspectionColumn(availableInspectionColumns, 'address')
   const inspectionLocation = optionalInspectionColumn(availableInspectionColumns, 'location')
 
-  return `
+  const innerSql = `
     SELECT
       a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
       a.category, a.priority, a.title, a.description,
       a.location,
       a.status, a.comment, a.recipient_person_id, a.auto_created,
       a.photo_urls,
-      a.block_id, a.cost_code, a.issue_pdf_url,
+      a.block_id, a.cost_code, a.issue_pdf_url, a.issue_number,
       a.job_number, a.expected_completion_date,
       a.repair_notes, a.repair_photo_url, a.repair_updated_at,
       a.created_at, a.updated_at,
@@ -128,8 +130,61 @@ function buildActionsSelect({ where = '', limit = '', availableInspectionColumns
     LEFT JOIN blocks b ON b.id = COALESCE(a.block_id, i.block_id)
     LEFT JOIN people p ON p.id = a.recipient_person_id
     ${where}
-    ORDER BY a.created_at DESC
+  `
+  return `
+    SELECT *
+    FROM (
+      SELECT DISTINCT ON (inner_actions.id)
+        inner_actions.*
+      FROM (${innerSql}) inner_actions
+      ORDER BY inner_actions.id, inner_actions.created_at DESC
+    ) actions_list
+    ORDER BY actions_list.created_at DESC
     ${limit}
+  `
+}
+
+function buildCoreFallbackSelect(whereSql) {
+  return `
+    SELECT
+      a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
+      a.category, a.priority, a.title, a.description, a.location,
+      a.status, a.comment, a.recipient_person_id, a.auto_created,
+      a.photo_urls,
+      a.block_id, a.cost_code, a.issue_pdf_url, a.issue_number,
+      a.job_number, a.expected_completion_date,
+      a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+      a.created_at, a.updated_at,
+      NULL::text AS created_by,
+      'Assigned' AS assigned_to,
+      NULL::text AS assigned_to_email,
+      NULL::text AS inspection_title,
+      NULL::text AS inspection_template_name,
+      NULL::text AS template_title,
+      NULL::text AS template_name,
+      NULL::text AS inspection_form_name,
+      NULL::text AS inspection_type,
+      NULL::text AS inspection_source,
+      NULL::text AS inspection_location_label,
+      NULL::text AS inspection_address,
+      NULL::text AS inspection_location,
+      NULL::text AS inspection_inspector_name,
+      NULL::text AS inspection_completed_by_name,
+      NULL::text AS inspection_created_by_name,
+      NULL::text AS inspection_user_email,
+      NULL::text AS inspection_inspector_email,
+      NULL::text AS inspection_inspector_id,
+      NULL::text AS current_user_name,
+      NULL::text AS current_user_email,
+      NULL::timestamptz AS inspection_due_date,
+      NULL::timestamptz AS inspection_submitted_at,
+      NULL::timestamptz AS inspection_created_at,
+      NULL::text AS estate_name,
+      NULL::text AS block_name,
+      NULL::text AS estate_block_name
+    FROM actions a
+    WHERE ${whereSql}
+    ORDER BY a.created_at DESC
   `
 }
 
@@ -159,6 +214,10 @@ export async function GET(request) {
     searchParams = new URL(request.url).searchParams
     const inspectionId = searchParams.get('inspection_id')
     const questionId = searchParams.get('question_id')
+    const search = searchParams.get('q') || ''
+    const defaultStatus = inspectionId ? 'all' : 'active'
+    const status = normalizeActionListStatus(searchParams.get('status'), defaultStatus)
+    const includeFalseActions = Boolean(questionId) || searchParams.get('include_false') === '1'
     let actionInspectionTrace = {}
     if (inspectionId) {
       try {
@@ -206,31 +265,40 @@ export async function GET(request) {
     }
     
     let result
+    let totalCount = 0
+    let countedFromDatabase = false
+    const listFilter = {
+      inspectionId,
+      questionId,
+      status,
+      search,
+      includeFalseActions,
+    }
     try {
+      await ensureRepairActionFields(sql)
+      await ensureIssueNumberFields(sql)
       const availableInspectionColumns = await getAvailableInspectionColumns()
       const currentUserName = currentUserDisplayName(cu)
       const clerkEmail = currentUserEmail(cu)
-      const queryParams = [currentUserName, clerkEmail]
-      let queryText
-      if (inspectionId && questionId) {
-        queryParams.push(inspectionId, questionId)
-        queryText = buildActionsSelect({
-          availableInspectionColumns,
-          where: 'WHERE a.inspection_id = $3 AND a.question_id = $4',
-        })
-      } else if (inspectionId) {
-        queryParams.push(inspectionId)
-        queryText = buildActionsSelect({
-          availableInspectionColumns,
-          where: 'WHERE a.inspection_id = $3',
-        })
-      } else {
-        queryText = buildActionsSelect({
-          availableInspectionColumns,
-          limit: 'LIMIT 1000',
-        })
-      }
-      
+      const countWhere = buildActionListWhere({
+        ...listFilter,
+        startIndex: 1,
+      })
+      const countResult = await sql.query(
+        `SELECT COUNT(DISTINCT a.id)::int AS total FROM actions a WHERE ${countWhere.sql}`,
+        countWhere.params
+      )
+      totalCount = Number(countResult.rows[0]?.total || 0)
+      countedFromDatabase = true
+      const listWhere = buildActionListWhere({
+        ...listFilter,
+        startIndex: 3,
+      })
+      const queryParams = [currentUserName, clerkEmail, ...listWhere.params]
+      const queryText = buildActionsSelect({
+        availableInspectionColumns,
+        where: `WHERE ${listWhere.sql}`,
+      })
       result = await sql.query(queryText, queryParams)
       if (inspectionId && !questionId) {
         console.log('[Actions API] Query successful for inspection_id:', inspectionId, '- found', result.rows.length, 'actions')
@@ -238,147 +306,11 @@ export async function GET(request) {
     } catch (dbError) {
       console.error('[Actions API] Query failed for inspection_id:', inspectionId, 'error:', dbError?.message || dbError)
       try {
-        let fallbackQuery
-        if (inspectionId && questionId) {
-          fallbackQuery = sql`
-            SELECT
-              a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-              a.category, a.priority, a.title, a.description, a.location,
-              a.status, a.comment, a.recipient_person_id, a.auto_created,
-              a.photo_urls,
-              NULL::varchar AS block_id,
-              NULL::varchar AS cost_code,
-              NULL::text AS issue_pdf_url,
-              a.job_number, a.expected_completion_date,
-              NULL::text AS repair_notes,
-              NULL::text AS repair_photo_url,
-              NULL::timestamptz AS repair_updated_at,
-              a.created_at, a.updated_at,
-              NULL::text AS created_by,
-              'Assigned' AS assigned_to,
-              NULL::text AS assigned_to_email,
-              NULL::text AS inspection_title,
-              NULL::text AS inspection_template_name,
-              NULL::text AS template_title,
-              NULL::text AS template_name,
-              NULL::text AS inspection_form_name,
-              NULL::text AS inspection_type,
-              NULL::text AS inspection_source,
-              NULL::text AS inspection_location_label,
-              NULL::text AS inspection_address,
-              NULL::text AS inspection_location,
-              NULL::text AS inspection_inspector_name,
-              NULL::text AS inspection_completed_by_name,
-              NULL::text AS inspection_created_by_name,
-              NULL::text AS inspection_user_email,
-              NULL::text AS inspection_inspector_email,
-              NULL::text AS inspection_inspector_id,
-              NULL::text AS current_user_name,
-              NULL::text AS current_user_email,
-              NULL::timestamptz AS inspection_due_date,
-              NULL::timestamptz AS inspection_submitted_at,
-              NULL::timestamptz AS inspection_created_at,
-              NULL::text AS estate_name,
-              NULL::text AS block_name,
-              NULL::text AS estate_block_name
-            FROM actions a
-            WHERE a.inspection_id = ${inspectionId} AND a.question_id = ${questionId}
-            ORDER BY a.created_at DESC
-          `
-        } else if (inspectionId) {
-          fallbackQuery = sql`
-            SELECT
-              a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-              a.category, a.priority, a.title, a.description, a.location,
-              a.status, a.comment, a.recipient_person_id, a.auto_created,
-              a.photo_urls,
-              NULL::varchar AS block_id,
-              NULL::varchar AS cost_code,
-              NULL::text AS issue_pdf_url,
-              a.job_number, a.expected_completion_date,
-              NULL::text AS repair_notes,
-              NULL::text AS repair_photo_url,
-              NULL::timestamptz AS repair_updated_at,
-              a.created_at, a.updated_at,
-              NULL::text AS created_by,
-              'Assigned' AS assigned_to,
-              NULL::text AS assigned_to_email,
-              NULL::text AS inspection_title,
-              NULL::text AS inspection_template_name,
-              NULL::text AS template_title,
-              NULL::text AS template_name,
-              NULL::text AS inspection_form_name,
-              NULL::text AS inspection_type,
-              NULL::text AS inspection_source,
-              NULL::text AS inspection_location_label,
-              NULL::text AS inspection_address,
-              NULL::text AS inspection_location,
-              NULL::text AS inspection_inspector_name,
-              NULL::text AS inspection_completed_by_name,
-              NULL::text AS inspection_created_by_name,
-              NULL::text AS inspection_user_email,
-              NULL::text AS inspection_inspector_email,
-              NULL::text AS inspection_inspector_id,
-              NULL::text AS current_user_name,
-              NULL::text AS current_user_email,
-              NULL::timestamptz AS inspection_due_date,
-              NULL::timestamptz AS inspection_submitted_at,
-              NULL::timestamptz AS inspection_created_at,
-              NULL::text AS estate_name,
-              NULL::text AS block_name,
-              NULL::text AS estate_block_name
-            FROM actions a
-            WHERE a.inspection_id = ${inspectionId}
-            ORDER BY a.created_at DESC
-          `
-        } else {
-          fallbackQuery = sql`
-            SELECT
-              a.id, a.inspection_id, a.section_id, a.section_name, a.question_id,
-              a.category, a.priority, a.title, a.description, a.location,
-              a.status, a.comment, a.recipient_person_id, a.auto_created,
-              a.photo_urls,
-              NULL::varchar AS block_id,
-              NULL::varchar AS cost_code,
-              NULL::text AS issue_pdf_url,
-              a.job_number, a.expected_completion_date,
-              NULL::text AS repair_notes,
-              NULL::text AS repair_photo_url,
-              NULL::timestamptz AS repair_updated_at,
-              a.created_at, a.updated_at,
-              NULL::text AS created_by,
-              'Assigned' AS assigned_to,
-              NULL::text AS assigned_to_email,
-              NULL::text AS inspection_title,
-              NULL::text AS inspection_template_name,
-              NULL::text AS template_title,
-              NULL::text AS template_name,
-              NULL::text AS inspection_form_name,
-              NULL::text AS inspection_type,
-              NULL::text AS inspection_source,
-              NULL::text AS inspection_location_label,
-              NULL::text AS inspection_address,
-              NULL::text AS inspection_location,
-              NULL::text AS inspection_inspector_name,
-              NULL::text AS inspection_completed_by_name,
-              NULL::text AS inspection_created_by_name,
-              NULL::text AS inspection_user_email,
-              NULL::text AS inspection_inspector_email,
-              NULL::text AS inspection_inspector_id,
-              NULL::text AS current_user_name,
-              NULL::text AS current_user_email,
-              NULL::timestamptz AS inspection_due_date,
-              NULL::timestamptz AS inspection_submitted_at,
-              NULL::timestamptz AS inspection_created_at,
-              NULL::text AS estate_name,
-              NULL::text AS block_name,
-              NULL::text AS estate_block_name
-            FROM actions a
-            ORDER BY a.created_at DESC
-            LIMIT 1000
-          `
-        }
-        result = await fallbackQuery
+        const fallbackWhere = buildActionListWhere({
+          ...listFilter,
+          startIndex: 1,
+        })
+        result = await sql.query(buildCoreFallbackSelect(fallbackWhere.sql), fallbackWhere.params)
         console.warn(
           '[Actions API] Used core actions fallback for inspection_id:',
           inspectionId || '(global)',
@@ -403,7 +335,14 @@ export async function GET(request) {
         dedupedRows.length
       )
     }
-    return NextResponse.json(dedupedRows)
+    if (!countedFromDatabase) totalCount = dedupedRows.length
+    return NextResponse.json(dedupedRows, {
+      headers: {
+        'X-Total-Count': String(totalCount),
+        'X-Action-List-Status': status,
+        'Access-Control-Expose-Headers': 'X-Total-Count, X-Action-List-Status',
+      },
+    })
   } catch (error) {
     console.error('Error fetching actions:', {
       inspectionId: searchParams?.get?.('inspection_id'),
@@ -458,7 +397,8 @@ export async function POST(request) {
     }
     const data = await request.json()
     await ensureRepairActionFields(sql)
-    
+    await ensureIssueNumberFields(sql)
+
     // DEDUPLICATION SAFEGUARD: Prevent duplicate actions for the same question
     // Check if an action already exists for this inspection + question + category combination
     if (data.inspection_id && data.question_id) {
