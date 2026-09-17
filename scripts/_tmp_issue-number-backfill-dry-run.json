@@ -1,0 +1,17 @@
+{
+  "dry_run": true,
+  "totals": {
+    "total": 3638,
+    "genuine": 993,
+    "false_marked": 2645,
+    "genuine_active": 926,
+    "already_numbered": 993,
+    "genuine_unnumbered": 0,
+    "false_numbered": 0
+  },
+  "would_assign": 0,
+  "first": [],
+  "last": [],
+  "min_reference": null,
+  "max_reference": null
+}

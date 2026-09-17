@@ -1,0 +1,62 @@
+{
+  "applied": true,
+  "assigned": 993,
+  "first": [
+    {
+      "id": "action_a4cdcdc7-913c-4d85-a074-854f97ad119b_1779359213604_m1agnpx",
+      "issue_reference": "ISS-000001",
+      "status": "open"
+    },
+    {
+      "id": "action_b9ba0113-e852-458e-99d2-e6db93fee327_1779434401164_txfee4j",
+      "issue_reference": "ISS-000002",
+      "status": "open"
+    },
+    {
+      "id": "action_146325b2-9228-4e1e-aea9-826c6d3fad40_1779434815165_xiudlpv",
+      "issue_reference": "ISS-000003",
+      "status": "open"
+    }
+  ],
+  "last": [
+    {
+      "id": "action_7d946fa2-b3f0-4205-ad1b-fdb35aa3e1b1_1789649708074_gyn3yan",
+      "issue_reference": "ISS-000991",
+      "status": "open"
+    },
+    {
+      "id": "action_7d946fa2-b3f0-4205-ad1b-fdb35aa3e1b1_1789649708103_lv72mtw",
+      "issue_reference": "ISS-000992",
+      "status": "open"
+    },
+    {
+      "id": "action_b9f2115c-359a-43c9-ba2f-598d546aa34f_1789650461532_p00k3mm",
+      "issue_reference": "ISS-000993",
+      "status": "open"
+    }
+  ],
+  "before": {
+    "total": 3638,
+    "genuine": 993,
+    "false_marked": 2645,
+    "genuine_active": 926,
+    "numbered": 0,
+    "genuine_unnumbered": 993,
+    "false_numbered": 0,
+    "min_number": 0,
+    "max_number": 0
+  },
+  "after": {
+    "total": 3638,
+    "genuine": 993,
+    "false_marked": 2645,
+    "genuine_active": 926,
+    "numbered": 993,
+    "genuine_unnumbered": 0,
+    "false_numbered": 0,
+    "min_number": 1,
+    "max_number": 993
+  },
+  "min_reference": "ISS-000001",
+  "max_reference": "ISS-000993"
+}
