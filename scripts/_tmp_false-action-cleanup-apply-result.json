@@ -1,0 +1,93 @@
+{
+  "applied": true,
+  "inspections_updated": 0,
+  "answers_updated": 0,
+  "photos_updated": 0,
+  "pdfs_updated": 0,
+  "approved_id_count": 2645,
+  "updated_count": 2645,
+  "before": {
+    "dashboard_open": 3571,
+    "target_existing": 2645,
+    "target_openish": 2645,
+    "target_already_closed": 0,
+    "genuine_open_untouched": 926
+  },
+  "after": {
+    "dashboard_open": 926,
+    "target_existing": 2645,
+    "target_closed": 2645,
+    "target_marked": 2645,
+    "target_still_openish": 0,
+    "genuine_open_untouched": 926,
+    "analytics_marked_still_counted": 0,
+    "analytics_marked_excluded": 2645
+  },
+  "expected": {
+    "dashboard_open_before": 3571,
+    "dashboard_open_after": 926
+  },
+  "shrublands": {
+    "inspection_id": "e85924ff-d53b-4822-bdb6-0a7aa2004a0e",
+    "action_id": "action_e85924ff-d53b-4822-bdb6-0a7aa2004a0e_1789656289694_5fukiak",
+    "inspection_unchanged": true,
+    "before": {
+      "inspection": {
+        "id": "e85924ff-d53b-4822-bdb6-0a7aa2004a0e",
+        "status": "submitted",
+        "submitted_at": "2026-09-17T14:44:49.526Z",
+        "updated_at": "2026-09-17T14:44:48.654Z",
+        "pdf_url": "https://oqc2svrelyotto1p.public.blob.vercel-storage.com/inspections/e85924ff-d53b-4822-bdb6-0a7aa2004a0e/report.pdf",
+        "template_name": "Caretaker Inspection",
+        "inspector_name": "Edward  Kowe",
+        "q12_question_text": "Other internal cleaning issue (specify in comments)"
+      },
+      "answer": {
+        "question_id": "cm_canonical_internal_cleaning_q12",
+        "answer_value": "Yes",
+        "answer_text": "Yes",
+        "notes": null,
+        "updated_at": "2026-09-17T14:44:48.736Z"
+      },
+      "photo_count": 8,
+      "action": {
+        "id": "action_e85924ff-d53b-4822-bdb6-0a7aa2004a0e_1789656289694_5fukiak",
+        "status": "open",
+        "comment": null,
+        "repair_notes": null,
+        "auto_created": true,
+        "question_id": "cm_canonical_internal_cleaning_q12",
+        "updated_at": "2026-09-17T14:44:50.351Z"
+      }
+    },
+    "after": {
+      "inspection": {
+        "id": "e85924ff-d53b-4822-bdb6-0a7aa2004a0e",
+        "status": "submitted",
+        "submitted_at": "2026-09-17T14:44:49.526Z",
+        "updated_at": "2026-09-17T14:44:48.654Z",
+        "pdf_url": "https://oqc2svrelyotto1p.public.blob.vercel-storage.com/inspections/e85924ff-d53b-4822-bdb6-0a7aa2004a0e/report.pdf",
+        "template_name": "Caretaker Inspection",
+        "inspector_name": "Edward  Kowe",
+        "q12_question_text": "Other internal cleaning issue (specify in comments)"
+      },
+      "answer": {
+        "question_id": "cm_canonical_internal_cleaning_q12",
+        "answer_value": "Yes",
+        "answer_text": "Yes",
+        "notes": null,
+        "updated_at": "2026-09-17T14:44:48.736Z"
+      },
+      "photo_count": 8,
+      "action": {
+        "id": "action_e85924ff-d53b-4822-bdb6-0a7aa2004a0e_1789656289694_5fukiak",
+        "status": "closed",
+        "comment": null,
+        "repair_notes": "[FALSE_AUTO_ACTION] Auto-created in error from a non-issue answer. Inspection answers, photos, question snapshots and reports were not changed. Closed to remove from the open backlog while retaining an audit trail.",
+        "auto_created": true,
+        "question_id": "cm_canonical_internal_cleaning_q12",
+        "updated_at": "2026-09-17T21:03:00.339Z"
+      }
+    }
+  }
+}
