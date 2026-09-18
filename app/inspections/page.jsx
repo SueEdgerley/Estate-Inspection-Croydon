@@ -71,6 +71,7 @@ export default function InspectionsListPage() {
   })
   const [inspectorOptions, setInspectorOptions] = useState([])
   const [selectedInspectionIds, setSelectedInspectionIds] = useState([])
+  const [pdfZipBusy, setPdfZipBusy] = useState(false)
   const [inspectorPickerLoading, setInspectorPickerLoading] = useState(false)
   const [inspectorPickerMeta, setInspectorPickerMeta] = useState({
     canFilterByInspector: false,
@@ -327,39 +328,58 @@ export default function InspectionsListPage() {
   }
 
   const handleDownloadPdf = async () => {
-    if (selectedRows.length === 0) {
+    const ids = selectedRows.map((row) => row.id).filter(Boolean)
+    if (ids.length === 0) {
       window.alert('Please select at least one inspection to download')
       return
     }
+    if (pdfZipBusy) return
 
-    for (let index = 0; index < selectedRows.length; index += 1) {
-      const inspection = selectedRows[index]
-      let pdfUrl = getInspectionFullReportPdfUrl(inspection) || ''
-      if (!pdfUrl) {
-        const res = await fetch(`/api/inspections/${inspection.id}/report-pdf`, {
-          method: 'POST',
-          credentials: 'include',
-        })
+    setPdfZipBusy(true)
+    try {
+      const res = await fetch('/api/inspections/report-pdfs-zip', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const included = Number(res.headers.get('X-Pdf-Zip-Included') || 0)
+      const requested = Number(res.headers.get('X-Pdf-Zip-Requested') || ids.length)
+      const encodedMessage = res.headers.get('X-Pdf-Zip-Message') || ''
+      const headerMessage = encodedMessage ? decodeURIComponent(encodedMessage) : ''
+
+      if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          window.alert(data.details || data.error || `Could not generate PDF for ${inspection.id} (${res.status})`)
-          continue
-        }
-        pdfUrl = String(data.url || '').trim()
+        window.alert(data.error || data.details || headerMessage || `Could not prepare PDFs (${res.status})`)
+        return
       }
-      if (!pdfUrl) continue
+
+      const blob = await res.blob()
+      if (!blob || blob.size < 22) {
+        window.alert('The ZIP file could not be prepared.')
+        return
+      }
+      const zipName =
+        res.headers.get('X-Pdf-Zip-Filename') ||
+        `inspection-reports-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.zip`
+      const href = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = pdfUrl
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      a.download = `inspection-${inspection.id}.pdf`
+      a.href = href
+      a.download = zipName
       document.body.appendChild(a)
-      await new Promise((resolve) => setTimeout(resolve, index * 120))
       a.click()
       document.body.removeChild(a)
-    }
+      URL.revokeObjectURL(href)
 
-    await reloadInspections()
+      if (included !== requested) {
+        window.alert(headerMessage || `${included} of ${requested} reports downloaded.`)
+      }
+      await reloadInspections()
+    } catch (err) {
+      window.alert(err?.message || 'Could not download the selected PDFs.')
+    } finally {
+      setPdfZipBusy(false)
+    }
   }
 
   const handleExportCsv = () => {
@@ -486,8 +506,19 @@ export default function InspectionsListPage() {
             {selectedRows.length} selected from {filteredInspections.length} inspections
           </div>
           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button type="button" onClick={handleDownloadPdf} style={primaryButtonStyle}>
-              Download selected PDFs
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfZipBusy}
+              style={{
+                ...primaryButtonStyle,
+                cursor: pdfZipBusy ? 'wait' : 'pointer',
+                opacity: pdfZipBusy ? 0.7 : 1,
+              }}
+            >
+              {pdfZipBusy
+                ? `Preparing ${selectedRows.length} PDF${selectedRows.length === 1 ? '' : 's'}…`
+                : 'Download selected PDFs'}
             </button>
             <button type="button" onClick={handleExportCsv} style={secondaryButtonStyle}>
               Export selected CSV
