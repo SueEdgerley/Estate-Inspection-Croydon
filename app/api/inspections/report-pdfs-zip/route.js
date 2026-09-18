@@ -9,6 +9,7 @@ import {
   MAX_BULK_PDF_IDS,
   buildBulkZipFilename,
   buildInspectionPdfFilename,
+  bulkZipResponseHeaders,
   formatBulkPdfZipMessage,
   normalizeBulkPdfIds,
   partitionBulkPdfAccess,
@@ -116,22 +117,19 @@ export async function POST(request) {
       )
     }
 
-    const zipBytes = buildZipArchive(zipFiles)
+    const zipBytes = Buffer.from(buildZipArchive(zipFiles))
     const zipName = buildBulkZipFilename()
-    const headers = {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${zipName}"`,
-      'Cache-Control': 'no-store',
-      'X-Pdf-Zip-Filename': zipName,
-      'X-Pdf-Zip-Requested': String(ids.length),
-      'X-Pdf-Zip-Included': String(included.length),
-      'X-Pdf-Zip-Failed': String(failed.length),
-      'X-Pdf-Zip-Message': encodeURIComponent(message),
-      'Access-Control-Expose-Headers':
-        'Content-Disposition, X-Pdf-Zip-Filename, X-Pdf-Zip-Requested, X-Pdf-Zip-Included, X-Pdf-Zip-Failed, X-Pdf-Zip-Message',
-    }
+    const headers = bulkZipResponseHeaders(zipName, {
+      requested: ids.length,
+      included: included.length,
+      failed: failed.length,
+      message,
+      contentLength: zipBytes.length,
+    })
 
-    return new NextResponse(new Uint8Array(zipBytes), { status: 200, headers })
+    // Web Response + Buffer keeps the ZIP binary intact. NextResponse(Uint8Array)
+    // has been an unreliable download body on some App Router/Vercel paths.
+    return new Response(zipBytes, { status: 200, headers })
   } catch (e) {
     console.error('[report-pdfs-zip]', e)
     return NextResponse.json(

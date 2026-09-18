@@ -9,6 +9,7 @@ import {
   MAX_BULK_PDF_IDS,
   buildBulkZipFilename,
   buildInspectionPdfFilename,
+  bulkZipResponseHeaders,
   formatBulkPdfZipMessage,
   normalizeBulkPdfIds,
   partitionBulkPdfAccess,
@@ -158,6 +159,23 @@ describe('authorisation', () => {
     )
     assert.equal(allowed.length, 1)
     assert.equal(failed.length, 0)
+  })
+})
+
+describe('ZIP download headers', () => {
+  it('sends application/zip with attachment filename ending .zip', () => {
+    const headers = bulkZipResponseHeaders('inspection-reports-18-09-2026.zip', {
+      requested: 12,
+      included: 12,
+      failed: 0,
+      message: '12 of 12 reports downloaded.',
+      contentLength: 2048,
+    })
+    assert.equal(headers['Content-Type'], 'application/zip')
+    assert.match(headers['Content-Disposition'], /attachment/)
+    assert.match(headers['Content-Disposition'], /filename="inspection-reports-18-09-2026\.zip"/)
+    assert.equal(headers['X-Content-Type-Options'], 'nosniff')
+    assert.equal(headers['Content-Length'], '2048')
   })
 })
 

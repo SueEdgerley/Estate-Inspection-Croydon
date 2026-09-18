@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import InspectionFullPdfControls from '@/app/components/InspectionFullPdfControls'
 import { getInspectionFullReportPdfUrl, withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
+import { downloadSelectedInspectionPdfsZip } from '@/lib/download-inspection-pdfs-zip'
 import { inspectionTypeLabel } from '@/lib/inspection-work-types'
 import {
   getCaretakerInspectionModeListLabel,
@@ -337,42 +338,13 @@ export default function InspectionsListPage() {
 
     setPdfZipBusy(true)
     try {
-      const res = await fetch('/api/inspections/report-pdfs-zip', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      })
-      const included = Number(res.headers.get('X-Pdf-Zip-Included') || 0)
-      const requested = Number(res.headers.get('X-Pdf-Zip-Requested') || ids.length)
-      const encodedMessage = res.headers.get('X-Pdf-Zip-Message') || ''
-      const headerMessage = encodedMessage ? decodeURIComponent(encodedMessage) : ''
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        window.alert(data.error || data.details || headerMessage || `Could not prepare PDFs (${res.status})`)
+      const result = await downloadSelectedInspectionPdfsZip(ids)
+      if (!result.ok) {
+        window.alert(result.error || 'Could not prepare PDFs')
         return
       }
-
-      const blob = await res.blob()
-      if (!blob || blob.size < 22) {
-        window.alert('The ZIP file could not be prepared.')
-        return
-      }
-      const zipName =
-        res.headers.get('X-Pdf-Zip-Filename') ||
-        `inspection-reports-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.zip`
-      const href = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = href
-      a.download = zipName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(href)
-
-      if (included !== requested) {
-        window.alert(headerMessage || `${included} of ${requested} reports downloaded.`)
+      if (result.included !== result.requested) {
+        window.alert(result.message || `${result.included} of ${result.requested} reports downloaded.`)
       }
       await reloadInspections()
     } catch (err) {
