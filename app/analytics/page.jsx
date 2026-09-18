@@ -15,6 +15,7 @@ import {
   resolveInspectionDatesFromClientState,
 } from '@/lib/analytics-client-filters'
 import OverviewTab from '@/app/components/analytics/OverviewTab'
+import BlockAverageTable from '@/app/components/analytics/BlockAverageTable'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -444,6 +445,17 @@ export default function AnalyticsPage() {
       })
       ;(management.attentionBlocks || []).forEach((row) => {
         lines.push(['Attention block', row.blockName, row.display].map(escapeCsvCell).join(','))
+      })
+      ;(management.blockAverages || []).forEach((row) => {
+        lines.push(
+          [
+            'Average grade by block',
+            row.blockName || '',
+            `${row.gradedInspections} inspections; avg ${row.avgGrade || '—'}; latest ${row.latestGrade || '—'}; ${row.latestSubmittedAt || ''}`,
+          ]
+            .map(escapeCsvCell)
+            .join(',')
+        )
       })
       ;(management.inspectionsByForm || []).forEach((row) => {
         lines.push(['Inspections by form', row.form, row.inspections].map(escapeCsvCell).join(','))
@@ -1008,11 +1020,23 @@ export default function AnalyticsPage() {
                 {tab === 'estates' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-                      Inspection volumes by block for the selected period. Estate totals are not shown as a
-                      reliable management figure because block–estate linkage is currently incomplete.
+                      Average grade by block compares individual blocks for the selected period. Inspection
+                      volumes below remain a count-only list and are unchanged.
                     </p>
+                    <div
+                      style={{
+                        backgroundColor: 'white',
+                        padding: '1.1rem',
+                        borderRadius: '0.5rem',
+                        boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
+                        border: `1px solid ${photobook.softBorder}`,
+                        borderTop: `3px solid ${photobook.primary}`,
+                      }}
+                    >
+                      <BlockAverageTable rows={management?.blockAverages || []} />
+                    </div>
                     <div>
-                      <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>By block</h2>
+                      <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Inspection volume by block</h2>
                       <div style={{ overflowX: 'auto', border: `1px solid ${photobook.softBorder}`, borderRadius: '0.5rem' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                           <thead>

@@ -1,6 +1,7 @@
 'use client'
 
 import { photobook } from '@/lib/photobook-theme'
+import BlockAverageTable from '@/app/components/analytics/BlockAverageTable'
 
 const C = {
   completed: '#16a34a',
@@ -232,6 +233,10 @@ export default function OverviewTab({ overview, trends, management }) {
             ))}
           </ol>
         )}
+      </div>
+
+      <div style={cardStyle()}>
+        <BlockAverageTable rows={management?.blockAverages || []} />
       </div>
 
       <div style={cardStyle()}>

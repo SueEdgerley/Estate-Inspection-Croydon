@@ -6,7 +6,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { summariseAbcd, parseGradeToken, rankAttentionBlocks, ATTENTION_BLOCK_MIN_GRADED, formatCdShare } from '../lib/analytics-grade-summary.js'
+import { summariseAbcd, parseGradeToken, rankAttentionBlocks, ATTENTION_BLOCK_MIN_GRADED, formatCdShare, GRADE_SCORE, scoreToGrade, mapBlockAverageRow, sortBlockAverageRows } from '../lib/analytics-grade-summary.js'
 import { mapIssueTheme, aggregateIssueThemes, isTechnicalOrFormIssueLabel, ISSUE_THEMES } from '../lib/analytics-issue-themes.js'
 import { analyticsFormLabel, aggregateInspectionsByForm } from '../lib/analytics-form-labels.js'
 import { buildManagementReport, DIRECTOR_HOS_REPORT_SOURCE, MONTHLY_REPORT_PERIOD_OPTIONS } from '../lib/analytics-management-report.js'
@@ -294,6 +294,7 @@ describe('selected-period management snapshot', () => {
     assert.equal(report.topIssues[0].theme, ISSUE_THEMES.REPAIRS)
     assert.equal(report.inspectionsByForm[0].form, 'Caretaker')
     assert.equal(report.attentionBlocks[0].display, '7 / 18 — 38.9% C/D')
+    assert.equal(report.blockAverages.length, 0)
   })
 
   it('resolves This month and Previous month through the shared Analytics date helper', () => {
@@ -306,5 +307,103 @@ describe('selected-period management snapshot', () => {
       MONTHLY_REPORT_PERIOD_OPTIONS.map((row) => row.value),
       ['month', 'previous_month']
     )
+  })
+})
+
+describe('average grade by block', () => {
+  it('reuses the existing Analytics scale A=4 best through D=1, not A=1', () => {
+    assert.deepEqual(GRADE_SCORE, { A: 4, B: 3, C: 2, D: 1 })
+  })
+
+  it('uses cautious midpoint banding so exact midpoints fall to the lower grade', () => {
+    assert.equal(scoreToGrade(4), 'A')
+    assert.equal(scoreToGrade(3.51), 'A')
+    assert.equal(scoreToGrade(3.5), 'B')
+    assert.equal(scoreToGrade(2.51), 'B')
+    assert.equal(scoreToGrade(2.5), 'C')
+    assert.equal(scoreToGrade(1.51), 'C')
+    assert.equal(scoreToGrade(1.5), 'D')
+    assert.equal(scoreToGrade(1), 'D')
+  })
+
+  it('groups by recorded block_id and keeps the stored block name', () => {
+    const left = mapBlockAverageRow({
+      block_id: 'blk_000007',
+      block_name: 'Alford Green 1-27',
+      graded_inspections: 6,
+      avg_score: 3.2,
+      latest_score: 3,
+      latest_submitted_at: '2026-09-17T09:00:00.000Z',
+    })
+    const right = mapBlockAverageRow({
+      block_id: 'blk_other_1_12',
+      block_name: '1–12',
+      graded_inspections: 2,
+      avg_score: 1.8,
+      latest_score: 2,
+      latest_submitted_at: '2026-09-10T09:00:00.000Z',
+    })
+    assert.equal(left.blockName, 'Alford Green 1-27')
+    assert.equal(right.blockName, '1–12')
+    assert.notEqual(left.blockId, right.blockId)
+    assert.equal(left.avgGrade, 'B')
+    assert.equal(right.avgGrade, 'C')
+    assert.equal(left.latestGrade, 'B')
+    assert.equal(left.gradedInspections, 6)
+  })
+
+  it('sorts worst average first while keeping inspection count as a tie-break', () => {
+    const sorted = sortBlockAverageRows(
+      [
+        mapBlockAverageRow({
+          block_name: 'Alford Green 1-27',
+          block_id: 'a',
+          graded_inspections: 6,
+          avg_score: 3.1,
+        }),
+        mapBlockAverageRow({
+          block_name: 'Alford Green 29-43',
+          block_id: 'b',
+          graded_inspections: 5,
+          avg_score: 2.2,
+        }),
+        mapBlockAverageRow({
+          block_name: 'Alford Green 46-60',
+          block_id: 'c',
+          graded_inspections: 1,
+          avg_score: 2.2,
+        }),
+      ],
+      'avgScore',
+      'asc'
+    )
+    assert.equal(sorted[0].blockName, 'Alford Green 29-43')
+    assert.equal(sorted[1].blockName, 'Alford Green 46-60')
+    assert.equal(sorted[2].blockName, 'Alford Green 1-27')
+  })
+
+  it('adds block averages without changing cumulative A–D totals', () => {
+    const grades = summariseAbcd(THIS_MONTH_BASELINE)
+    const report = buildManagementReport({
+      period: { preset: 'month', dateFrom: '2026-09-01', dateTo: '2026-09-17', label: 'This month' },
+      inspectionsCompleted: 731,
+      blocksInspected: 265,
+      grades,
+      blockAverages: [
+        {
+          block_name: 'Alford Green 1-27',
+          block_id: 'blk_000007',
+          graded_inspections: 6,
+          avg_score: 3.2,
+          latest_score: 3,
+          latest_submitted_at: '2026-09-17',
+        },
+      ],
+    })
+    assert.equal(report.grades.abPct, 87.5)
+    assert.equal(report.grades.cdPct, 12.5)
+    assert.equal(report.blockAverages[0].blockName, 'Alford Green 1-27')
+    assert.equal(report.blockAverages[0].avgGrade, 'B')
+    assert.equal(report.blockAverages[0].gradedInspections, 6)
   })
 })
