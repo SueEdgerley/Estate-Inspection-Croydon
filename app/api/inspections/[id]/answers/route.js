@@ -5,6 +5,11 @@ import { findQuestionInTemplate } from '@/lib/template-question-lookup'
 import { resolveStoredQuestionType } from '@/lib/resolveStoredQuestionType'
 import { mergeNvNotes } from '@/lib/nv-notes-pack'
 import { isWalkaboutSatelliteAnswerId, walkaboutSatelliteParentId } from '@/lib/estate-walkabout-template'
+import {
+  getOwnRecordViewer,
+  loadInspectionInspectorId,
+  ownRecordInspectionForbidden,
+} from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -12,6 +17,9 @@ export const dynamic = 'force-dynamic'
 // GET - Fetch answers for an inspection section
 export async function GET(request, { params }) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -21,6 +29,14 @@ export async function GET(request, { params }) {
       )
     }
     const { id } = await params
+    const inspection = await loadInspectionInspectorId(id)
+    if (viewer.scopeOwn) {
+      if (!inspection) {
+        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+      }
+      const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+      if (forbidden) return forbidden
+    }
     const { searchParams } = new URL(request.url)
     const sectionId = searchParams.get('section_id')
 
@@ -57,6 +73,9 @@ export async function GET(request, { params }) {
 // POST - Save answers for an inspection section
 export async function POST(request, { params }) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -72,12 +91,14 @@ export async function POST(request, { params }) {
     const extras = extrasRaw && typeof extrasRaw === 'object' ? extrasRaw : {}
 
     const inspStatusRow = await sql`
-      SELECT status, submitted_at FROM inspections WHERE id = ${id} LIMIT 1
+      SELECT status, submitted_at, inspector_id FROM inspections WHERE id = ${id} LIMIT 1
     `
     const inspMeta = inspStatusRow.rows[0]
     if (!inspMeta) {
       return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
     }
+    const forbidden = ownRecordInspectionForbidden(viewer, inspMeta.inspector_id)
+    if (forbidden) return forbidden
     const status = String(inspMeta.status || '').toLowerCase().trim()
     if (inspMeta.submitted_at || status === 'submitted' || status === 'completed' || status === 'complete') {
       return NextResponse.json(

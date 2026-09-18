@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { buildRepairsUpdatePdf } from '@/lib/pdf/buildRepairsUpdatePdf'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -35,6 +36,10 @@ async function generate(request, { params }) {
     if (!inspection) {
       return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
     }
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+    if (forbidden) return forbidden
 
     const actionsResult = await sql`
       SELECT

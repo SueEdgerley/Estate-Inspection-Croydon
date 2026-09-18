@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import {
+  getOwnRecordViewer,
+  loadInspectionInspectorId,
+  ownRecordInspectionForbidden,
+} from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,6 +13,9 @@ export const dynamic = 'force-dynamic'
 // POST - Save photo record to database
 export async function POST(request) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -17,6 +25,14 @@ export async function POST(request) {
       )
     }
     const data = await request.json()
+    if (data.inspection_id) {
+      const inspection = await loadInspectionInspectorId(data.inspection_id)
+      if (!inspection) {
+        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+      }
+      const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+      if (forbidden) return forbidden
+    }
     const id = `photo_${data.inspection_id}_${data.question_id}_${Date.now()}`
     
     const result = await sql`
@@ -46,6 +62,9 @@ export async function POST(request) {
 // GET - Get photos for an inspection/question
 export async function GET(request) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -57,6 +76,16 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const inspectionId = searchParams.get('inspection_id')
     const questionId = searchParams.get('question_id')
+    if (inspectionId) {
+      const inspection = await loadInspectionInspectorId(inspectionId)
+      if (viewer.scopeOwn) {
+        if (!inspection) {
+          return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+        }
+        const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+        if (forbidden) return forbidden
+      }
+    }
     
     let query
     if (questionId) {

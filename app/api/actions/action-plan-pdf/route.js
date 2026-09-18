@@ -23,6 +23,7 @@ import {
   PDF_LOGO_MAX_HEIGHT,
   PDF_LOGO_MAX_WIDTH,
 } from '@/lib/logo-branding'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -315,7 +316,7 @@ export async function POST(request) {
 
     const inspectionResult = await sql`
       SELECT
-        i.id, i.title, i.location_label, i.submitted_at, i.created_at,
+        i.id, i.title, i.location_label, i.submitted_at, i.created_at, i.inspector_id,
         COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS estate_block_name
       FROM inspections i
       LEFT JOIN estates e ON e.id = i.estate_id
@@ -325,6 +326,10 @@ export async function POST(request) {
     `
     const inspection = inspectionResult.rows[0]
     if (!inspection) return new NextResponse('Inspection not found', { status: 404 })
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+    if (forbidden) return forbidden
 
     const actionsResult = actionIds.length
       ? await sql.query(

@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureFullInspectionPdf } from '@/lib/full-inspection-report-pdf'
+import { getOwnRecordViewer, loadInspectionInspectorId, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -32,6 +33,17 @@ export async function POST(request, { params }) {
     const { id } = await params
     const url = new URL(request.url)
     const forceRegenerate = url.searchParams.get('regenerate') === '1'
+
+    if (!bypassLocal) {
+      const viewer = await getOwnRecordViewer()
+      if (viewer.error) return viewer.error
+      const inspection = await loadInspectionInspectorId(id)
+      if (!inspection) {
+        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+      }
+      const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+      if (forbidden) return forbidden
+    }
 
     const result = await ensureFullInspectionPdf(sql, {
       inspectionId: id,

@@ -8,6 +8,11 @@ import {
   isRecipientPersonFkError,
   validateActionRecipientForInsert,
 } from '@/lib/validate-issue-recipient'
+import {
+  getOwnRecordViewer,
+  loadActionAccessMeta,
+  ownRecordActionForbidden,
+} from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -64,6 +69,9 @@ function normalizeDateOnly(value) {
 // GET - Get action by ID
 export async function GET(request, { params }) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -150,6 +158,12 @@ export async function GET(request, { params }) {
       )
     }
 
+    const forbidden = ownRecordActionForbidden(viewer, {
+      inspectorId: result.rows[0].inspection_inspector_id,
+      recipientPersonId: result.rows[0].recipient_person_id,
+    })
+    if (forbidden) return forbidden
+
     return NextResponse.json(result.rows[0])
   } catch (error) {
     console.error('Error fetching action:', error)
@@ -165,6 +179,9 @@ export async function PUT(request, { params }) {
   let id = null
   let debugPayload = null
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -175,6 +192,16 @@ export async function PUT(request, { params }) {
     }
     const routeParams = await params
     id = routeParams.id
+    const existing = await loadActionAccessMeta(id)
+    if (!existing) {
+      return NextResponse.json({ error: 'Action not found' }, { status: 404 })
+    }
+    const forbidden = ownRecordActionForbidden(viewer, {
+      inspectorId: existing.inspector_id,
+      recipientPersonId: existing.recipient_person_id,
+    })
+    if (forbidden) return forbidden
+
     const data = await request.json()
     const repairFieldsAvailable = await ensureRepairActionFields(sql)
     if (!repairFieldsAvailable) {

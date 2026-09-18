@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { isEstateWalkaboutTemplateVersion } from '@/lib/estate-walkabout-template'
 import { buildWalkaboutResidentPosterPdf } from '@/lib/pdf/buildWalkaboutResidentPosterPdf'
 import { unpackNvWizardNotes } from '@/lib/nv-notes-pack'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -145,6 +146,10 @@ async function generate(request, { params }) {
 
     const inspection = inspectionResult.rows[0]
     if (!inspection) return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+    if (forbidden) return forbidden
 
     const templateVersion = parseTemplateVersion(inspection.template_version)
     const isWalkabout =

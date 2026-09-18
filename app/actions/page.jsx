@@ -78,6 +78,7 @@ export default function ActionsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [downloadingActionPlan, setDownloadingActionPlan] = useState(false)
+  const [mustScopeToOwnRecords, setMustScopeToOwnRecords] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [inspectionId, setInspectionId] = useState(null)
@@ -199,6 +200,23 @@ export default function ActionsPage() {
     if (filteredActions.some((action) => action.id === selectedId)) return
     setSelectedId(filteredActions[0]?.id || '')
   }, [filteredActions, selectedId])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRole() {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' })
+        const data = await res.json().catch(() => null)
+        if (!cancelled) setMustScopeToOwnRecords(data?.roleUi?.mustScopeToOwnRecords === true)
+      } catch {
+        if (!cancelled) setMustScopeToOwnRecords(false)
+      }
+    }
+    loadRole()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -388,6 +406,11 @@ export default function ActionsPage() {
         <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280' }}>
           Issues and actions raised from inspection forms
         </p>
+        {mustScopeToOwnRecords ? (
+          <p style={{ margin: '0.75rem 0 0 0', color: '#374151' }}>
+            You can only see issues from your own inspections or assigned to you.
+          </p>
+        ) : null}
       </div>
 
       {inspectionId ? (
@@ -500,6 +523,7 @@ export default function ActionsPage() {
             </datalist>
           </div>
           
+          {mustScopeToOwnRecords ? null : (
           <div style={filterGroupStyle}>
             <label htmlFor="person-filter" style={filterLabelStyle}>
               Assigned/Completed By
@@ -519,6 +543,7 @@ export default function ActionsPage() {
               ))}
             </datalist>
           </div>
+          )}
         </div>
         
         {(filters.dateFrom || filters.dateTo || filters.location || filters.person) && (

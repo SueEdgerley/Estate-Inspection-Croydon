@@ -15,6 +15,7 @@ import {
 import { auditEstateWalkaboutSnapshot } from '@/lib/estate-walkabout-snapshot-audit'
 import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -72,6 +73,9 @@ export async function GET(request, { params }) {
   const includeQuestionPipelineInBody = request.nextUrl?.searchParams?.get('debug') === '1'
   const walkaboutAudit = request.nextUrl?.searchParams?.get('walkabout_audit') === '1'
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -97,6 +101,9 @@ export async function GET(request, { params }) {
         { status: 404 }
       )
     }
+
+    const forbidden = ownRecordInspectionForbidden(viewer, result.rows[0].inspector_id)
+    if (forbidden) return forbidden
 
     const row = { ...result.rows[0] }
     const tvCreated = row._template_version_row_created_at

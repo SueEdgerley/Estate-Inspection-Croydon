@@ -28,6 +28,7 @@
     "test:analytics-client-filters": "node --test scripts/analytics-client-filters.test.mjs",
     "test:analytics-management": "node --test scripts/analytics-management.test.mjs",
     "test:analytics": "node --test scripts/analytics-filters.test.mjs scripts/analytics-load-guard.test.mjs scripts/analytics-client-filters.test.mjs scripts/analytics-management.test.mjs",
+    "test:own-record": "node --import ./scripts/esm-alias-register.mjs --test scripts/own-record-scope.test.mjs",
     "test:photo-upload-attrs": "node --test scripts/photo-upload-input-attrs.test.mjs"
   },
   "dependencies": {

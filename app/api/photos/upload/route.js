@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
+import { ensureDatabase, getPgUrl } from '@/lib/db'
+import {
+  getOwnRecordViewer,
+  loadInspectionInspectorId,
+  ownRecordInspectionForbidden,
+} from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -7,10 +13,23 @@ export const dynamic = 'force-dynamic'
 // POST - Upload photo to Vercel Blob Storage
 export async function POST(request) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     const formData = await request.formData()
     const file = formData.get('file')
     const inspectionId = formData.get('inspection_id')
     const questionId = formData.get('question_id')
+
+    if (inspectionId) {
+      if (getPgUrl()) await ensureDatabase()
+      const inspection = await loadInspectionInspectorId(String(inspectionId))
+      if (!inspection) {
+        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+      }
+      const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+      if (forbidden) return forbidden
+    }
     
     if (!file) {
       return NextResponse.json(

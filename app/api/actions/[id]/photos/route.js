@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import {
+  getOwnRecordViewer,
+  loadActionAccessMeta,
+  ownRecordActionForbidden,
+} from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,6 +13,9 @@ export const dynamic = 'force-dynamic'
 // POST - Link photos to an action
 export async function POST(request, { params }) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -17,6 +25,16 @@ export async function POST(request, { params }) {
       )
     }
     const { id } = await params
+    const existing = await loadActionAccessMeta(id)
+    if (!existing) {
+      return NextResponse.json({ error: 'Action not found' }, { status: 404 })
+    }
+    const forbidden = ownRecordActionForbidden(viewer, {
+      inspectorId: existing.inspector_id,
+      recipientPersonId: existing.recipient_person_id,
+    })
+    if (forbidden) return forbidden
+
     const { photo_ids } = await request.json()
 
     if (!Array.isArray(photo_ids) || photo_ids.length === 0) {

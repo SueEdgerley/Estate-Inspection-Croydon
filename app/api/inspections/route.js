@@ -41,6 +41,10 @@ import {
   roleMayCreateAdHocInspection,
   roleMayCreateInspectionWithTemplate,
 } from '@/lib/app-role-access'
+import {
+  loadOwnRecordIdentity,
+  roleMustScopeToOwnOperationalRecords,
+} from '@/lib/own-record-scope'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
 import { isGroundsMaintenanceTemplate } from '@/lib/grounds-maintenance-template'
@@ -1033,6 +1037,14 @@ export async function GET(request) {
       postgresListAll = false
     }
     const canListAll = clerkAdmin || postgresListAll
+    const cu = await currentUser()
+    const roleCtx = await getAppRoleContextForClerkUser(
+      userId,
+      clerkAdmin || cu?.publicMetadata?.isAdmin === true,
+      { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
+    )
+    const scopeOwn = roleMustScopeToOwnOperationalRecords(roleCtx.normalized, roleCtx.clerkIsAdmin)
+    const identity = scopeOwn ? await loadOwnRecordIdentity(userId, userEmail) : null
     const { searchParams } = new URL(request.url)
 
     const whereConditions = buildInspectionWhereConditions({
@@ -1051,7 +1063,8 @@ export async function GET(request) {
       scheduled: searchParams.get('scheduled') || 'all',
       grading: searchParams.get('grading') || 'all',
       locationSearch: searchParams.get('search') || '',
-      admin: canListAll,
+      admin: canListAll && !scopeOwn,
+      fallbackInspectorIds: scopeOwn ? identity.inspectorMatchValues : null,
     })
     const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const limit = canListAll ? 200 : 100

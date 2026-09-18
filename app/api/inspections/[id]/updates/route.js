@@ -9,6 +9,7 @@ import {
   canViewInspectionFollowUpUpdates,
   mapInspectionUpdateRow,
 } from '@/lib/inspection-follow-up-updates'
+import { loadOwnRecordIdentity, roleMustScopeToOwnOperationalRecords } from '@/lib/own-record-scope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,7 +39,9 @@ export async function GET(_request, { params }) {
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(userId, cu?.publicMetadata?.isAdmin === true)
     const userEmail = await getCurrentUserEmail()
-    if (!canViewInspectionFollowUpUpdates({ roleCtx, userEmail, inspection })) {
+    const scopeOwn = roleMustScopeToOwnOperationalRecords(roleCtx.normalized, roleCtx.clerkIsAdmin)
+    const identity = scopeOwn ? await loadOwnRecordIdentity(userId, userEmail) : null
+    if (!canViewInspectionFollowUpUpdates({ roleCtx, userEmail, inspection, identity })) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

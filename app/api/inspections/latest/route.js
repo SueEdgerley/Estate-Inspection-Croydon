@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { getPgUrl } from '@/lib/db'
+import { getOwnRecordViewer } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /** GET /api/inspections/latest – last 10 inspections (id, estate, block, createdAt) to confirm submits are landing. */
 export async function GET() {
+  const viewer = await getOwnRecordViewer()
+  if (viewer.error) return viewer.error
+
   if (!getPgUrl()) {
     return NextResponse.json(
       { error: 'Database not configured' },
@@ -14,16 +18,31 @@ export async function GET() {
     )
   }
   try {
-    const result = await sql`
-      SELECT i.id, i.created_at AS "createdAt",
-             e.name AS estate,
-             b.name AS block
-      FROM inspections i
-      LEFT JOIN estates e ON e.id = i.estate_id
-      LEFT JOIN blocks b ON b.id = i.block_id
-      ORDER BY i.created_at DESC NULLS LAST
-      LIMIT 10
-    `
+    if (viewer.scopeOwn && !(viewer.identity?.inspectorMatchValues || []).length) {
+      return NextResponse.json([])
+    }
+    const result = viewer.scopeOwn
+      ? await sql`
+          SELECT i.id, i.created_at AS "createdAt",
+                 e.name AS estate,
+                 b.name AS block
+          FROM inspections i
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = i.block_id
+          WHERE lower(trim(COALESCE(i.inspector_id, ''))) = ANY(${viewer.identity.inspectorMatchValues}::text[])
+          ORDER BY i.created_at DESC NULLS LAST
+          LIMIT 10
+        `
+      : await sql`
+          SELECT i.id, i.created_at AS "createdAt",
+                 e.name AS estate,
+                 b.name AS block
+          FROM inspections i
+          LEFT JOIN estates e ON e.id = i.estate_id
+          LEFT JOIN blocks b ON b.id = i.block_id
+          ORDER BY i.created_at DESC NULLS LAST
+          LIMIT 10
+        `
     return NextResponse.json(result.rows)
   } catch (e) {
     console.error('Inspections latest GET:', e)

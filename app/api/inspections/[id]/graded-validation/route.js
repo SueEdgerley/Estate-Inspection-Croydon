@@ -3,16 +3,19 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { deriveInspectionGrading } from '@/lib/deriveInspectionGrading'
 import { buildGradedValidationReport } from '@/lib/gradedInspectionValidation'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
  * GET — QA: compare template graded questions to inspection_answers + derived grading.
- * No auth (same pattern as GET /api/inspections/[id]); restrict via network if needed.
  */
 export async function GET(request, { params }) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -21,7 +24,7 @@ export async function GET(request, { params }) {
     const { id } = await params
 
     const insp = await sql`
-      SELECT id, template_version, grading, status, submitted_at
+      SELECT id, template_version, grading, status, submitted_at, inspector_id
       FROM inspections
       WHERE id = ${id}
       LIMIT 1
@@ -29,6 +32,8 @@ export async function GET(request, { params }) {
     if (insp.rows.length === 0) {
       return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
     }
+    const forbidden = ownRecordInspectionForbidden(viewer, insp.rows[0].inspector_id)
+    if (forbidden) return forbidden
 
     const row = insp.rows[0]
     const template = row.template_version

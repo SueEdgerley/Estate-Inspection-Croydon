@@ -3,6 +3,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,6 +32,10 @@ export async function POST(request) {
     }
 
     const inspection = inspectionResult.rows[0]
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+    if (forbidden) return forbidden
 
     const actionsResult = await sql`
       SELECT * FROM actions

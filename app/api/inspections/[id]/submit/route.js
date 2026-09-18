@@ -43,6 +43,7 @@ import {
   formatDateGb,
 } from '@/lib/issue-job-card-upload'
 import { getAppRoleContextForClerkUser, roleMayCreateInspectionWithTemplate } from '@/lib/app-role-access'
+import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-record-access'
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 import { ensureFullInspectionPdf } from '@/lib/full-inspection-report-pdf'
 import { sendInspectionSubmissionConfirmationEmail } from '@/lib/inspection-submission-confirmation-email'
@@ -525,6 +526,10 @@ export async function POST(request, { params }) {
     }
     
     const inspection = inspectionResult.rows[0]
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    const forbidden = ownRecordInspectionForbidden(viewer, inspection.inspector_id)
+    if (forbidden) return forbidden
 
     // Get all answers
     const answersResult = await sql`

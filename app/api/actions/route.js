@@ -18,6 +18,11 @@ import { getRequestTrace, logAccessTrace, roleTrace } from '@/lib/access-trace'
 import { deduplicateActionRowsById } from '@/lib/deduplicate-actions'
 import { ensureIssueNumberFields } from '@/lib/issue-number-fields'
 import { buildActionListWhere, normalizeActionListStatus } from '@/lib/action-list-filters'
+import {
+  identityOwnsInspection,
+  loadOwnRecordIdentity,
+  roleMustScopeToOwnOperationalRecords,
+} from '@/lib/own-record-scope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -263,6 +268,30 @@ export async function GET(request) {
       })
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+
+    const scopeOwn = roleMustScopeToOwnOperationalRecords(roleCtx.normalized, roleCtx.clerkIsAdmin)
+    const identity = scopeOwn
+      ? await loadOwnRecordIdentity(userId, currentUserEmail(cu))
+      : null
+    if (scopeOwn && inspectionId) {
+      const inspectionOwner = await sql`
+        SELECT inspector_id FROM inspections WHERE id = ${inspectionId} LIMIT 1
+      `
+      if (!inspectionOwner.rows[0]) {
+        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 })
+      }
+      if (!identityOwnsInspection(identity, inspectionOwner.rows[0].inspector_id)) {
+        logAccessTrace('api.actions.get.forbidden', {
+          ...getRequestTrace(request),
+          user_id: userId,
+          inspection_id: inspectionId,
+          ...actionInspectionTrace,
+          ...roleTrace(roleCtx),
+          failure_source: '/api/actions own-record',
+        })
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
     
     let result
     let totalCount = 0
@@ -273,6 +302,7 @@ export async function GET(request) {
       status,
       search,
       includeFalseActions,
+      ownRecord: scopeOwn ? identity : null,
     }
     try {
       await ensureRepairActionFields(sql)
