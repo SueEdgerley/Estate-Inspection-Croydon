@@ -92,6 +92,8 @@ export default function AppLayout({ children }) {
     }
     const allowed =
       pathname === '/templates' ||
+      pathname === '/phone-drafts' ||
+      pathname.startsWith('/phone-drafts/') ||
       pathname.startsWith('/caretaker/my-inspections') ||
       pathname.startsWith('/caretaker/inspections') ||
       pathname.startsWith('/guides') ||
