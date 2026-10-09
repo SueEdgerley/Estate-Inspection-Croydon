@@ -48,6 +48,10 @@ import {
   walkaboutDurationLabel,
 } from '@/lib/walkabout-inspection-timing'
 import { resolveDraftToRestoreAfterReload, sanitizeRestoredPhotoUrls } from '@/lib/walkabout-photo-recovery'
+import {
+  buildWalkaboutFormStateFromDraft,
+  formatRestoredWalkaboutBanner,
+} from '@/lib/walkabout-draft-restore'
 
 /**
  * Persist a post-submit warning so it can be surfaced on the inspection page
@@ -505,16 +509,25 @@ export default function EstateWalkaboutNewInspectionForm({
   templateId,
   setTemplateId,
   templateLocked = false,
+  initialDraftToRestore = null,
 }) {
   const router = useRouter()
   const { user } = useUser()
-  const [postgresBlockId, setPostgresBlockId] = useState('')
-  const [location, setLocation] = useState('')
-  const [description, setDescription] = useState('')
+  const initialRestored = initialDraftToRestore
+    ? buildWalkaboutFormStateFromDraft(initialDraftToRestore, { blocks })
+    : null
+  const [postgresBlockId, setPostgresBlockId] = useState(() => initialRestored?.postgresBlockId || '')
+  const [location, setLocation] = useState(() => initialRestored?.location || '')
+  const [description, setDescription] = useState(() => initialRestored?.description || '')
 
-  const [answers, setAnswers] = useState(emptyAnswers)
-  const [answerExtras, setAnswerExtras] = useState({})
-  const [checklist, setChecklist] = useState(() => [])
+  const [answers, setAnswers] = useState(() => ({
+    ...emptyAnswers(),
+    ...(initialRestored?.answers || {}),
+  }))
+  const [answerExtras, setAnswerExtras] = useState(() => initialRestored?.answerExtras || {})
+  const [checklist, setChecklist] = useState(() =>
+    normalizeChecklistItems(initialRestored?.checklist || [])
+  )
   const [peopleOptions, setPeopleOptions] = useState([])
   const [jobTitleOptions, setJobTitleOptions] = useState([])
 
@@ -527,17 +540,27 @@ export default function EstateWalkaboutNewInspectionForm({
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine
   )
-  const [offlineDraftId, setOfflineDraftId] = useState('')
+  const [offlineDraftId, setOfflineDraftId] = useState(() => initialRestored?.id || '')
   const [offlineDrafts, setOfflineDrafts] = useState([])
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [submittedInspection, setSubmittedInspection] = useState(null)
   const [hasPreviousCarryOver, setHasPreviousCarryOver] = useState(false)
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
-  const [inspectionStartTime, setInspectionStartTime] = useState(() => toDatetimeLocalValue())
-  const [inspectionEndTime, setInspectionEndTime] = useState('')
+  const [inspectionStartTime, setInspectionStartTime] = useState(() =>
+    initialRestored?.inspectionStartTime
+      ? toDatetimeLocalValue(initialRestored.inspectionStartTime)
+      : toDatetimeLocalValue()
+  )
+  const [inspectionEndTime, setInspectionEndTime] = useState(() =>
+    initialRestored?.inspectionEndTime ? toDatetimeLocalValue(initialRestored.inspectionEndTime) : ''
+  )
   const [activePhotoUploads, setActivePhotoUploads] = useState({})
   const [offlineSaveNotice, setOfflineSaveNotice] = useState('')
-  const restoredSessionDraftRef = useRef(false)
+  const [restoreNotice, setRestoreNotice] = useState(() =>
+    initialRestored ? formatRestoredWalkaboutBanner(initialRestored) : ''
+  )
+  const restoredSessionDraftRef = useRef(Boolean(initialRestored?.id))
+  const suppressAutosaveRef = useRef(Boolean(initialRestored?.id))
 
   const hasActivePhotoUploads = useMemo(
     () => Object.values(activePhotoUploads).some(Boolean),
@@ -609,7 +632,12 @@ export default function EstateWalkaboutNewInspectionForm({
     setHasPreviousCarryOver(Boolean(carried && Object.keys(carried).length > 0))
   }, [])
 
+  const markWalkaboutDraftDirty = useCallback(() => {
+    suppressAutosaveRef.current = false
+  }, [])
+
   const setField = (id, val) => {
+    markWalkaboutDraftDirty()
     setAnswers((prev) => ({ ...prev, [id]: val }))
     setValidationErrors((prev) => {
       const next = { ...prev }
@@ -635,6 +663,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const setYesNoNaField = (qid, value) => {
     if (qid === EW_IT_PRIVATE_GARDENS_MAINTAINED_QID && value !== 'No') {
+      markWalkaboutDraftDirty()
       setAnswers((prev) => ({
         ...prev,
         [qid]: value,
@@ -679,6 +708,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const setPhotos = (id, urls) => {
     if (!PHOTO_EXTRA_IDS.has(id)) return
+    markWalkaboutDraftDirty()
     setAnswerExtras((prev) => ({
       ...prev,
       [id]: { ...(prev[id] || {}), photo_urls: capActionPhotoUrls(urls) },
@@ -808,6 +838,7 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const flushActiveDraftFromRef = useCallback(() => {
     if (submitSuccessMessage) return
+    if (suppressAutosaveRef.current) return
     const payload = currentDraftPayloadRef.current
     if (!draftHasOfficerProgress(payload)) return
     const id = offlineDraftIdRef.current || createOfflineDraftId()
@@ -830,6 +861,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const flushDraftAfterLocalPhoto = useCallback(
     (update) => {
       if (submitSuccessMessage) return
+      markWalkaboutDraftDirty()
 
       const base = currentDraftPayloadRef.current
       let submitBody = base.submitBody || {}
@@ -865,59 +897,54 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       noteDraftSaveResult(saved)
     },
-    [noteDraftSaveResult, submitSuccessMessage]
+    [markWalkaboutDraftDirty, noteDraftSaveResult, submitSuccessMessage]
   )
 
   const restoreOfflineDraft = useCallback((draft) => {
     try {
-      const payload = draft?.payload || {}
-      const body = payload.submitBody || {}
-      const originalId = draft.id
-      setOfflineDraftId(originalId)
-      offlineDraftIdRef.current = originalId
-      rememberActiveOfflineDraftId(originalId)
-      setPostgresBlockId(body.block_id || payload.blockId || '')
-      setLocation(body.location || payload.location || '')
-      setDescription(body.description || payload.description || '')
-      setInspectionStartTime(body.inspection_start_time ? toDatetimeLocalValue(body.inspection_start_time) : toDatetimeLocalValue())
-      setInspectionEndTime(body.inspection_end_time ? toDatetimeLocalValue(body.inspection_end_time) : '')
-      const restoredAnswers = { ...(body.answers || {}) }
-      let restoredChecklist = []
-      try {
-        restoredChecklist = JSON.parse(restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID] || '[]')
-      } catch {
-        restoredChecklist = []
-      }
-      delete restoredAnswers[ESTATE_WALKABOUT_CHECKLIST_QID]
-      setAnswers({ ...emptyAnswers(), ...restoredAnswers })
-      const restoredExtras = body.answer_extras && typeof body.answer_extras === 'object' ? body.answer_extras : {}
-      const normalizedExtras = {}
-      for (const [qid, ex] of Object.entries(restoredExtras)) {
-        if (!ex || typeof ex !== 'object') continue
-        normalizedExtras[qid] = {
-          ...ex,
-          photo_urls: capActionPhotoUrls(
-            sanitizeRestoredPhotoUrls(ex.photo_urls || ex.photoUrl || ex.photoUrls)
-          ),
-        }
-      }
-      setAnswerExtras(normalizedExtras)
-      setChecklist(normalizeChecklistItems(restoredChecklist))
+      const restored = buildWalkaboutFormStateFromDraft(draft, { blocks: locationBlocks })
+      if (!restored?.id) return
+      suppressAutosaveRef.current = true
+      setOfflineDraftId(restored.id)
+      offlineDraftIdRef.current = restored.id
+      rememberActiveOfflineDraftId(restored.id)
+      setPostgresBlockId(restored.postgresBlockId)
+      setLocation(restored.location)
+      setDescription(restored.description)
+      setInspectionStartTime(
+        restored.inspectionStartTime
+          ? toDatetimeLocalValue(restored.inspectionStartTime)
+          : toDatetimeLocalValue()
+      )
+      setInspectionEndTime(
+        restored.inspectionEndTime ? toDatetimeLocalValue(restored.inspectionEndTime) : ''
+      )
+      setAnswers({ ...emptyAnswers(), ...restored.answers })
+      setAnswerExtras(restored.answerExtras)
+      setChecklist(normalizeChecklistItems(restored.checklist))
       setSubmitError(null)
       setOfflineSaveNotice('')
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      }
+      setRestoreNotice(formatRestoredWalkaboutBanner(restored))
+      restoredSessionDraftRef.current = true
     } catch {
       setSubmitError('Could not reopen the saved inspection on this phone.')
     }
-  }, [])
+  }, [locationBlocks])
+
+  useEffect(() => {
+    if (!initialDraftToRestore?.id) return
+    if (offlineDraftIdRef.current === initialDraftToRestore.id) return
+    restoreOfflineDraft(initialDraftToRestore)
+  }, [initialDraftToRestore, restoreOfflineDraft])
 
   useEffect(() => {
     const updateOnlineStatus = () => setIsOnline(isBrowserOnline())
     updateOnlineStatus()
     const drafts = readOfflineInspectionDrafts()
     setOfflineDrafts(drafts)
+    if (offlineDraftIdRef.current) {
+      rememberActiveOfflineDraftId(offlineDraftIdRef.current)
+    }
     if (!restoredSessionDraftRef.current) {
       restoredSessionDraftRef.current = true
       const activeId = readActiveOfflineDraftId()
@@ -965,6 +992,7 @@ export default function EstateWalkaboutNewInspectionForm({
   }, [flushActiveDraftFromRef, restoreOfflineDraft])
 
   useEffect(() => {
+    if (suppressAutosaveRef.current) return undefined
     if (!draftHasOfficerProgress(currentDraftPayload)) return undefined
     const timer = window.setTimeout(() => {
       try {
@@ -1127,6 +1155,7 @@ export default function EstateWalkaboutNewInspectionForm({
   }
 
   const updateItem = (itemId, patch) => {
+    markWalkaboutDraftDirty()
     setChecklist((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...patch } : it)))
   }
 
@@ -1748,6 +1777,26 @@ export default function EstateWalkaboutNewInspectionForm({
             draftsTitle="Saved Walkabouts on this phone"
             style={{ maxWidth: 'none' }}
           />
+          {restoreNotice ? (
+            <div
+              data-testid="walkabout-restored-banner"
+              role="status"
+              aria-live="polite"
+              style={{
+                padding: '14px 16px',
+                marginBottom: 20,
+                background: '#ecfdf5',
+                color: '#14532d',
+                border: '1px solid #86efac',
+                borderRadius: EW.radius,
+                fontSize: 14,
+                lineHeight: 1.55,
+              }}
+            >
+              <strong style={{ display: 'block', marginBottom: 6 }}>Saved inspection opened</strong>
+              {restoreNotice}
+            </div>
+          ) : null}
           {offlineSaveNotice ? (
             <div
               role="status"
@@ -1823,7 +1872,10 @@ export default function EstateWalkaboutNewInspectionForm({
                 <input
                   type="datetime-local"
                   value={inspectionStartTime}
-                  onChange={(e) => setInspectionStartTime(e.target.value)}
+                  onChange={(e) => {
+                    markWalkaboutDraftDirty()
+                    setInspectionStartTime(e.target.value)
+                  }}
                   style={inputStyle}
                 />
               </div>
@@ -1832,7 +1884,10 @@ export default function EstateWalkaboutNewInspectionForm({
                 <input
                   type="datetime-local"
                   value={inspectionEndTime}
-                  onChange={(e) => setInspectionEndTime(e.target.value)}
+                  onChange={(e) => {
+                    markWalkaboutDraftDirty()
+                    setInspectionEndTime(e.target.value)
+                  }}
                   style={inputStyle}
                 />
                 <p style={{ margin: '6px 0 0', fontSize: 13, color: EW.muted }}>
@@ -1856,7 +1911,10 @@ export default function EstateWalkaboutNewInspectionForm({
                 id="estate_walkabout_postgres_block_id"
                 name="postgres_block_id"
                 value={postgresBlockId}
-                onChange={setPostgresBlockId}
+                onChange={(blockId) => {
+                  markWalkaboutDraftDirty()
+                  setPostgresBlockId(blockId)
+                }}
                 locations={locationBlocks}
                 error={!!validationErrors.block_id}
                 noneLabel="— None selected —"
@@ -1871,11 +1929,21 @@ export default function EstateWalkaboutNewInspectionForm({
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle}>Location note (optional)</label>
-              <input value={location} onChange={(e) => setLocation(e.target.value)} style={inputStyle} />
+              <input
+                value={location}
+                onChange={(e) => {
+                  markWalkaboutDraftDirty()
+                  setLocation(e.target.value)
+                }}
+                style={inputStyle}
+              />
             </div>
             <div>
               <label style={labelStyle}>Description (optional)</label>
-              <textarea className="inspection-comment-textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} style={{ ...inputStyle, ...commentTextareaStyle, minHeight: 72 }} />
+              <textarea className="inspection-comment-textarea" value={description} onChange={(e) => {
+                markWalkaboutDraftDirty()
+                setDescription(e.target.value)
+              }} rows={2} style={{ ...inputStyle, ...commentTextareaStyle, minHeight: 72 }} />
             </div>
           </section>
 
@@ -2087,7 +2155,10 @@ export default function EstateWalkaboutNewInspectionForm({
               </div>
               <button
                 type="button"
-                onClick={() => setChecklist((c) => [...c, newChecklistItem()])}
+                onClick={() => {
+                  markWalkaboutDraftDirty()
+                  setChecklist((c) => [...c, newChecklistItem()])
+                }}
                 style={{
                   padding: '10px 16px',
                   background: EW.accent,
@@ -2201,7 +2272,10 @@ export default function EstateWalkaboutNewInspectionForm({
                   )}
                   <button
                     type="button"
-                    onClick={() => setChecklist((c) => c.filter((x) => x.id !== it.id))}
+                    onClick={() => {
+                      markWalkaboutDraftDirty()
+                      setChecklist((c) => c.filter((x) => x.id !== it.id))
+                    }}
                     style={{
                       marginTop: 12,
                       padding: '6px 12px',

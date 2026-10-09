@@ -57,10 +57,12 @@ import {
   formatDraftLastSaved,
   hasInspectionDraftContent,
   readOfflineInspectionDrafts,
+  rememberActiveOfflineDraftId,
   removeOfflineInspectionDraft,
   upsertOfflineInspectionDraft,
   OFFLINE_DRAFT_STORAGE_FULL_MESSAGE,
 } from '@/lib/offline-inspection-drafts'
+import { isWalkaboutOfflineDraft } from '@/lib/walkabout-draft-restore'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
 import {
   clearInspectionResumeDraft,
@@ -2118,6 +2120,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const { user } = useUser()
   const [isMobile, setIsMobile] = useState(false)
   const templateIdFromUrl = String(searchParams?.get('template_id') || '').trim()
+  const draftIdFromUrl = String(searchParams?.get('draft_id') || '').trim()
   const walkaboutFromUrl = searchParams.get('walkabout') === '1'
   const effectiveLockedTemplateId = walkaboutFromUrl
     ? ESTATE_WALKABOUT_TEMPLATE_ID
@@ -2161,6 +2164,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   )
   const [offlineDraftId, setOfflineDraftId] = useState('')
   const [offlineDrafts, setOfflineDrafts] = useState([])
+  const [walkaboutResumeDraft, setWalkaboutResumeDraft] = useState(null)
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [viewerAccess, setViewerAccess] = useState({ accessMessage: null, jobTitle: null })
@@ -2704,6 +2708,22 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   }, [])
 
   useEffect(() => {
+    if (!draftIdFromUrl) return
+    if (walkaboutResumeDraft?.id === draftIdFromUrl) return
+    const listed = (Array.isArray(offlineDrafts) ? offlineDrafts : []).find(
+      (item) => item?.id === draftIdFromUrl
+    )
+    const stored =
+      listed || readOfflineInspectionDrafts().find((item) => item?.id === draftIdFromUrl)
+    if (!stored || !isWalkaboutOfflineDraft(stored)) return
+    if (!draftHasOfficerProgress(stored.payload || {})) return
+    rememberActiveOfflineDraftId(stored.id)
+    setOfflineDraftId(stored.id)
+    setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
+    setWalkaboutResumeDraft(stored)
+  }, [draftIdFromUrl, offlineDrafts, walkaboutResumeDraft])
+
+  useEffect(() => {
     if (resumeDraftPromptResolvedRef.current) return
     const draft = readInspectionResumeDraft()
     const draftTemplateId =
@@ -2947,6 +2967,14 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const restoreOfflineDraft = (draft) => {
     try {
+      if (isWalkaboutOfflineDraft(draft)) {
+        if (!draft?.id) return
+        rememberActiveOfflineDraftId(draft.id)
+        setOfflineDraftId(draft.id)
+        setTemplateId(ESTATE_WALKABOUT_TEMPLATE_ID)
+        setWalkaboutResumeDraft(draft)
+        return
+      }
       setOfflineDraftId(draft.id)
       applyInspectionDraftPayload(draft?.payload || {})
     } catch {
@@ -3523,11 +3551,13 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   if (selectedTemplate && isEstateWalkaboutTemplate(selectedTemplate)) {
     return (
       <EstateWalkaboutNewInspectionForm
+        key={walkaboutResumeDraft?.id || 'walkabout'}
         blocks={blocks}
         templates={templates}
         templateId={templateId}
         setTemplateId={setTemplateId}
         templateLocked={isTemplateLocked}
+        initialDraftToRestore={walkaboutResumeDraft}
       />
     )
   }
