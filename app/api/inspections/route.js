@@ -193,7 +193,10 @@ function operationalInspectionTimes(template, startValue, endValue, { defaultEnd
     return { start: null, end: null }
   }
   const start = parseInspectionTimeInput(startValue)
-  const end = parseInspectionTimeInput(endValue) || (defaultEnd ? new Date() : null)
+  const parsedEnd = parseInspectionTimeInput(endValue)
+  const fillSubmitTimeAsEnd =
+    defaultEnd && parsedEnd == null && !(template && isEstateWalkaboutTemplate(template))
+  const end = parsedEnd || (fillSubmitTimeAsEnd ? new Date() : null)
   return { start, end }
 }
 

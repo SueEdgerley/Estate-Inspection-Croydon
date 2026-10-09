@@ -53,6 +53,7 @@ import SignOffSection from '@/app/components/wizard/SignOffSection'
 import { buildInspectionFormNvTokens } from '@/lib/inspection-form-ui'
 import {
   createOfflineDraftId,
+  draftHasOfficerProgress,
   formatDraftLastSaved,
   hasInspectionDraftContent,
   readOfflineInspectionDrafts,
@@ -2417,6 +2418,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const templates = apiPayload.templates || []
   const selectedTemplate = useMemo(() => templates.find((t) => t.id === templateId), [templates, templateId])
+  const isWalkaboutFormActive =
+    templateId === ESTATE_WALKABOUT_TEMPLATE_ID || isEstateWalkaboutTemplate(selectedTemplate)
   const requestedTemplateId = effectiveLockedTemplateId || templateId
   const formPermissionBlocked = Boolean(
     !loading && requestedTemplateId && !templates.some((t) => t.id === requestedTemplateId)
@@ -2753,6 +2756,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const flushDraftAfterLocalPhoto = useCallback(
     (update) => {
+      if (isWalkaboutFormActive) return
       if (submitCompletedRef.current || submitSuccessMessage) return
 
       const base = currentDraftPayloadRef.current
@@ -2779,7 +2783,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
       noteDraftSaveResult(saved)
     },
-    [noteDraftSaveResult, submitSuccessMessage]
+    [isWalkaboutFormActive, noteDraftSaveResult, submitSuccessMessage]
   )
 
   useEffect(() => {
@@ -2789,7 +2793,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   }, [submitSuccessMessage])
 
   useEffect(() => {
-    if (!hasInspectionDraftContent(currentDraftPayload)) return undefined
+    if (isWalkaboutFormActive) return undefined
+    if (!draftHasOfficerProgress(currentDraftPayload)) return undefined
     if (submitCompletedRef.current || submitSuccessMessage) return undefined
     const timer = window.setTimeout(() => {
       try {
@@ -2807,10 +2812,17 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
     }, 1000)
     return () => window.clearTimeout(timer)
-  }, [offlineDraftId, currentDraftPayload, noteDraftSaveResult, submitSuccessMessage])
+  }, [
+    isWalkaboutFormActive,
+    offlineDraftId,
+    currentDraftPayload,
+    noteDraftSaveResult,
+    submitSuccessMessage,
+  ])
 
   // Debounced autosave of the resume draft ("inspection-draft" localStorage key).
   useEffect(() => {
+    if (isWalkaboutFormActive) return undefined
     if (resumeDraftPrompt) return undefined
     if (submitCompletedRef.current || submitSuccessMessage) return undefined
     if (!resumeDraftHasMeaningfulContent(currentDraftPayload)) return undefined
@@ -2829,6 +2841,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     }, 800)
     return () => window.clearTimeout(timer)
   }, [
+    isWalkaboutFormActive,
     resumeDraftPrompt,
     submitSuccessMessage,
     currentDraftPayload,
@@ -2838,6 +2851,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   ])
 
   const saveCurrentOfflineDraft = useCallback(() => {
+    if (isWalkaboutFormActive) return offlineDraftId || ''
+    if (!draftHasOfficerProgress(currentDraftPayload)) return offlineDraftId || ''
     try {
       const id = offlineDraftId || createOfflineDraftId()
       if (!offlineDraftId) setOfflineDraftId(id)
@@ -2853,7 +2868,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       noteDraftSaveResult(false)
       return offlineDraftId || ''
     }
-  }, [currentDraftPayload, offlineDraftId, noteDraftSaveResult])
+  }, [isWalkaboutFormActive, currentDraftPayload, offlineDraftId, noteDraftSaveResult])
 
   const handleFailedInspectionSave = useCallback(
     (res, data) => {
@@ -3583,6 +3598,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         activeDraftId={offlineDraftId}
         activeDraftPayload={currentDraftPayload}
         offlineDrafts={offlineDrafts}
+        blocks={locationBlocks}
         submitSuccessMessage={submitSuccessMessage}
         storageWarning={draftStorageWarning}
         onReopenDraft={restoreOfflineDraft}

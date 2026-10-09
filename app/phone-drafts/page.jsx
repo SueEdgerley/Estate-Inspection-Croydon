@@ -108,7 +108,7 @@ export default function PhoneDraftsBackupPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                   <thead>
                     <tr>
-                      {['Saved', 'Started', 'Location', 'Answers', 'Photos', 'Note'].map((heading) => (
+                      {['Draft ID', 'Saved', 'Started', 'Location', 'Answers', 'Photos', 'Note'].map((heading) => (
                         <th
                           key={heading}
                           style={{
@@ -129,6 +129,9 @@ export default function PhoneDraftsBackupPage() {
                         key={row.id}
                         style={{ background: row.possibleHillside ? '#ecfdf5' : '#fff' }}
                       >
+                        <td style={{ ...tdStyle, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+                          {row.id || '—'}
+                        </td>
                         <td style={tdStyle}>{row.lastSavedAt || '—'}</td>
                         <td style={tdStyle}>{formatStarted(row.startedAt)}</td>
                         <td style={tdStyle}>{row.location || row.blockId || 'Not recorded'}</td>

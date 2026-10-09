@@ -5,6 +5,7 @@ import { isBrowserOnline } from '@/lib/offline-browser'
 import {
   isPendingLocalPhotoUrl,
   readImageFileAsDataUrl,
+  replaceUrlInList,
   uploadPendingLocalPhotoUrls,
 } from '@/lib/offline-photo-upload'
 import { getPhotoUploadInputAttrs } from '@/lib/photo-upload-input-attrs'
@@ -94,6 +95,7 @@ export default function PhotoUploadControl({
   mobileStacked = false,
   onUploadStatusChange,
   onPendingLocalPhotoSaved,
+  onBeforeCapture,
 }) {
   const photoUrls = useMemo(
     () => (Array.isArray(value) ? value.filter((u) => typeof u === 'string' && u) : []),
@@ -273,40 +275,35 @@ export default function PhotoUploadControl({
     setUploadError(null)
     setLocalSaveNotice(null)
     setWaitingForSignal(false)
-    const urlsToAdd = []
+
+    const emitUrls = (nextUrls) => {
+      photoUrlsRef.current = nextUrls
+      onChange(nextUrls)
+      if (nextUrls.some(isPendingLocalPhotoUrl)) {
+        onPendingLocalPhotoSaved?.(nextUrls)
+      }
+    }
+
+    const applyLocalUrl = (localUrl) => {
+      const currentUrls = photoUrlsRef.current
+      if (isReplace) {
+        emitUrls(currentUrls.map((url) => (url === replaceUrl ? localUrl : url)))
+        return
+      }
+      if (currentUrls.includes(localUrl)) return
+      emitUrls([...currentUrls, localUrl])
+    }
 
     const finishSelection = () => {
       setUploading(false)
       setProgress(100)
       e.target.value = ''
-      // Always append against the latest known list — render-time `photoUrls` can be
-      // stale if the parent has not re-rendered yet after a previous upload.
-      const currentUrls = photoUrlsRef.current
-      let nextUrls = currentUrls
-      if (isReplace && urlsToAdd.length) {
-        nextUrls = currentUrls.map((u) => (u === replaceUrl ? urlsToAdd[0] : u))
-        photoUrlsRef.current = nextUrls
-        onChange(nextUrls)
-      } else if (urlsToAdd.length) {
-        const seen = new Set(currentUrls)
-        nextUrls = [...currentUrls]
-        for (const url of urlsToAdd) {
-          if (!url || seen.has(url)) continue
-          seen.add(url)
-          nextUrls.push(url)
-        }
-        photoUrlsRef.current = nextUrls
-        onChange(nextUrls)
-      }
-      if (urlsToAdd.some(isPendingLocalPhotoUrl)) {
-        onPendingLocalPhotoSaved?.(nextUrls)
-      }
     }
 
     const processNext = async (index) => {
       if (index >= filesToProcess.length) {
         finishSelection()
-        if (isBrowserOnline() && urlsToAdd.some(isPendingLocalPhotoUrl)) {
+        if (isBrowserOnline() && photoUrlsRef.current.some(isPendingLocalPhotoUrl)) {
           await syncPendingUploads()
         }
         return
@@ -314,41 +311,36 @@ export default function PhotoUploadControl({
 
       const file = filesToProcess[index]
 
-      if (!isBrowserOnline()) {
-        try {
-          await storePhotoLocally(file, urlsToAdd)
-          await processNext(index + 1)
-        } catch (err) {
-          setUploading(false)
-          setUploadError(err?.message || 'Could not save photo on this phone.')
-          e.target.value = ''
-        }
-        return
-      }
-
       try {
-        const uploadFileOrBlob = await compressImageFile(file)
-        uploadFile(
-          uploadFileOrBlob,
-          (url) => {
-            urlsToAdd.push(url)
-            processNext(index + 1)
-          },
-          async (message) => {
-            try {
-              await storePhotoLocally(uploadFileOrBlob, urlsToAdd)
+        const photoForStorage = await compressImageFile(file)
+        const localUrls = []
+        await storePhotoLocally(photoForStorage, localUrls)
+        const localUrl = localUrls[0]
+        if (!localUrl) throw new Error('Could not save photo on this phone.')
+        applyLocalUrl(localUrl)
+
+        if (!isBrowserOnline()) {
+          await processNext(index + 1)
+          return
+        }
+
+        await new Promise((resolve) => {
+          uploadFile(
+            photoForStorage,
+            (uploadedUrl) => {
+              emitUrls(replaceUrlInList(photoUrlsRef.current, localUrl, uploadedUrl))
+              resolve()
+            },
+            (message) => {
               if (message) setUploadError(message)
-              await processNext(index + 1)
-            } catch (err) {
-              setUploading(false)
-              setUploadError(err?.message || message || 'Could not save photo on this phone.')
-              e.target.value = ''
+              resolve()
             }
-          }
-        )
+          )
+        })
+        await processNext(index + 1)
       } catch (err) {
         setUploading(false)
-        setUploadError(err?.message || 'Could not prepare photo for upload.')
+        setUploadError(err?.message || 'Could not save photo on this phone.')
         e.target.value = ''
       }
     }
@@ -371,6 +363,11 @@ export default function PhotoUploadControl({
 
   const openFileInput = (ref) => {
     if (!ref?.current) return
+    try {
+      onBeforeCapture?.()
+    } catch {
+      /* draft flush must not block opening the camera */
+    }
     ref.current.value = ''
     ref.current.click()
   }

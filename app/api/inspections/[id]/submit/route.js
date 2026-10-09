@@ -59,6 +59,7 @@ import {
 import { getRequestTrace, logAccessTrace, roleTrace, templateTrace } from '@/lib/access-trace'
 import { ROLE_CANNOT_SUBMIT_API_MESSAGE } from '@/lib/inspection-permission-messages'
 import { sendBulkRefuseWalkaboutEmail } from '@/lib/walkabout-email-notifications'
+import { resolveSubmittedInspectionEndTime } from '@/lib/walkabout-inspection-timing'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -617,12 +618,22 @@ export async function POST(request, { params }) {
 
     const gradingValue = deriveInspectionGrading(templateVersion ?? inspection.template_version, answers)
     const isNv = isNeighbourhoodVoiceTemplateVersion(templateVersion)
+    const isWalkabout =
+      isEstateWalkaboutTemplateVersion(templateVersion) ||
+      String(inspection.type || '').toLowerCase() === 'estate_walkabout' ||
+      String(inspection.template_name || '').toLowerCase().includes('walkabout')
     const wasDraft = inspection.status === 'draft'
     const submittedAtForTiming = new Date()
     const requestStartTime = parseInspectionTimeInput(body?.inspection_start_time)
     const requestEndTime = parseInspectionTimeInput(body?.inspection_end_time)
     const inspectionStartTime = isNv ? null : requestStartTime || inspection.inspection_start_time || null
-    const inspectionEndTime = isNv ? null : requestEndTime || submittedAtForTiming
+    const inspectionEndTime = resolveSubmittedInspectionEndTime({
+      isNeighbourhoodVoice: isNv,
+      isWalkabout,
+      requestEndTime,
+      storedEndTime: inspection.inspection_end_time,
+      submittedAt: submittedAtForTiming,
+    })
 
     const locRow = await sql`
       SELECT COALESCE(NULLIF(CONCAT_WS(' / ', e.name, b.name), ''), i.location_label, i.title) AS location_line
