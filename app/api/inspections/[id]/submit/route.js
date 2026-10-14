@@ -47,6 +47,7 @@ import { getOwnRecordViewer, ownRecordInspectionForbidden } from '@/lib/own-reco
 import { getInspectionFullReportPdfUrl } from '@/lib/inspection-pdf-fields'
 import { ensureFullInspectionPdf } from '@/lib/full-inspection-report-pdf'
 import { sendInspectionSubmissionConfirmationEmail } from '@/lib/inspection-submission-confirmation-email'
+import { alreadySubmittedInspectionReplay } from '@/lib/walkabout-session-guard'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
@@ -623,6 +624,21 @@ export async function POST(request, { params }) {
       String(inspection.type || '').toLowerCase() === 'estate_walkabout' ||
       String(inspection.template_name || '').toLowerCase().includes('walkabout')
     const wasDraft = inspection.status === 'draft'
+    const alreadySubmitted = alreadySubmittedInspectionReplay(inspection)
+    if (alreadySubmitted) {
+      const existingPdf = getInspectionFullReportPdfUrl(inspection) || null
+      return NextResponse.json(
+        {
+          inspectionId: id,
+          alreadySubmitted: true,
+          pdfUrl: existingPdf,
+          fullPdfUrl: existingPdf,
+          posterPdfUrl: inspection.poster_pdf_url || null,
+          emails_sent: 0,
+        },
+        { status: 200 }
+      )
+    }
     const submittedAtForTiming = new Date()
     const requestStartTime = parseInspectionTimeInput(body?.inspection_start_time)
     const requestEndTime = parseInspectionTimeInput(body?.inspection_end_time)

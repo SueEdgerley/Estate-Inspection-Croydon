@@ -52,6 +52,20 @@ import {
   buildWalkaboutFormStateFromDraft,
   formatRestoredWalkaboutBanner,
 } from '@/lib/walkabout-draft-restore'
+import {
+  consumeWalkaboutNextBlockCarryOver,
+  resolveWalkaboutClientInspectionId,
+  shouldFlushWalkaboutDraftBeforeCamera,
+  syncWalkaboutDraftIdInUrl,
+  walkaboutHref,
+  walkaboutInterruptedSubmitMessage,
+  walkaboutShouldAutosaveDraft,
+  walkaboutShouldBeginSubmit,
+  walkaboutShouldRestoreAfterReload,
+  walkaboutShouldRestoreOnMount,
+  walkaboutSubmitButtonLabel,
+  writeWalkaboutNextBlockFlag,
+} from '@/lib/walkabout-session-guard'
 
 /**
  * Persist a post-submit warning so it can be surfaced on the inspection page
@@ -523,6 +537,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const [answers, setAnswers] = useState(() => ({
     ...emptyAnswers(),
     ...(initialRestored?.answers || {}),
+    ...(!initialRestored ? consumeWalkaboutNextBlockCarryOver(readWalkaboutCarryOver) : {}),
   }))
   const [answerExtras, setAnswerExtras] = useState(() => initialRestored?.answerExtras || {})
   const [checklist, setChecklist] = useState(() =>
@@ -561,6 +576,10 @@ export default function EstateWalkaboutNewInspectionForm({
   )
   const restoredSessionDraftRef = useRef(Boolean(initialRestored?.id))
   const suppressAutosaveRef = useRef(Boolean(initialRestored?.id))
+  const submitCompletedRef = useRef(false)
+  const submitInFlightRef = useRef(false)
+  const submitInFlightIdRef = useRef('')
+  const ignoreParentResumeRef = useRef(false)
 
   const hasActivePhotoUploads = useMemo(
     () => Object.values(activePhotoUploads).some(Boolean),
@@ -733,15 +752,23 @@ export default function EstateWalkaboutNewInspectionForm({
     setSubmitWarning(null)
     setSubmitSuccessMessage('')
     setOfflineDraftId('')
+    offlineDraftIdRef.current = ''
     clearActiveOfflineDraftId()
+    syncWalkaboutDraftIdInUrl('')
     setInspectionStartTime(toDatetimeLocalValue())
     setInspectionEndTime('')
     setOfflineSaveNotice('')
   }
 
   const startNextBlockWithSameAttendees = () => {
+    writeWalkaboutNextBlockFlag()
+    ignoreParentResumeRef.current = true
+    submitCompletedRef.current = false
+    submitInFlightRef.current = false
+    submitInFlightIdRef.current = ''
     resetWalkaboutFormForNextBlock(readWalkaboutCarryOver() || {})
     setSubmittedInspection(null)
+    router.replace(walkaboutHref({ templateId: ESTATE_WALKABOUT_TEMPLATE_ID }))
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
@@ -837,11 +864,15 @@ export default function EstateWalkaboutNewInspectionForm({
   }, [])
 
   const flushActiveDraftFromRef = useCallback(() => {
-    if (submitSuccessMessage) return
-    if (suppressAutosaveRef.current) return
+    if (submitCompletedRef.current || submitSuccessMessage || submittedInspection) return
     const payload = currentDraftPayloadRef.current
     if (!draftHasOfficerProgress(payload)) return
-    const id = offlineDraftIdRef.current || createOfflineDraftId()
+    const existingId = offlineDraftIdRef.current
+    if (suppressAutosaveRef.current) {
+      if (existingId) rememberActiveOfflineDraftId(existingId)
+      return
+    }
+    const id = existingId || createOfflineDraftId()
     offlineDraftIdRef.current = id
     rememberActiveOfflineDraftId(id)
     try {
@@ -856,11 +887,22 @@ export default function EstateWalkaboutNewInspectionForm({
     } catch {
       noteDraftSaveResult(false)
     }
-  }, [noteDraftSaveResult, offlineDraftId, submitSuccessMessage])
+  }, [noteDraftSaveResult, offlineDraftId, submitSuccessMessage, submittedInspection])
+
+  const flushDraftBeforeCamera = useCallback(() => {
+    if (
+      !shouldFlushWalkaboutDraftBeforeCamera({
+        submitCompleted: Boolean(submitCompletedRef.current || submittedInspection),
+      })
+    ) {
+      return
+    }
+    flushActiveDraftFromRef()
+  }, [flushActiveDraftFromRef, submittedInspection])
 
   const flushDraftAfterLocalPhoto = useCallback(
     (update) => {
-      if (submitSuccessMessage) return
+      if (submitCompletedRef.current || submitSuccessMessage || submittedInspection) return
       markWalkaboutDraftDirty()
 
       const base = currentDraftPayloadRef.current
@@ -897,17 +939,20 @@ export default function EstateWalkaboutNewInspectionForm({
       }
       noteDraftSaveResult(saved)
     },
-    [markWalkaboutDraftDirty, noteDraftSaveResult, submitSuccessMessage]
+    [markWalkaboutDraftDirty, noteDraftSaveResult, submitSuccessMessage, submittedInspection]
   )
 
   const restoreOfflineDraft = useCallback((draft) => {
     try {
       const restored = buildWalkaboutFormStateFromDraft(draft, { blocks: locationBlocks })
       if (!restored?.id) return
+      if (submitCompletedRef.current) return
+      ignoreParentResumeRef.current = false
       suppressAutosaveRef.current = true
       setOfflineDraftId(restored.id)
       offlineDraftIdRef.current = restored.id
       rememberActiveOfflineDraftId(restored.id)
+      syncWalkaboutDraftIdInUrl(restored.id)
       setPostgresBlockId(restored.postgresBlockId)
       setLocation(restored.location)
       setDescription(restored.description)
@@ -932,7 +977,15 @@ export default function EstateWalkaboutNewInspectionForm({
   }, [locationBlocks])
 
   useEffect(() => {
-    if (!initialDraftToRestore?.id) return
+    if (
+      !walkaboutShouldRestoreOnMount({
+        initialDraftId: initialDraftToRestore?.id,
+        submitCompleted: submitCompletedRef.current,
+      })
+    ) {
+      return
+    }
+    if (ignoreParentResumeRef.current) return
     if (offlineDraftIdRef.current === initialDraftToRestore.id) return
     restoreOfflineDraft(initialDraftToRestore)
   }, [initialDraftToRestore, restoreOfflineDraft])
@@ -945,23 +998,22 @@ export default function EstateWalkaboutNewInspectionForm({
     if (offlineDraftIdRef.current) {
       rememberActiveOfflineDraftId(offlineDraftIdRef.current)
     }
-    if (!restoredSessionDraftRef.current) {
-      restoredSessionDraftRef.current = true
-      const activeId = readActiveOfflineDraftId()
-      const sessionDraft = resolveDraftToRestoreAfterReload({ drafts, activeDraftId: activeId })
-      if (sessionDraft) {
-        restoreOfflineDraft(sessionDraft)
-      } else if (activeId) {
-        clearActiveOfflineDraftId()
-      }
-    }
+    restoredSessionDraftRef.current = true
     window.addEventListener('online', updateOnlineStatus)
     window.addEventListener('offline', updateOnlineStatus)
     return () => {
       window.removeEventListener('online', updateOnlineStatus)
       window.removeEventListener('offline', updateOnlineStatus)
     }
-  }, [restoreOfflineDraft])
+  }, [])
+
+  useEffect(() => {
+    if (submitCompletedRef.current || submittedInspection) {
+      syncWalkaboutDraftIdInUrl('')
+      return
+    }
+    if (offlineDraftId) syncWalkaboutDraftIdInUrl(offlineDraftId)
+  }, [offlineDraftId, submittedInspection])
 
   useEffect(() => {
     if (!submitSuccessMessage) return undefined
@@ -975,10 +1027,20 @@ export default function EstateWalkaboutNewInspectionForm({
     }
     const handlePageShow = (event) => {
       if (!event?.persisted) return
+      if (submitCompletedRef.current) return
       const drafts = readOfflineInspectionDrafts()
       setOfflineDrafts(drafts)
-      const activeId = readActiveOfflineDraftId() || offlineDraftIdRef.current
-      const draft = resolveDraftToRestoreAfterReload({ drafts, activeDraftId: activeId })
+      const currentId = offlineDraftIdRef.current
+      if (
+        !walkaboutShouldRestoreAfterReload({
+          currentDraftId: currentId,
+          candidateDraftId: currentId,
+          submitCompleted: submitCompletedRef.current,
+        })
+      ) {
+        return
+      }
+      const draft = resolveDraftToRestoreAfterReload({ drafts, activeDraftId: currentId })
       if (draft) restoreOfflineDraft(draft)
     }
     window.addEventListener('pagehide', flushActiveDraftFromRef)
@@ -992,8 +1054,16 @@ export default function EstateWalkaboutNewInspectionForm({
   }, [flushActiveDraftFromRef, restoreOfflineDraft])
 
   useEffect(() => {
-    if (suppressAutosaveRef.current) return undefined
-    if (!draftHasOfficerProgress(currentDraftPayload)) return undefined
+    if (
+      !walkaboutShouldAutosaveDraft({
+        submitCompleted: submitCompletedRef.current,
+        submittedInspectionId: submittedInspection?.id,
+        suppressUntilEdit: suppressAutosaveRef.current,
+        hasOfficerProgress: draftHasOfficerProgress(currentDraftPayload),
+      })
+    ) {
+      return undefined
+    }
     const timer = window.setTimeout(() => {
       try {
         const id = offlineDraftId || createOfflineDraftId()
@@ -1011,9 +1081,10 @@ export default function EstateWalkaboutNewInspectionForm({
       }
     }, 1000)
     return () => window.clearTimeout(timer)
-  }, [offlineDraftId, currentDraftPayload, noteDraftSaveResult])
+  }, [offlineDraftId, currentDraftPayload, noteDraftSaveResult, submittedInspection])
 
   const saveCurrentOfflineDraft = () => {
+    if (submitCompletedRef.current) return offlineDraftId || ''
     if (!draftHasOfficerProgress(currentDraftPayload)) return offlineDraftId || ''
     try {
       const id = offlineDraftId || createOfflineDraftId()
@@ -1078,6 +1149,15 @@ export default function EstateWalkaboutNewInspectionForm({
   }
 
   const submitOfflineDraft = async (draft) => {
+    if (
+      !walkaboutShouldBeginSubmit({
+        submitCompleted: submitCompletedRef.current,
+        inFlight: submitInFlightRef.current,
+        hasActivePhotoUploads,
+      })
+    ) {
+      return
+    }
     if (hasActivePhotoUploads) {
       setSubmitError('Please wait for photo uploads to finish before saving this inspection.')
       return
@@ -1088,6 +1168,9 @@ export default function EstateWalkaboutNewInspectionForm({
     }
     let body = draft?.payload?.submitBody
     if (!body) return
+    submitInFlightRef.current = true
+    const listedId = draft?.payload?.offlineDraftId || draft?.id || ''
+    submitInFlightIdRef.current = listedId
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitWarning(null)
@@ -1100,7 +1183,7 @@ export default function EstateWalkaboutNewInspectionForm({
         body: JSON.stringify({
           ...body,
           draft: true,
-          client_inspection_id: draft?.payload?.offlineDraftId || draft?.id,
+          client_inspection_id: submitInFlightIdRef.current || draft?.payload?.offlineDraftId || draft?.id,
         }),
       })
       if (!res) {
@@ -1133,9 +1216,13 @@ export default function EstateWalkaboutNewInspectionForm({
       if (submitWarning) {
         storeSubmitWarningForInspection(inspectionId, submitWarning)
       }
+      submitCompletedRef.current = true
+      ignoreParentResumeRef.current = true
       setOfflineDrafts(removeOfflineInspectionDraft(draft.id))
       if (offlineDraftId === draft.id) setOfflineDraftId('')
+      offlineDraftIdRef.current = offlineDraftId === draft.id ? '' : offlineDraftIdRef.current
       if (readActiveOfflineDraftId() === draft.id) clearActiveOfflineDraftId()
+      syncWalkaboutDraftIdInUrl('')
       setDraftStorageWarning('')
       clearInspectionResumeDraft()
       // Carry-over comes from the submitted draft's own answers (the live form
@@ -1150,6 +1237,7 @@ export default function EstateWalkaboutNewInspectionForm({
     } catch (err) {
       setSubmitError(err.message || 'Something went wrong')
     } finally {
+      submitInFlightRef.current = false
       setIsSubmitting(false)
     }
   }
@@ -1230,6 +1318,15 @@ export default function EstateWalkaboutNewInspectionForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (
+      !walkaboutShouldBeginSubmit({
+        submitCompleted: submitCompletedRef.current,
+        inFlight: submitInFlightRef.current,
+        hasActivePhotoUploads,
+      })
+    ) {
+      return
+    }
     setSubmitError(null)
     setSubmitWarning(null)
     setOfflineSaveNotice('')
@@ -1245,14 +1342,24 @@ export default function EstateWalkaboutNewInspectionForm({
       return
     }
 
+    submitInFlightRef.current = true
+    const clientInspectionId = resolveWalkaboutClientInspectionId({
+      existingDraftId: offlineDraftIdRef.current || offlineDraftId,
+      inFlightId: submitInFlightIdRef.current,
+      createId: createOfflineDraftId,
+    })
+    submitInFlightIdRef.current = clientInspectionId
+    offlineDraftIdRef.current = clientInspectionId
+    setOfflineDraftId(clientInspectionId)
+    rememberActiveOfflineDraftId(clientInspectionId)
     setIsSubmitting(true)
+    let draftCreatedOnServer = false
     try {
       if (!isOnline) {
         saveCurrentOfflineDraft()
         setOfflineSaveNotice(
           'No internet connection. This inspection has been saved as a draft on this phone. It has not been submitted. Use Saved drafts to return to it when you have signal.'
         )
-        setIsSubmitting(false)
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
@@ -1263,19 +1370,14 @@ export default function EstateWalkaboutNewInspectionForm({
         } catch {
           saveCurrentOfflineDraft()
           setSubmitError(walkaboutPendingPhotoMessage({ hasPendingLocalUrls: true }))
-          setIsSubmitting(false)
           return
         }
       }
       if (submitBodyHasPendingPhotos(submitBody)) {
         saveCurrentOfflineDraft()
         setSubmitError(walkaboutPendingPhotoMessage({ hasPendingLocalUrls: true }))
-        setIsSubmitting(false)
         return
       }
-      // Stable submission id so a retry/duplicate submit converges on one record.
-      const clientInspectionId = offlineDraftId || createOfflineDraftId()
-      if (!offlineDraftId) setOfflineDraftId(clientInspectionId)
       const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1284,10 +1386,7 @@ export default function EstateWalkaboutNewInspectionForm({
       })
       if (!res) {
         saveCurrentOfflineDraft()
-        setOfflineSaveNotice(
-          'The server could not be reached. This inspection has been saved as a draft on this phone. It has not been submitted.'
-        )
-        setIsSubmitting(false)
+        setOfflineSaveNotice(walkaboutInterruptedSubmitMessage({ locallySaved: true }))
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
@@ -1305,7 +1404,20 @@ export default function EstateWalkaboutNewInspectionForm({
         setSubmitError('Save reported success but no inspection ID was returned. This inspection has not been saved.')
         return
       }
-      const submitData = await submitPendingInspection(inspectionId)
+      draftCreatedOnServer = true
+      let submitData
+      try {
+        submitData = await submitPendingInspection(inspectionId)
+      } catch (submitErr) {
+        saveCurrentOfflineDraft()
+        setSubmitError(
+          walkaboutInterruptedSubmitMessage({
+            draftCreatedOnServer: true,
+          }) + (submitErr?.message ? ` ${submitErr.message}` : '')
+        )
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
       const submitWarnings = [
         ...(Array.isArray(submitData.email_failures) && submitData.email_failures.length > 0
           ? [`Email failures: ${submitData.email_failures.map((failure) => failure.error || failure.email || failure.recipient || 'send failed').join('; ')}`]
@@ -1321,11 +1433,13 @@ export default function EstateWalkaboutNewInspectionForm({
       if (submitWarning) {
         storeSubmitWarningForInspection(inspectionId, submitWarning)
       }
-      if (offlineDraftId) {
-        setOfflineDrafts(removeOfflineInspectionDraft(offlineDraftId))
-        setOfflineDraftId('')
-      }
+      submitCompletedRef.current = true
+      ignoreParentResumeRef.current = true
+      setOfflineDrafts(removeOfflineInspectionDraft(clientInspectionId))
+      setOfflineDraftId('')
+      offlineDraftIdRef.current = ''
       clearActiveOfflineDraftId()
+      syncWalkaboutDraftIdInUrl('')
       setDraftStorageWarning('')
       clearInspectionResumeDraft()
       // Remember the attendees/date/officer/area so the officer can start the
@@ -1338,17 +1452,21 @@ export default function EstateWalkaboutNewInspectionForm({
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err) {
-      if (!isBrowserOnline()) {
-        saveCurrentOfflineDraft()
+      saveCurrentOfflineDraft()
+      if (!isBrowserOnline() || !draftCreatedOnServer) {
         setOfflineSaveNotice(
-          'Connection was lost during save. This inspection has been saved as a draft on this phone. It has not been submitted.'
+          walkaboutInterruptedSubmitMessage({
+            draftCreatedOnServer,
+            locallySaved: true,
+          })
         )
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
-      setSubmitError(err.message || 'Something went wrong. This inspection has not been submitted.')
+      setSubmitError(err.message || walkaboutInterruptedSubmitMessage({ draftCreatedOnServer }))
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
+      submitInFlightRef.current = false
       setIsSubmitting(false)
     }
   }
@@ -1436,7 +1554,7 @@ export default function EstateWalkaboutNewInspectionForm({
                   urls: capActionPhotoUrls(urls),
                 })
               }
-              onBeforeCapture={flushActiveDraftFromRef}
+              onBeforeCapture={flushDraftBeforeCamera}
               onUploadStatusChange={(uploading) => handlePhotoUploadStatusChange(`ew-${qid}`, uploading)}
               label={`Add photos (up to ${MAX_ACTION_PHOTOS})`}
               multiple
@@ -1498,7 +1616,7 @@ export default function EstateWalkaboutNewInspectionForm({
                   urls: capActionPhotoUrls(urls),
                 })
               }
-              onBeforeCapture={flushActiveDraftFromRef}
+              onBeforeCapture={flushDraftBeforeCamera}
               onUploadStatusChange={(uploading) =>
                 handlePhotoUploadStatusChange('ew_it_bulk_refuse_removal', uploading)
               }
@@ -1585,7 +1703,7 @@ export default function EstateWalkaboutNewInspectionForm({
                   urls: capActionPhotoUrls(urls, maxSlot),
                 })
               }
-              onBeforeCapture={flushActiveDraftFromRef}
+              onBeforeCapture={flushDraftBeforeCamera}
               onUploadStatusChange={(uploading) => handlePhotoUploadStatusChange(`ph-${qid}`, uploading)}
               label={`Add photos (up to ${maxSlot})`}
               multiple={maxSlot > 1}
@@ -1632,9 +1750,9 @@ export default function EstateWalkaboutNewInspectionForm({
               Walkabout submitted
             </h1>
             <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 15, lineHeight: 1.5 }}>
-              Your Estate Walkabout has been submitted. Inspecting several blocks on the same visit?
-              Start the next block without re-entering the attendees — you can still edit them if the
-              group changes.
+              This inspection has been submitted and will not be saved again as a draft. Inspecting
+              several blocks on the same visit? Start the next block without re-entering the attendees
+              — the next block opens blank except for those attendees.
             </p>
             <p
               data-testid="walkabout-inspection-reference"
@@ -2252,7 +2370,7 @@ export default function EstateWalkaboutNewInspectionForm({
                               urls: capActionPhotoUrls(urls),
                             })
                           }
-                          onBeforeCapture={flushActiveDraftFromRef}
+                          onBeforeCapture={flushDraftBeforeCamera}
                           onUploadStatusChange={(uploading) =>
                             handlePhotoUploadStatusChange(`ew-action-${it.id}`, uploading)
                           }
@@ -2309,24 +2427,22 @@ export default function EstateWalkaboutNewInspectionForm({
               opacity: isSubmitting || hasActivePhotoUploads ? 0.85 : 1,
             }}
           >
-            {isSubmitting
-              ? 'Saving…'
-              : hasActivePhotoUploads
-                ? 'Waiting for photos…'
-                : !isOnline
-                  ? 'Save draft on this phone'
-                  : 'Save inspection'}
+            {walkaboutSubmitButtonLabel({
+              isSubmitting,
+              isOnline,
+              hasActivePhotoUploads,
+            })}
           </button>
           <p style={{ margin: '10px 0 0', fontSize: 13, color: EW.muted, lineHeight: 1.45 }}>
             {hasActivePhotoUploads
-              ? 'Save is unavailable until the current photograph has finished saving or uploading. The inspection is not reset while you wait.'
+              ? 'Submit is unavailable until the current photograph has finished saving or uploading. The inspection is not reset while you wait.'
               : isSubmitting
-                ? 'Please wait — your inspection is being submitted.'
+                ? 'Please wait — your inspection is being submitted. Do not tap again.'
                 : !isOnline
-                  ? 'You are offline. Tap the button to keep this inspection as a draft on this phone. Submit when signal returns.'
+                  ? 'You are offline. Tap the button to keep this inspection as a draft on this phone. It will not be submitted until you have signal.'
                   : submitBodyHasPendingPhotos(currentSubmitBody)
-                    ? 'Some photographs are still on this phone. Tapping Save will try to upload them, then submit.'
-                    : 'Submit when the walkabout is complete. Progress is saved quietly on this phone as you work.'}
+                    ? 'Some photographs are still on this phone. Tapping Submit will try to upload them, then submit this inspection.'
+                    : 'Submit inspection sends this report. Progress is also saved as a draft on this phone until you submit.'}
           </p>
         </form>
         <BestPracticeGuideButton

@@ -2708,7 +2708,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   }, [])
 
   useEffect(() => {
-    if (!draftIdFromUrl) return
+    if (!draftIdFromUrl) {
+      if (walkaboutResumeDraft) setWalkaboutResumeDraft(null)
+      return
+    }
     if (walkaboutResumeDraft?.id === draftIdFromUrl) return
     const listed = (Array.isArray(offlineDrafts) ? offlineDrafts : []).find(
       (item) => item?.id === draftIdFromUrl
