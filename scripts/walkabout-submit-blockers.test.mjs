@@ -9,7 +9,11 @@ import {
   describeWalkaboutValidationErrors,
   walkaboutPendingPhotoMessage,
 } from '../lib/walkabout-submit-blockers.js'
-import { resolveInspectionStatusMode, savedDraftsShouldRender } from '../lib/inspection-status-mode.js'
+import {
+  resolveInspectionStatusMode,
+  savedDraftsShouldRender,
+  walkaboutShowsSavedDraftsByDefault,
+} from '../lib/inspection-status-mode.js'
 
 describe('submit blockers', () => {
   it('names missing grades, signature and area', () => {
@@ -42,7 +46,11 @@ describe('submit blockers', () => {
 })
 
 describe('saved drafts stay visible online and offline', () => {
-  it('still renders the saved list when the officer is online', () => {
+  it('Walkabout does not show the saved list on the blank form', () => {
+    assert.equal(walkaboutShowsSavedDraftsByDefault(), false)
+  })
+
+  it('still allows other forms to render the saved list when the officer is online', () => {
     const mode = resolveInspectionStatusMode({
       isOnline: true,
       activeDraftId: '',

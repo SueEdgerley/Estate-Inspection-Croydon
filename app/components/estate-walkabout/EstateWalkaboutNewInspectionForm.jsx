@@ -27,6 +27,9 @@ import {
   OFFLINE_DRAFT_STORAGE_FULL_MESSAGE,
 } from '@/lib/offline-inspection-drafts'
 import OfflineInspectionStatusPanel from '@/app/components/OfflineInspectionStatusPanel'
+import WalkaboutRecoverDraftsView, {
+  WalkaboutRecoverDraftsButton,
+} from '@/app/components/estate-walkabout/WalkaboutRecoverDrafts'
 import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
 import {
   flushInspectionDraftPayloadToLocalStorage,
@@ -560,6 +563,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [submittedInspection, setSubmittedInspection] = useState(null)
   const [hasPreviousCarryOver, setHasPreviousCarryOver] = useState(false)
+  const [recoverDraftsOpen, setRecoverDraftsOpen] = useState(false)
   const [draftStorageWarning, setDraftStorageWarning] = useState('')
   const [inspectionStartTime, setInspectionStartTime] = useState(() =>
     initialRestored?.inspectionStartTime
@@ -975,6 +979,22 @@ export default function EstateWalkaboutNewInspectionForm({
       setSubmitError('Could not reopen the saved inspection on this phone.')
     }
   }, [locationBlocks])
+
+  const handleRecoverResume = useCallback(
+    (draft) => {
+      restoreOfflineDraft(draft)
+      setRecoverDraftsOpen(false)
+    },
+    [restoreOfflineDraft]
+  )
+
+  const openRecoverDrafts = useCallback(() => {
+    setRecoverDraftsOpen(true)
+  }, [])
+
+  const closeRecoverDrafts = useCallback(() => {
+    setRecoverDraftsOpen(false)
+  }, [])
 
   useEffect(() => {
     if (
@@ -1849,17 +1869,49 @@ export default function EstateWalkaboutNewInspectionForm({
         <Link href="/" style={{ color: EW.accent, textDecoration: 'none', fontSize: 14 }}>
           ← Back to Inspections
         </Link>
-        <header style={{ marginTop: 16, marginBottom: 28 }}>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: EW.text, letterSpacing: -0.02 }}>
-            Estate Walkabout
-          </h1>
-          <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 16, maxWidth: 720 }}>
-            Structured walkabout sections. Some questions automatically create actions when a problem response is selected. Use{' '}
-            <strong>Additional items &amp; action plan</strong> only for issues that are not already covered by the checklist.
-          </p>
+        <header style={{ marginTop: 16, marginBottom: recoverDraftsOpen ? 16 : 28 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 28,
+                fontWeight: 800,
+                color: EW.text,
+                letterSpacing: -0.02,
+                flex: '1 1 220px',
+              }}
+            >
+              Estate Walkabout
+            </h1>
+            <WalkaboutRecoverDraftsButton open={recoverDraftsOpen} onClick={openRecoverDrafts} />
+          </div>
+          {recoverDraftsOpen ? null : (
+            <p style={{ margin: '10px 0 0', color: EW.muted, fontSize: 16, maxWidth: 720 }}>
+              Structured walkabout sections. Some questions automatically create actions when a problem response is selected. Use{' '}
+              <strong>Additional items &amp; action plan</strong> only for issues that are not already covered by the checklist.
+            </p>
+          )}
         </header>
 
-        <form onSubmit={handleSubmit}>
+        {recoverDraftsOpen ? (
+          <WalkaboutRecoverDraftsView
+            drafts={offlineDrafts}
+            blocks={locationBlocks}
+            activeDraftId={offlineDraftId}
+            onResumeDraft={handleRecoverResume}
+            onBack={closeRecoverDrafts}
+          />
+        ) : null}
+
+        <form onSubmit={handleSubmit} hidden={recoverDraftsOpen} aria-hidden={recoverDraftsOpen ? 'true' : 'false'}>
           {toastMessage && (
             <div
               role="status"
@@ -1893,6 +1945,7 @@ export default function EstateWalkaboutNewInspectionForm({
             storageWarning={draftStorageWarning}
             onReopenDraft={restoreOfflineDraft}
             draftsTitle="Saved Walkabouts on this phone"
+            showSavedDrafts={false}
             style={{ maxWidth: 'none' }}
           />
           {restoreNotice ? (

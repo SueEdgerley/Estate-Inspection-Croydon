@@ -79,6 +79,7 @@ export default function OfflineInspectionStatusPanel({
   onSubmitDraft,
   style,
   draftsTitle = 'Saved inspections on this phone',
+  showSavedDrafts = true,
 }) {
   const activeDraftRecord = activeDraftId
     ? offlineDrafts.find((draft) => draft.id === activeDraftId) || null
@@ -93,7 +94,7 @@ export default function OfflineInspectionStatusPanel({
     submitSuccessMessage,
   })
 
-  const savedDrafts = (
+  const savedDrafts = showSavedDrafts ? (
     <SavedInspectionDraftsPanel
       drafts={offlineDrafts}
       blocks={blocks}
@@ -107,7 +108,7 @@ export default function OfflineInspectionStatusPanel({
       intro="These inspections are saved on this phone only until you see Inspection submitted successfully. Resume opens that draft and does not delete the others."
       style={{ maxWidth: 'none', margin: mode === 'hidden' && !storageWarning ? '0 0 1rem' : '0.75rem 0 0' }}
     />
-  )
+  ) : null
 
   if (mode === 'hidden') {
     if (!storageWarning) {
