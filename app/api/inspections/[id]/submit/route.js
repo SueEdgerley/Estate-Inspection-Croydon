@@ -51,6 +51,12 @@ import { alreadySubmittedInspectionReplay } from '@/lib/walkabout-session-guard'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
+import {
+  buildCaretakerEstatesMailboxNotification,
+  fieldsForCaretakerEstatesMailboxEmail,
+  isCaretakerEstatesMailboxEmail,
+  loadCaretakerEstatesMailboxInspection,
+} from '@/lib/caretaker-estates-mailbox-notification'
 import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
 import {
   ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
@@ -359,12 +365,25 @@ async function sendCaretakerPhotoAndYesNotifications({
   inspectionTitle,
   locationLine,
   scope,
+  submittedBy = '',
+  inspectionAt = null,
 }) {
   if (!isCaretakerTemplate(templateVersion)) return { sent: 0, failed: [] }
   const sent = []
   const failed = []
   const rowsByQuestionId = new Map((answerRows || []).map((row) => [String(row.question_id || ''), row]))
   const dedupe = new Set()
+  let savedInspection = null
+  try {
+    savedInspection = await loadCaretakerEstatesMailboxInspection(sql, inspectionId)
+  } catch (loadErr) {
+    console.warn('[inspections/submit] caretaker estates mailbox inspection lookup failed:', loadErr?.message || loadErr)
+  }
+  const estatesMailboxInspection = fieldsForCaretakerEstatesMailboxEmail(savedInspection, inspectionId, {
+    submittedBy,
+    blockAddress: locationLine,
+    inspectionDate: inspectionAt,
+  })
 
   for (const section of templateVersion.sections || []) {
     if (!caretakerSectionInScope(section, scope)) continue
@@ -412,7 +431,9 @@ async function sendCaretakerPhotoAndYesNotifications({
         const photoList = photoUrls.length
           ? `<ul>${photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo</a></li>`).join('')}</ul>`
           : '<p>No photo link recorded.</p>'
-        const html = `
+        const estatesMailbox = isCaretakerEstatesMailboxEmail(to, CARETAKER_SECTION_2_EMAIL)
+        let subject = `Caretaker inspection: ${section.title || locationLine || inspectionTitle || 'notification'}`
+        let html = `
           <div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#111">
             ${croydonLogoEmailHeaderHtml()}
             <h1 style="font-size:18px;">Caretaker inspection notification</h1>
@@ -427,7 +448,7 @@ async function sendCaretakerPhotoAndYesNotifications({
             ${photoList}
           </div>
         `
-        const text = [
+        let text = [
           'Caretaker inspection notification',
           locationLine ? `Location: ${locationLine}` : '',
           section.title || section.name ? `Section: ${section.title || section.name}` : '',
@@ -437,10 +458,27 @@ async function sendCaretakerPhotoAndYesNotifications({
           target.reminder || '',
           ...photoUrls,
         ].filter(Boolean).join('\n')
+        if (estatesMailbox) {
+          const content = buildCaretakerEstatesMailboxNotification({
+            inspectionId: estatesMailboxInspection.inspectionId,
+            submittedBy: estatesMailboxInspection.submittedBy,
+            blockAddress: estatesMailboxInspection.blockAddress,
+            inspectionDate: estatesMailboxInspection.inspectionDate,
+            sectionTitle: section.title || section.name || '',
+            questionText,
+            answer: answer == null ? '' : String(answer),
+            comment: extras.comment,
+            photoUrls,
+            reminder: target.reminder || '',
+          })
+          subject = content.subject
+          html = content.html
+          text = content.text
+        }
         try {
           const sendResult = await sendAppEmail({
             to,
-            subject: `Caretaker inspection: ${section.title || locationLine || inspectionTitle || 'notification'}`,
+            subject,
             html,
             text,
           })
@@ -1218,6 +1256,8 @@ export async function POST(request, { params }) {
             inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'Caretaker inspection',
             locationLine: estateBlockLine,
             scope: caretakerScope,
+            submittedBy: inspectionLive.inspector_name || inspectorName || '',
+            inspectionAt: inspectionLive.inspection_start_time || inspectionLive.submitted_at || null,
           })
           if (Array.isArray(caretakerEmails.sent)) {
             emailResults.sent.push(...caretakerEmails.sent)

@@ -62,6 +62,12 @@ import { getActionTriggerOn } from '@/lib/template-rules'
 import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
+import {
+  buildCaretakerEstatesMailboxNotification,
+  fieldsForCaretakerEstatesMailboxEmail,
+  isCaretakerEstatesMailboxEmail,
+  loadCaretakerEstatesMailboxInspection,
+} from '@/lib/caretaker-estates-mailbox-notification'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
@@ -487,16 +493,37 @@ async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle,
   return result
 }
 
-async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspectionTitle, locationLine, notifications }) {
+async function sendCaretakerEmailNotifications(sqlFn, {
+  inspectionId,
+  inspectionTitle,
+  locationLine,
+  notifications,
+  submittedBy = '',
+  blockAddress = '',
+  inspectionAt = null,
+}) {
   const result = { sent: 0, failed: [] }
   const dedupe = new Set()
+  let savedInspection = null
+  try {
+    savedInspection = await loadCaretakerEstatesMailboxInspection(sqlFn, inspectionId)
+  } catch (loadErr) {
+    console.warn('[sendCaretakerEmailNotifications] saved inspection lookup failed:', loadErr?.message || loadErr)
+  }
+  const estatesMailboxInspection = fieldsForCaretakerEstatesMailboxEmail(savedInspection, inspectionId, {
+    submittedBy,
+    blockAddress,
+    inspectionDate: inspectionAt,
+  })
   for (const notification of notifications || []) {
     const to = String(notification.to || '').trim()
     if (!to) continue
     const dedupeKey = `${to}|${notification.routing}|${notification.questionText}`
     if (dedupe.has(dedupeKey)) continue
     dedupe.add(dedupeKey)
-    const html = buildCaretakerNotificationHtml({
+    const estatesMailbox = isCaretakerEstatesMailboxEmail(to, CARETAKER_SECTION_2_EMAIL)
+    let subject = `Caretaker inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`
+    let html = buildCaretakerNotificationHtml({
       inspectionTitle,
       locationLine,
       sectionTitle: notification.sectionTitle,
@@ -506,7 +533,7 @@ async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspection
       photoUrls: notification.photoUrls || [],
       reminder: notification.reminder || '',
     })
-    const text = [
+    let text = [
       'Caretaker inspection notification',
       locationLine ? `Location: ${locationLine}` : '',
       notification.sectionTitle ? `Section: ${notification.sectionTitle}` : '',
@@ -516,6 +543,23 @@ async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspection
       notification.reminder || '',
       ...(notification.photoUrls || []),
     ].filter(Boolean).join('\n')
+    if (estatesMailbox) {
+      const content = buildCaretakerEstatesMailboxNotification({
+        inspectionId: estatesMailboxInspection.inspectionId,
+        submittedBy: estatesMailboxInspection.submittedBy,
+        blockAddress: estatesMailboxInspection.blockAddress,
+        inspectionDate: estatesMailboxInspection.inspectionDate,
+        sectionTitle: notification.sectionTitle,
+        questionText: notification.questionText,
+        answer: notification.answer,
+        comment: notification.comment,
+        photoUrls: notification.photoUrls || [],
+        reminder: notification.reminder || '',
+      })
+      subject = content.subject
+      html = content.html
+      text = content.text
+    }
     try {
       console.log('[sendCaretakerEmailNotifications] final recipient email', {
         inspectionId,
@@ -524,7 +568,7 @@ async function sendCaretakerEmailNotifications(sqlFn, { inspectionId, inspection
       })
       const sendResult = await sendAppEmail({
         to,
-        subject: `Caretaker inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
+        subject,
         html,
         text,
       })
@@ -2130,6 +2174,8 @@ export async function POST(request) {
           inspectionTitle: template.name || 'Caretaker inspection',
           locationLine: displayTitle || String(location || '').trim(),
           notifications,
+          submittedBy: inspectorName || '',
+          inspectionAt: submittedTimes.start || null,
         })
         caretakerEmailResults.sent += sent.sent || 0
         if (Array.isArray(sent.failed)) caretakerEmailResults.failed.push(...sent.failed)
