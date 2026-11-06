@@ -6,7 +6,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { summariseAbcd, parseGradeToken, rankAttentionBlocks, ATTENTION_BLOCK_MIN_GRADED, formatCdShare, GRADE_SCORE, scoreToGrade, mapBlockAverageRow, sortBlockAverageRows } from '../lib/analytics-grade-summary.js'
+import { summariseAbcd, parseGradeToken, rankAttentionBlocks, ATTENTION_BLOCK_MIN_GRADED, formatCdShare, GRADE_SCORE, scoreToGrade, mapBlockAverageRow, sortBlockAverageRows, summariseBlockOverallGrades, equalWeightGradeScore } from '../lib/analytics-grade-summary.js'
 import { mapIssueTheme, aggregateIssueThemes, isTechnicalOrFormIssueLabel, ISSUE_THEMES } from '../lib/analytics-issue-themes.js'
 import { analyticsFormLabel, aggregateInspectionsByForm } from '../lib/analytics-form-labels.js'
 import { buildManagementReport, DIRECTOR_HOS_REPORT_SOURCE, MONTHLY_REPORT_PERIOD_OPTIONS } from '../lib/analytics-management-report.js'
@@ -295,6 +295,9 @@ describe('selected-period management snapshot', () => {
     assert.equal(report.inspectionsByForm[0].form, 'Caretaker')
     assert.equal(report.attentionBlocks[0].display, '7 / 18 — 38.9% C/D')
     assert.equal(report.blockAverages.length, 0)
+    assert.equal(report.blockGradeSummary.blocksInspected, 0)
+    assert.equal(report.blockGradeSummary.grades.length, 5)
+    assert.equal(report.blockGradeSummary.grades.find((row) => row.grade === 'Ungraded').count, 0)
   })
 
   it('resolves This month and Previous month through the shared Analytics date helper', () => {
@@ -405,5 +408,100 @@ describe('average grade by block', () => {
     assert.equal(report.blockAverages[0].blockName, 'Alford Green 1-27')
     assert.equal(report.blockAverages[0].avgGrade, 'B')
     assert.equal(report.blockAverages[0].gradedInspections, 6)
+    assert.equal(report.blockGradeSummary.blocksInspected, 1)
+    assert.equal(report.blockGradeSummary.grades.find((row) => row.grade === 'B').count, 1)
+  })
+
+  it('gives every A–D answer equal weight, including answers from a second inspection of the same block', () => {
+    const inspectionAverage = (1 + 4) / 2
+    assert.equal(scoreToGrade(inspectionAverage), 'C')
+
+    const inspectedTwice = mapBlockAverageRow({
+      block_id: 'blk-twice',
+      block_name: 'Inspected twice',
+      graded_inspections: 2,
+      a: 9,
+      b: 0,
+      c: 0,
+      d: 1,
+    })
+    assert.equal(equalWeightGradeScore(9, 0, 0, 1), 3.7)
+    assert.equal(inspectedTwice.gradedAnswers, 10)
+    assert.equal(inspectedTwice.avgScore, 3.7)
+    assert.equal(inspectedTwice.avgGrade, 'A')
+    assert.equal(inspectedTwice.gradedInspections, 2)
+
+    const example = mapBlockAverageRow({
+      block_id: 'blk-example',
+      block_name: 'Example',
+      graded_inspections: 1,
+      a: 0,
+      b: 2,
+      c: 7,
+      d: 1,
+    })
+    assert.equal(example.a, 0)
+    assert.equal(example.b, 2)
+    assert.equal(example.c, 7)
+    assert.equal(example.d, 1)
+    assert.equal(example.gradedAnswers, 10)
+    assert.equal(example.avgScore, 2.1)
+    assert.equal(example.avgGrade, 'C')
+
+    const ungraded = mapBlockAverageRow({
+      block_id: 'blk-ungraded',
+      block_name: 'No graded answers',
+      graded_inspections: 0,
+      a: 0,
+      b: 0,
+      c: 0,
+      d: 0,
+    })
+    assert.equal(ungraded.avgGrade, 'Ungraded')
+    assert.equal(ungraded.gradedAnswers, 0)
+
+    const sameEstate = [
+      mapBlockAverageRow({ block_id: 'estate-block-1', block_name: '1–12', a: 1, b: 0, c: 0, d: 0 }),
+      mapBlockAverageRow({ block_id: 'estate-block-2', block_name: '13–24', a: 0, b: 0, c: 0, d: 1 }),
+    ]
+    assert.equal(sameEstate[0].avgGrade, 'A')
+    assert.equal(sameEstate[1].avgGrade, 'D')
+
+    const summary = summariseBlockOverallGrades([inspectedTwice, ungraded, ...sameEstate])
+    assert.equal(summary.blocksInspected, 4)
+    assert.equal(summary.grades.find((row) => row.grade === 'A').count, 2)
+    assert.equal(summary.grades.find((row) => row.grade === 'C').count, 0)
+    assert.equal(summary.grades.find((row) => row.grade === 'D').count, 1)
+    assert.equal(summary.grades.find((row) => row.grade === 'Ungraded').count, 1)
+    assert.equal(
+      summary.grades.reduce((sum, row) => sum + row.count, 0),
+      summary.blocksInspected
+    )
+    assert.equal(summary.grades.find((row) => row.grade === 'A').pct, 50)
+    assert.equal(summary.grades.find((row) => row.grade === 'Ungraded').pct, 25)
+
+    const report = buildManagementReport({
+      blockAverages: [
+        { block_id: 'blk-twice', block_name: 'Inspected twice', graded_inspections: 2, a: 9, b: 0, c: 0, d: 1 },
+        { block_id: 'blk-ungraded', block_name: 'No graded answers', graded_inspections: 0, a: 0, b: 0, c: 0, d: 0 },
+      ],
+    })
+    assert.equal(report.blockAverages.length, 2)
+    assert.equal(report.blockGradeSummary.blocksInspected, 2)
+    assert.equal(report.blockAverages[0].avgGrade, 'A')
+    assert.equal(report.blockAverages[1].avgGrade, 'Ungraded')
+    assert.equal(report.blockGradeSummary.grades.find((row) => row.grade === 'Ungraded').pct, 50)
+  })
+
+  it('sorts the block table by A, B, C, D and graded answer totals', () => {
+    const rows = [
+      mapBlockAverageRow({ block_id: 'a', block_name: 'Few A', a: 1, b: 0, c: 2, d: 0 }),
+      mapBlockAverageRow({ block_id: 'b', block_name: 'More A', a: 4, b: 1, c: 0, d: 3 }),
+    ]
+    assert.equal(sortBlockAverageRows(rows, 'a', 'desc')[0].blockName, 'More A')
+    assert.equal(sortBlockAverageRows(rows, 'b', 'desc')[0].blockName, 'More A')
+    assert.equal(sortBlockAverageRows(rows, 'c', 'desc')[0].blockName, 'Few A')
+    assert.equal(sortBlockAverageRows(rows, 'd', 'desc')[0].blockName, 'More A')
+    assert.equal(sortBlockAverageRows(rows, 'gradedAnswers', 'desc')[0].gradedAnswers, 8)
   })
 })

@@ -14,8 +14,10 @@ import {
   reconcilePersonAfterRoleChange,
   resolveInspectionDatesFromClientState,
 } from '@/lib/analytics-client-filters'
+import { filterPeopleForTeam, reconcilePersonAfterTeamChange } from '@/lib/analytics-teams'
 import OverviewTab from '@/app/components/analytics/OverviewTab'
-import BlockAverageTable from '@/app/components/analytics/BlockAverageTable'
+import BlockGradeViews from '@/app/components/analytics/BlockGradeViews'
+import TeamManagementSection from '@/app/components/analytics/TeamManagementSection'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -293,6 +295,7 @@ export default function AnalyticsPage() {
   const [customTo, setCustomTo] = useState('')
   const [personRole, setPersonRole] = useState('all')
   const [person, setPerson] = useState('all')
+  const [team, setTeam] = useState('all')
   const [issueCategory, setIssueCategory] = useState('all')
   const [issueDateFrom, setIssueDateFrom] = useState('')
   const [issueDateTo, setIssueDateTo] = useState('')
@@ -311,6 +314,7 @@ export default function AnalyticsPage() {
         customTo,
         personRole,
         person,
+        team,
         issueCategory,
         issueDateFrom,
         issueDateTo,
@@ -326,6 +330,7 @@ export default function AnalyticsPage() {
       customTo,
       personRole,
       person,
+      team,
       issueCategory,
       issueDateFrom,
       issueDateTo,
@@ -409,12 +414,16 @@ export default function AnalyticsPage() {
       dateTo: payload.applied?.dateTo ?? fromClient.dateTo,
       issueDateFrom: payload.applied?.issueDateFrom ?? fromClient.issueDateFrom,
       issueDateTo: payload.applied?.issueDateTo ?? fromClient.issueDateTo,
+      teamName:
+        (filterOptions?.teams || []).find((row) => row.id === (fromClient.team || payload.applied?.team))?.name ||
+        payload.applied?.teamName ||
+        null,
     }
-  }, [applied, lastAppliedFilters, payload])
+  }, [applied, lastAppliedFilters, payload, filterOptions])
   const peopleOptions = useMemo(() => {
-    const rows = filterOptions?.people || []
-    return filterPeopleOptions(rows, personRole)
-  }, [filterOptions, personRole])
+    const rows = filterPeopleOptions(filterOptions?.people || [], personRole)
+    return filterPeopleForTeam(rows, team, filterOptions?.teams || [])
+  }, [filterOptions, personRole, team])
 
   useEffect(() => {
     if (person === 'all') return
@@ -446,12 +455,19 @@ export default function AnalyticsPage() {
       ;(management.attentionBlocks || []).forEach((row) => {
         lines.push(['Attention block', row.blockName, row.display].map(escapeCsvCell).join(','))
       })
+      ;(management.blockGradeSummary?.grades || []).forEach((row) => {
+        lines.push(
+          ['Overall block grade', row.grade, `${row.count} blocks; ${row.pct == null ? '' : `${row.pct}%`}`]
+            .map(escapeCsvCell)
+            .join(',')
+        )
+      })
       ;(management.blockAverages || []).forEach((row) => {
         lines.push(
           [
             'Average grade by block',
             row.blockName || '',
-            `${row.gradedInspections} inspections; avg ${row.avgGrade || '—'}; latest ${row.latestGrade || '—'}; ${row.latestSubmittedAt || ''}`,
+            `${row.gradedInspections} inspections; ${row.a ?? 0} A, ${row.b ?? 0} B, ${row.c ?? 0} C, ${row.d ?? 0} D; ${row.gradedAnswers ?? 0} graded answers; overall ${row.avgGrade || '—'}; latest ${row.latestGrade || '—'}; ${row.latestSubmittedAt || ''}`,
           ]
             .map(escapeCsvCell)
             .join(',')
@@ -739,7 +755,8 @@ export default function AnalyticsPage() {
                 onChange={(e) => {
                   const nextRole = e.target.value
                   setPersonRole(nextRole)
-                  setPerson(reconcilePersonAfterRoleChange(nextRole, person, filterOptions?.people || []))
+                  const teamPeople = filterPeopleForTeam(filterOptions?.people || [], team, filterOptions?.teams || [])
+                  setPerson(reconcilePersonAfterRoleChange(nextRole, person, teamPeople))
                 }}
                 style={{ padding: '0.4rem' }}
               >
@@ -752,9 +769,33 @@ export default function AnalyticsPage() {
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
+              <span style={{ fontWeight: 600 }}>Manager / team</span>
+              <select
+                value={team}
+                onChange={(e) => {
+                  const nextTeam = e.target.value
+                  setTeam(nextTeam)
+                  const rolePeople = filterPeopleOptions(filterOptions?.people || [], personRole)
+                  setPerson(reconcilePersonAfterTeamChange(nextTeam, person, rolePeople, filterOptions?.teams || []))
+                }}
+                style={{ padding: '0.4rem' }}
+              >
+                <option value="all">All teams</option>
+                {(filterOptions?.teams || []).map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                    {row.managerName ? ` — ${row.managerName}` : ''}
+                    {row.empty ? ' (no members)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.78rem' }}>
               <span style={{ fontWeight: 600 }}>Inspector / person</span>
               <select value={person} onChange={(e) => setPerson(e.target.value)} style={{ padding: '0.4rem' }}>
-                <option value="all">{personRole === 'all' ? 'All people' : 'All in selected role'}</option>
+                <option value="all">
+                  {team !== 'all' ? 'All in selected team' : personRole === 'all' ? 'All people' : 'All in selected role'}
+                </option>
                 {peopleOptions.map((p) => (
                   <option key={p.personId || p.value} value={p.value}>
                     {p.label}
@@ -839,6 +880,26 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
+          {payload?.canManageTeams ? (
+            <div
+              className="analytics-no-print"
+              style={{
+                marginTop: '-0.35rem',
+                marginBottom: '1rem',
+                padding: '0.85rem 1rem 1rem',
+                backgroundColor: '#fff',
+                border: `1px solid ${photobook.softBorder}`,
+                borderRadius: '0.75rem',
+              }}
+            >
+              <TeamManagementSection
+                teams={filterOptions?.teams || []}
+                people={filterOptions?.people || []}
+                onChanged={load}
+              />
+            </div>
+          ) : null}
+
           {displayApplied && overview != null && (
             <p className="analytics-no-print" style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '1rem' }}>
               Active window: <strong>{displayApplied.preset}</strong>
@@ -846,6 +907,7 @@ export default function AnalyticsPage() {
                 ? ` (${displayApplied.dateFrom || '…'} → ${displayApplied.dateTo || '…'})`
                 : ''}
               {displayApplied.personRoleLabel ? ` · Role: ${displayApplied.personRoleLabel}` : ''}
+              {displayApplied.teamName ? ` · Team: ${displayApplied.teamName}` : ''}
               {displayApplied.person ? ` · Person: ${displayApplied.person}` : ''}
               {displayApplied.gradeTemplateName ? ` · Form: ${displayApplied.gradeTemplateName}` : ''}
               {displayApplied.gradeBlockId ? ` · Block: ${displayApplied.gradeBlockId}` : ''}
@@ -1020,21 +1082,10 @@ export default function AnalyticsPage() {
                 {tab === 'estates' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-                      Average grade by block compares individual blocks for the selected period. Inspection
-                      volumes below remain a count-only list and are unchanged.
+                      Overall grades count each inspected block once. The table shows the A–D answers behind
+                      that letter. Inspection volumes below remain a count-only list.
                     </p>
-                    <div
-                      style={{
-                        backgroundColor: 'white',
-                        padding: '1.1rem',
-                        borderRadius: '0.5rem',
-                        boxShadow: '0 1px 3px rgba(88, 28, 135, 0.08)',
-                        border: `1px solid ${photobook.softBorder}`,
-                        borderTop: `3px solid ${photobook.primary}`,
-                      }}
-                    >
-                      <BlockAverageTable rows={management?.blockAverages || []} />
-                    </div>
+                    <BlockGradeViews rows={management?.blockAverages || []} />
                     <div>
                       <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem', color: photobook.heading }}>Inspection volume by block</h2>
                       <div style={{ overflowX: 'auto', border: `1px solid ${photobook.softBorder}`, borderRadius: '0.5rem' }}>

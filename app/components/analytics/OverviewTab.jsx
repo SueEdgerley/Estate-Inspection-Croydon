@@ -1,7 +1,7 @@
 'use client'
 
 import { photobook } from '@/lib/photobook-theme'
-import BlockAverageTable from '@/app/components/analytics/BlockAverageTable'
+import BlockGradeViews from '@/app/components/analytics/BlockGradeViews'
 
 const C = {
   completed: '#16a34a',
@@ -235,9 +235,7 @@ export default function OverviewTab({ overview, trends, management }) {
         )}
       </div>
 
-      <div style={cardStyle()}>
-        <BlockAverageTable rows={management?.blockAverages || []} />
-      </div>
+      <BlockGradeViews rows={management?.blockAverages || []} />
 
       <div style={cardStyle()}>
         <div style={{ fontSize: '0.9rem', fontWeight: 600, color: photobook.heading, marginBottom: '0.35rem' }}>
