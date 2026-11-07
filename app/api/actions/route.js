@@ -4,10 +4,14 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import {
   getAppRoleContextForClerkUser,
+  roleMayExportActionList,
   roleMayPostManualAction,
   roleMayViewGlobalActionsList,
 } from '@/lib/app-role-access'
+import { buildActionsExportCsv } from '@/lib/action-export-csv'
+import { filterActionsForView } from '@/lib/action-list-view-filters'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import { ensureCaretakerActionTrackingFields } from '@/lib/caretaker-estates-action-fields'
 import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
 import {
   ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
@@ -82,6 +86,7 @@ function buildActionsSelect({ where = '', limit = '', availableInspectionColumns
       a.block_id, a.cost_code, a.issue_pdf_url, a.issue_number,
       a.job_number, a.expected_completion_date,
       a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+      a.completed_at, a.notification_sent_at,
       a.created_at, a.updated_at,
       COALESCE(
         CASE WHEN lower(trim(COALESCE(i.inspector_name, ''))) <> 'inspector' THEN NULLIF(trim(i.inspector_name), '') END,
@@ -159,6 +164,7 @@ function buildCoreFallbackSelect(whereSql) {
       a.block_id, a.cost_code, a.issue_pdf_url, a.issue_number,
       a.job_number, a.expected_completion_date,
       a.repair_notes, a.repair_photo_url, a.repair_updated_at,
+      a.completed_at, a.notification_sent_at,
       a.created_at, a.updated_at,
       NULL::text AS created_by,
       'Assigned' AS assigned_to,
@@ -209,6 +215,7 @@ export async function GET(request) {
     )
 
     await ensureDatabase()
+    await ensureCaretakerActionTrackingFields(sql)
     const pgUrl = getPgUrl()
     if (!pgUrl) {
       return NextResponse.json(
@@ -266,6 +273,11 @@ export async function GET(request) {
         ...roleTrace(roleCtx),
         failure_source: '/api/actions',
       })
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const exportCsv = searchParams.get('format') === 'csv'
+    if (exportCsv && !roleMayExportActionList(roleCtx.normalized, roleCtx.clerkIsAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -366,6 +378,22 @@ export async function GET(request) {
       )
     }
     if (!countedFromDatabase) totalCount = dedupedRows.length
+    if (searchParams.get('format') === 'csv') {
+      const filtered = filterActionsForView(dedupedRows, {
+        dateFrom: searchParams.get('date_from') || '',
+        dateTo: searchParams.get('date_to') || '',
+        location: searchParams.get('location') || '',
+        person: searchParams.get('person') || '',
+      })
+      return new NextResponse(buildActionsExportCsv(filtered), {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="issues-actions.csv"',
+          'X-Total-Count': String(filtered.length),
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
     return NextResponse.json(dedupedRows, {
       headers: {
         'X-Total-Count': String(totalCount),

@@ -57,6 +57,7 @@ export async function GET() {
       LEFT JOIN estates e ON e.id = i.estate_id
       LEFT JOIN blocks b ON b.id = i.block_id
       WHERE (${elevatedAccess} = true OR lower(trim(COALESCE(i.inspector_id, ''))) = lower(trim(${userEmail || ''})))
+        AND i.superseded_by IS NULL
         AND (
           i.submitted_at IS NOT NULL
           OR lower(trim(COALESCE(i.status, ''))) IN ('submitted', 'completed', 'complete')

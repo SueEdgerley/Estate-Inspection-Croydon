@@ -36,6 +36,8 @@ export async function GET() {
         LEFT JOIN blocks b ON b.id = i.block_id
         LEFT JOIN people p ON p.id = a.recipient_person_id
         WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
+          AND a.superseded_by IS NULL
+          AND i.superseded_by IS NULL
           AND (
             lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
             OR lower(COALESCE(a.category, '')) LIKE '%repair%'
@@ -80,6 +82,8 @@ export async function GET() {
           LEFT JOIN estates e ON e.id = i.estate_id
           LEFT JOIN blocks b ON b.id = i.block_id
           WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
+            AND a.superseded_by IS NULL
+            AND i.superseded_by IS NULL
             AND (
               lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
               OR lower(COALESCE(a.category, '')) LIKE '%repair%'
@@ -118,6 +122,8 @@ export async function GET() {
           FROM actions a
           LEFT JOIN inspections i ON i.id = a.inspection_id
           WHERE COALESCE(lower(a.status), 'open') NOT IN ('completed', 'closed')
+            AND a.superseded_by IS NULL
+            AND i.superseded_by IS NULL
             AND (
               lower(COALESCE(a.category, '')) IN ('repair', 'repairs')
               OR lower(COALESCE(a.category, '')) LIKE '%repair%'

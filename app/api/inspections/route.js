@@ -48,6 +48,7 @@ import {
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
 import { isEstateInspectionFormTemplate } from '@/lib/standard-inspection-form'
 import { isGroundsMaintenanceTemplate } from '@/lib/grounds-maintenance-template'
+import { findGroundsMaintenanceSite } from '@/lib/grounds-maintenance-sites'
 import {
   countQuestionsInTemplate,
   logInspectionQuestionPipeline,
@@ -63,11 +64,11 @@ import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
 import {
-  buildCaretakerEstatesMailboxNotification,
   fieldsForCaretakerEstatesMailboxEmail,
   isCaretakerEstatesMailboxEmail,
   loadCaretakerEstatesMailboxInspection,
 } from '@/lib/caretaker-estates-mailbox-notification'
+import { deliverCaretakerEstatesMailboxNotification } from '@/lib/caretaker-estates-mailbox-action'
 import { deriveInspectionWorkType } from '@/lib/inspection-work-types'
 import { packNvWizardExtras, unpackNvWizardNotes } from '@/lib/nv-notes-pack'
 import { isNeighbourhoodVoiceTemplateVersion } from '@/lib/neighbourhood-voice-question-schema'
@@ -257,6 +258,8 @@ function collectCaretakerEmailNotifications({ template, answers, answerExtras, i
       const comment = typeof extras.comment === 'string' ? extras.comment.trim() : ''
       const questionText = q.question_text || q.label || q.id
       const base = {
+        sectionId: section.id,
+        questionId: q.id,
         sectionTitle: section.title || section.name || '',
         questionText,
         answer: answer == null ? '' : String(answer),
@@ -502,7 +505,7 @@ async function sendCaretakerEmailNotifications(sqlFn, {
   blockAddress = '',
   inspectionAt = null,
 }) {
-  const result = { sent: 0, failed: [] }
+  const result = { sent: 0, failed: [], warnings: [] }
   const dedupe = new Set()
   let savedInspection = null
   try {
@@ -544,21 +547,54 @@ async function sendCaretakerEmailNotifications(sqlFn, {
       ...(notification.photoUrls || []),
     ].filter(Boolean).join('\n')
     if (estatesMailbox) {
-      const content = buildCaretakerEstatesMailboxNotification({
+      const delivery = await deliverCaretakerEstatesMailboxNotification(sqlFn, {
         inspectionId: estatesMailboxInspection.inspectionId,
         submittedBy: estatesMailboxInspection.submittedBy,
         blockAddress: estatesMailboxInspection.blockAddress,
+        blockId: estatesMailboxInspection.blockId,
         inspectionDate: estatesMailboxInspection.inspectionDate,
+        sectionId: notification.sectionId,
         sectionTitle: notification.sectionTitle,
+        questionId: notification.questionId,
         questionText: notification.questionText,
         answer: notification.answer,
         comment: notification.comment,
         photoUrls: notification.photoUrls || [],
         reminder: notification.reminder || '',
       })
-      subject = content.subject
-      html = content.html
-      text = content.text
+      if (delivery.warning) result.warnings.push(delivery.warning)
+      if (!delivery.actionSaved) continue
+      if (delivery.sent) {
+        result.sent += 1
+        if (!delivery.outboundLogged) {
+          await insertOutboundEmailLog(sqlFn, {
+            inspectionId,
+            questionId: notification.questionId || null,
+            actionId: delivery.actionId || null,
+            emailTo: to,
+            emailRouting: notification.routing || 'caretaker_section_2_photo',
+            status: 'sent',
+            sentAt: delivery.notificationSentAt || null,
+            provider: delivery.provider || null,
+            providerMessageId: delivery.providerMessageId || null,
+          })
+        }
+      } else if (delivery.failed) {
+        result.failed.push({
+          email: to,
+          question: notification.questionText,
+          error: delivery.error || 'send_failed',
+        })
+        await insertOutboundEmailLog(sqlFn, {
+          inspectionId,
+          questionId: notification.questionId || null,
+          emailTo: to,
+          emailRouting: `${notification.routing || 'caretaker_section_2_photo'}:${delivery.error || 'failed'}`,
+          status: 'failed',
+          sentAt: null,
+        })
+      }
+      continue
     }
     try {
       console.log('[sendCaretakerEmailNotifications] final recipient email', {
@@ -1174,6 +1210,7 @@ export async function GET(request) {
            ARRAY_REMOVE(ARRAY_AGG(a.inspection_id::text ORDER BY a.created_at DESC), NULL) AS action_inspection_refs
          FROM actions a
          WHERE a.inspection_id::text IN (${actionCountPlaceholders})
+           AND a.superseded_by IS NULL
          GROUP BY a.inspection_id::text`,
         inspectionIds
       )
@@ -1265,6 +1302,16 @@ export async function GET(request) {
       { error: 'Failed to list inspections', details: error?.message },
       { status: 500 }
     )
+  }
+}
+
+async function saveGroundsMaintenanceSite(inspectionId, site) {
+  if (!inspectionId || !site?.id) return
+  try {
+    await sql`ALTER TABLE inspections ADD COLUMN IF NOT EXISTS gm_site_id TEXT`
+    await sql`UPDATE inspections SET gm_site_id = ${site.id} WHERE id = ${inspectionId}`
+  } catch (error) {
+    console.error('[api/inspections] could not store grounds site', error)
   }
 }
 
@@ -1512,11 +1559,18 @@ export async function POST(request) {
       )
     }
 
+    const requestedGmSiteId = String(body?.gm_site_id || '').trim()
+    const gmSite = isGroundsMaintenanceTemplate(template) ? findGroundsMaintenanceSite(requestedGmSiteId) : null
+    if (requestedGmSiteId && isGroundsMaintenanceTemplate(template) && !gmSite) {
+      return NextResponse.json({ error: 'Choose a Grounds Maintenance site from the site list' }, { status: 400 })
+    }
+
     if (
       (isCaretakerTemplate(template) ||
         isEsmInspectionFormTemplate(template) ||
         isGroundsMaintenanceTemplate(template)) &&
-      !String(bodyBlockId || '').trim()
+      !String(bodyBlockId || '').trim() &&
+      !gmSite
     ) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })
     }
@@ -1529,7 +1583,7 @@ export async function POST(request) {
       WHERE COALESCE(active, true) = true
     `
     const resolveRecipientEmail = buildRecipientResolver(peopleResult.rows || [])
-    const loc = await validateInspectionEstateAndBlock(bodyEstateId, bodyBlockId)
+    const loc = await validateInspectionEstateAndBlock(gmSite ? null : bodyEstateId, gmSite ? null : bodyBlockId)
     if (!loc.ok) {
       console.warn('[api/inspections] location validation failed', {
         template_id,
@@ -1541,6 +1595,12 @@ export async function POST(request) {
     }
     const estateId = loc.estateId
     const blockId = loc.blockId
+    const locationNotes = location && String(location).trim() ? String(location).trim() : ''
+    const storedLocationLabel = gmSite
+      ? locationNotes && locationNotes !== gmSite.siteName
+        ? `${gmSite.siteName} — ${locationNotes}`
+        : gmSite.siteName
+      : locationNotes || null
     const clientInspectionId = sanitizeClientInspectionId(body?.client_inspection_id)
     const inspectionId = clientInspectionId || crypto.randomUUID()
     const snapshot = buildTemplateVersionSnapshot(template)
@@ -1576,7 +1636,7 @@ export async function POST(request) {
     if (createDraft === true) {
       const displayTitle = (typeof title === 'string' && title.trim())
         ? title.trim()
-        : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
+        : [template.name, storedLocationLabel].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
       // Idempotent create: when the client reuses a stable id (offline draft id /
       // submission key), a repeated submit/retry must converge on the existing
       // record instead of inserting a duplicate. ON CONFLICT DO NOTHING also
@@ -1594,7 +1654,7 @@ export async function POST(request) {
           ${inspectionRowType},
           ${displayTitle},
           ${description && String(description).trim() ? String(description).trim() : null},
-          ${location && String(location).trim() ? String(location).trim() : null},
+          ${storedLocationLabel},
           ${dueDateParsed},
           ${template_id},
           ${template.name || null},
@@ -1630,6 +1690,7 @@ export async function POST(request) {
           !inspectorEmail ||
           String(existing.rows[0].inspector_id).toLowerCase() === String(inspectorEmail).toLowerCase()
         if (existingStatus === 'draft' && sameInspector) {
+          await saveGroundsMaintenanceSite(inspectionId, gmSite)
           await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
         }
         console.log('[api/inspections] draft create converged on existing inspection', {
@@ -1649,6 +1710,7 @@ export async function POST(request) {
         )
       }
 
+      await saveGroundsMaintenanceSite(inspectionId, gmSite)
       await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
       console.log('[api/inspections] draft inspection created', {
         inspection_id: inspectionId,
@@ -1681,7 +1743,7 @@ export async function POST(request) {
 
     const displayTitle = (typeof title === 'string' && title.trim())
       ? title.trim()
-      : [template.name, location && String(location).trim()].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
+      : [template.name, storedLocationLabel].filter(Boolean).join(' – ') || inspectionId.slice(0, 8)
 
     const gradingValue = deriveInspectionGrading(template, answers)
 
@@ -1698,7 +1760,7 @@ export async function POST(request) {
         ${inspectionRowType},
         ${displayTitle},
         ${description && String(description).trim() ? String(description).trim() : null},
-        ${location && String(location).trim() ? String(location).trim() : null},
+        ${storedLocationLabel},
         ${dueDateParsed},
         ${template_id},
         ${template.name || null},
@@ -1741,6 +1803,7 @@ export async function POST(request) {
         updated_at = ${new Date()}
     `
 
+    await saveGroundsMaintenanceSite(inspectionId, gmSite)
     await persistInspectionResponses({ inspectionId, template, answers, answer_extras })
 
     const actionsForPoster = []
@@ -2179,6 +2242,7 @@ export async function POST(request) {
         })
         caretakerEmailResults.sent += sent.sent || 0
         if (Array.isArray(sent.failed)) caretakerEmailResults.failed.push(...sent.failed)
+        if (Array.isArray(sent.warnings)) actionCreationWarnings.push(...sent.warnings)
       } catch (caretakerEmailErr) {
         console.warn('[Inspections] Caretaker notification email failed:', caretakerEmailErr?.message || caretakerEmailErr)
         caretakerEmailResults.failed.push({ error: caretakerEmailErr?.message || String(caretakerEmailErr) })

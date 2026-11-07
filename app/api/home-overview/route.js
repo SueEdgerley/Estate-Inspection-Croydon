@@ -14,6 +14,10 @@ import {
   joinSqlAnd,
 } from '@/lib/inspection-filters'
 import { WORK_TYPE_VALUES, workTypeLabel } from '@/lib/inspection-work-types'
+import {
+  sqlOutstandingActionNotSuperseded,
+  sqlOutstandingActionNotSupersededUnjoined,
+} from '@/lib/superseded-records'
 
 // Match /api/dashboard auth: system role or operational job titles.
 const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'housing_team_manager', 'esm']
@@ -363,7 +367,8 @@ export async function GET(request) {
               AND expected_completion_date IS NOT NULL
               AND expected_completion_date < CURRENT_DATE
           )::int AS overdue_count
-        FROM actions`
+        FROM actions a
+        WHERE ${sqlOutstandingActionNotSupersededUnjoined('a')}`
       )
       openActions = parseInt(actionCounts.rows[0]?.open_count || 0, 10)
       overdueActions = parseInt(actionCounts.rows[0]?.overdue_count || 0, 10)
@@ -405,6 +410,7 @@ export async function GET(request) {
         LEFT JOIN estates e ON e.id = COALESCE(b.estate_id, i.estate_id)
         LEFT JOIN people p ON p.id = a.recipient_person_id
         WHERE ${OPEN_ACTION_STATUS_ALIASED}
+          AND ${sqlOutstandingActionNotSuperseded('a', 'i')}
         ORDER BY
           CASE
             WHEN a.expected_completion_date IS NOT NULL AND a.expected_completion_date < CURRENT_DATE THEN 0

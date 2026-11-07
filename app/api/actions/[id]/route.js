@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import { ensureCaretakerActionTrackingFields } from '@/lib/caretaker-estates-action-fields'
+import { nextCompletionTimestamp } from '@/lib/action-completion'
 import { ensureIssueNumberFields } from '@/lib/issue-number-fields'
 import {
   ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
@@ -207,6 +209,7 @@ export async function PUT(request, { params }) {
     if (!repairFieldsAvailable) {
       throw new Error('Repair action columns could not be verified or created on actions table')
     }
+    await ensureCaretakerActionTrackingFields(sql)
 
     const normalizedData = {
       ...data,
@@ -233,6 +236,12 @@ export async function PUT(request, { params }) {
       repair_photo_url_present: data.repair_photo_url !== undefined && data.repair_photo_url !== null && data.repair_photo_url !== '',
     }
 
+    let previousStatus = null
+    if (normalizedData.status !== undefined) {
+      const currentStatus = await sql.query('SELECT status FROM actions WHERE id = $1', [id])
+      previousStatus = currentStatus.rows[0]?.status || null
+    }
+
     const buildUpdateQuery = () => {
       const clauses = []
       const values = []
@@ -246,7 +255,11 @@ export async function PUT(request, { params }) {
       if (normalizedData.title !== undefined) add('title', normalizedData.title)
       if (normalizedData.description !== undefined) add('description', normalizedData.description)
       if (normalizedData.location !== undefined) add('location', normalizedData.location)
-      if (normalizedData.status !== undefined) add('status', normalizedData.status)
+      if (normalizedData.status !== undefined) {
+        add('status', normalizedData.status)
+        const completion = nextCompletionTimestamp(previousStatus, normalizedData.status)
+        if (completion !== undefined) add('completed_at', completion)
+      }
       if (normalizedData.comment !== undefined) add('comment', normalizedData.comment)
       if (normalizedData.recipient_person_id !== undefined) add('recipient_person_id', normalizedData.recipient_person_id)
       if (normalizedData.job_number !== undefined) add('job_number', normalizedData.job_number || null)

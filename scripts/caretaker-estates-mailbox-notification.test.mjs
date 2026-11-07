@@ -144,6 +144,36 @@ describe('estates mailbox email', () => {
     assert.match(email.text, /Comments: Black bags beside the bin store/)
   })
 
+  it('adds the action reference and action link without removing the inspection report', () => {
+    const actionUrl = `https://estateinspections.co.uk/actions?inspection_id=${INSPECTION_ID}&action_id=action_estates_1`
+    const withAction = buildCaretakerEstatesMailboxNotification({
+      inspectionId: saved.id,
+      submittedBy: saved.submittedBy,
+      blockAddress: saved.blockAddress,
+      inspectionDate: saved.inspectionDate,
+      sectionTitle: '2. External Cleaning - Cleaning completed for ...',
+      questionText: 'Fly Tipping',
+      answer: 'Yes',
+      comment: 'Black bags beside the bin store',
+      photoUrls: ['https://example.blob.core.windows.net/photos/fly-tip.jpg'],
+      actionReference: 'ISS-000015',
+      actionUrl,
+      baseUrl: 'https://estateinspections.co.uk',
+    })
+    const reportUrl = `https://estateinspections.co.uk/inspections/${INSPECTION_ID}`
+    assert.equal(
+      withAction.subject,
+      'Caretaker inspection | Priya Shah | Regina Court, 14 High Street | Fly Tipping'
+    )
+    for (const body of [withAction.html, withAction.text]) {
+      assert.match(body, /ISS-000015/)
+      assert.match(body, /View full inspection report/)
+      assert.match(body, new RegExp(reportUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      assert.match(body, /View this action/)
+      assert.match(body, /action_estates_1/)
+    }
+  })
+
   it('corrects a malformed app URL before building the logo and report links', () => {
     const origin = caretakerNotificationPublicBaseUrl({
       NEXT_PUBLIC_APP_URL: 'https://estateinspections.co.uk.api:443',
@@ -188,7 +218,13 @@ describe('send paths', () => {
       assert.match(source, /const CARETAKER_SECTION_5_EMAIL = 'simon\.roice@croydon\.gov\.uk'/)
       assert.match(source, /const CARETAKER_SECTION_6_EMAIL = 'internalhousingrepairs@croydon\.gov\.uk'/)
       assert.match(source, /isCaretakerEstatesMailboxEmail\(to, CARETAKER_SECTION_2_EMAIL\)/)
-      assert.match(source, /if \(estatesMailbox\) \{\s*const content = buildCaretakerEstatesMailboxNotification/)
+      assert.match(source, /deliverCaretakerEstatesMailboxNotification/)
+      assert.match(source, /if \(!delivery\.actionSaved\) continue/)
+      assert.match(source, /sectionNo === 2 && partNo >= 1 && partNo <= 5 && photoUrls\.length > 0/)
+      assert.doesNotMatch(source, /sectionNo === 2 && partNo >= 1 && partNo <= 5 && isYes/)
+      const mailboxAt = source.indexOf('if (!delivery.actionSaved) continue')
+      const sendAt = source.indexOf('sendAppEmail', mailboxAt)
+      assert.ok(mailboxAt > 0 && sendAt > mailboxAt)
       assert.match(source, /let subject = `Caretaker inspection: \$\{/)
       assert.doesNotMatch(source, /caretaker manager|area boundaries/i)
     })

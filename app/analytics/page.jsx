@@ -18,6 +18,7 @@ import { filterPeopleForTeam, reconcilePersonAfterTeamChange } from '@/lib/analy
 import OverviewTab from '@/app/components/analytics/OverviewTab'
 import BlockGradeViews from '@/app/components/analytics/BlockGradeViews'
 import TeamManagementSection from '@/app/components/analytics/TeamManagementSection'
+import GroundsLotsTab from '@/app/components/analytics/GroundsLotsTab'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'trends', label: 'Trends' },
   { id: 'performance', label: 'Performance' },
   { id: 'grades', label: 'C / D grades' },
+  { id: 'grounds', label: 'Grounds lots' },
 ]
 
 function defaultQuarterYear() {
@@ -1077,6 +1079,15 @@ export default function AnalyticsPage() {
               <section role="tabpanel" aria-label={TABS.find((x) => x.id === tab)?.label} style={{ minHeight: '12rem' }}>
                 {tab === 'overview' && (
                   <OverviewTab overview={overview} trends={trends} management={management} />
+                )}
+
+                {tab === 'grounds' && (
+                  <GroundsLotsTab
+                    people={peopleOptions}
+                    canManage={payload?.canManageTeams === true}
+                    initialFrom={displayApplied?.dateFrom || ''}
+                    initialTo={displayApplied?.dateTo || ''}
+                  />
                 )}
 
                 {tab === 'estates' && (

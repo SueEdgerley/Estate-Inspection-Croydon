@@ -52,11 +52,14 @@ import { sendAppEmail } from '@/lib/send-app-email'
 import { insertOutboundEmailLog } from '@/lib/outbound-email-log'
 import { croydonLogoEmailHeaderHtml } from '@/lib/logo-branding'
 import {
-  buildCaretakerEstatesMailboxNotification,
   fieldsForCaretakerEstatesMailboxEmail,
   isCaretakerEstatesMailboxEmail,
   loadCaretakerEstatesMailboxInspection,
 } from '@/lib/caretaker-estates-mailbox-notification'
+import {
+  deliverCaretakerEstatesMailboxNotification,
+  recoverCaretakerEstatesMailboxNotifications,
+} from '@/lib/caretaker-estates-mailbox-action'
 import { insertActionWithOptionalColumns } from '@/lib/action-insert-columns'
 import {
   ISSUE_RECIPIENT_UNAVAILABLE_MESSAGE,
@@ -368,9 +371,10 @@ async function sendCaretakerPhotoAndYesNotifications({
   submittedBy = '',
   inspectionAt = null,
 }) {
-  if (!isCaretakerTemplate(templateVersion)) return { sent: 0, failed: [] }
+  if (!isCaretakerTemplate(templateVersion)) return { sent: 0, failed: [], warnings: [] }
   const sent = []
   const failed = []
+  const warnings = []
   const rowsByQuestionId = new Map((answerRows || []).map((row) => [String(row.question_id || ''), row]))
   const dedupe = new Set()
   let savedInspection = null
@@ -459,21 +463,50 @@ async function sendCaretakerPhotoAndYesNotifications({
           ...photoUrls,
         ].filter(Boolean).join('\n')
         if (estatesMailbox) {
-          const content = buildCaretakerEstatesMailboxNotification({
+          const delivery = await deliverCaretakerEstatesMailboxNotification(sql, {
             inspectionId: estatesMailboxInspection.inspectionId,
             submittedBy: estatesMailboxInspection.submittedBy,
             blockAddress: estatesMailboxInspection.blockAddress,
+            blockId: estatesMailboxInspection.blockId,
             inspectionDate: estatesMailboxInspection.inspectionDate,
+            sectionId: section.id,
             sectionTitle: section.title || section.name || '',
+            questionId: q.id,
             questionText,
             answer: answer == null ? '' : String(answer),
             comment: extras.comment,
             photoUrls,
             reminder: target.reminder || '',
           })
-          subject = content.subject
-          html = content.html
-          text = content.text
+          if (delivery.warning) warnings.push(delivery.warning)
+          if (!delivery.actionSaved) continue
+          if (delivery.sent) {
+            sent.push({ email: to, type: target.routing })
+            if (!delivery.outboundLogged) {
+              await insertOutboundEmailLog(sql, {
+                inspectionId,
+                questionId: q.id,
+                actionId: delivery.actionId || null,
+                emailTo: to,
+                emailRouting: target.routing,
+                status: 'sent',
+                sentAt: delivery.notificationSentAt || null,
+                provider: delivery.provider || null,
+                providerMessageId: delivery.providerMessageId || null,
+              })
+            }
+          } else if (delivery.failed) {
+            failed.push({ email: to, question: questionText, error: delivery.error || 'send_failed' })
+            await insertOutboundEmailLog(sql, {
+              inspectionId,
+              questionId: q.id,
+              emailTo: to,
+              emailRouting: `${target.routing}:${delivery.error || 'failed'}`,
+              status: 'failed',
+              sentAt: null,
+            })
+          }
+          continue
         }
         try {
           const sendResult = await sendAppEmail({
@@ -522,7 +555,7 @@ async function sendCaretakerPhotoAndYesNotifications({
     }
   }
 
-  return { sent, failed }
+  return { sent, failed, warnings }
 }
 
 // POST - Submit inspection (generate PDF and send emails)
@@ -665,6 +698,18 @@ export async function POST(request, { params }) {
     const alreadySubmitted = alreadySubmittedInspectionReplay(inspection)
     if (alreadySubmitted) {
       const existingPdf = getInspectionFullReportPdfUrl(inspection) || null
+      let recovery = { sent: 0, failed: [], warnings: [] }
+      try {
+        recovery = await recoverCaretakerEstatesMailboxNotifications(sql, id)
+      } catch (recoveryError) {
+        recovery = {
+          sent: 0,
+          failed: [],
+          warnings: [
+            `Estate Services retry failed: ${recoveryError?.message || String(recoveryError)}`,
+          ],
+        }
+      }
       return NextResponse.json(
         {
           inspectionId: id,
@@ -672,7 +717,9 @@ export async function POST(request, { params }) {
           pdfUrl: existingPdf,
           fullPdfUrl: existingPdf,
           posterPdfUrl: inspection.poster_pdf_url || null,
-          emails_sent: 0,
+          emails_sent: recovery.sent || 0,
+          ...(recovery.failed?.length ? { email_failures: recovery.failed } : {}),
+          ...(recovery.warnings?.length ? { action_creation_warnings: recovery.warnings } : {}),
         },
         { status: 200 }
       )
@@ -1264,6 +1311,9 @@ export async function POST(request, { params }) {
           }
           if (Array.isArray(caretakerEmails.failed)) {
             emailResults.failed.push(...caretakerEmails.failed)
+          }
+          if (Array.isArray(caretakerEmails.warnings)) {
+            actionCreationWarnings.push(...caretakerEmails.warnings)
           }
         } catch (caretakerEmailErr) {
           console.error('[inspections/submit] caretaker notifications:', caretakerEmailErr)

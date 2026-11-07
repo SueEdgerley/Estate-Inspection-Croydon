@@ -209,12 +209,12 @@ export async function GET(request) {
     const statsResult = await run(
       `SELECT
         COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled') AS caretaker_scheduled,
-        COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled' AND status = 'submitted') AS caretaker_completed,
+        COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled' AND status = 'submitted' AND superseded_by IS NULL) AS caretaker_completed,
         COUNT(*) FILTER (WHERE work_type = 'caretaker_scheduled' AND status IS DISTINCT FROM 'submitted') AS caretaker_missed,
-        COUNT(*) FILTER (WHERE work_type = 'esm_adhoc' AND status = 'submitted') AS esm_adhoc_completed,
-        COUNT(DISTINCT estate_id) FILTER (WHERE work_type = 'esm_adhoc' AND status = 'submitted' AND estate_id IS NOT NULL) AS esm_estates_checked,
-        COUNT(*) FILTER (WHERE work_type = 'housing_walkabout' AND status = 'submitted') AS housing_walkabouts_completed,
-        COUNT(*) FILTER (WHERE status = 'submitted') AS total_completed
+        COUNT(*) FILTER (WHERE work_type = 'esm_adhoc' AND status = 'submitted' AND superseded_by IS NULL) AS esm_adhoc_completed,
+        COUNT(DISTINCT estate_id) FILTER (WHERE work_type = 'esm_adhoc' AND status = 'submitted' AND estate_id IS NOT NULL AND superseded_by IS NULL) AS esm_estates_checked,
+        COUNT(*) FILTER (WHERE work_type = 'housing_walkabout' AND status = 'submitted' AND superseded_by IS NULL) AS housing_walkabouts_completed,
+        COUNT(*) FILTER (WHERE status = 'submitted' AND superseded_by IS NULL) AS total_completed
       FROM inspections
       WHERE ${whereText}`,
       whereParams

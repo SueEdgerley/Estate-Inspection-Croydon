@@ -37,6 +37,9 @@ model Inspection {
   fullPdfUrl          String?   @map("full_pdf_url") @db.Text
   posterPdfUrl        String?   @map("poster_pdf_url") @db.Text
   status              String    @default("draft") @db.VarChar(50)
+  /// Surviving inspection id when this row is an archived duplicate. Null = current record.
+  supersededBy        String?   @map("superseded_by") @db.VarChar(255)
+  supersededAt        DateTime? @map("superseded_at") @db.Timestamptz
   scheduledId         String?   @map("scheduled_id") @db.VarChar(255)
   isScheduled         Boolean?  @default(false) @map("is_scheduled")
   title               String?   @db.VarChar(500)
@@ -349,6 +352,8 @@ model Action {
   description          String?  @db.Text
   location             String?  @db.VarChar(500)
   status               String   @default("open") @db.VarChar(50)
+  supersededBy         String?  @map("superseded_by") @db.VarChar(255)
+  supersededAt         DateTime? @map("superseded_at") @db.Timestamptz
   comment              String?  @db.Text
   recipientPersonId    String?  @map("recipient_person_id") @db.VarChar(255)
   blockId              String?  @map("block_id") @db.VarChar(255)

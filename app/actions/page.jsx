@@ -10,6 +10,8 @@ import {
   formatActionDate,
 } from '@/lib/action-display-formatter'
 import { deduplicateActionRowsById } from '@/lib/deduplicate-actions'
+import { filterActionsForView } from '@/lib/action-list-view-filters'
+import { roleMayExportActionList } from '@/lib/action-export-access'
 import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 
 const STATUS_OPTIONS = [
@@ -51,12 +53,6 @@ function dateInputValue(value) {
   return date.toISOString().slice(0, 10)
 }
 
-function includesFilter(values, filter) {
-  const needle = filter.trim().toLowerCase()
-  if (!needle) return true
-  return values.some((value) => String(value || '').toLowerCase().includes(needle))
-}
-
 function uniqueDisplayOptions(values) {
   const options = []
   const seen = new Set()
@@ -78,6 +74,9 @@ export default function ActionsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [downloadingActionPlan, setDownloadingActionPlan] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [canExportActions, setCanExportActions] = useState(false)
+  const [linkedActionId, setLinkedActionId] = useState('')
   const [mustScopeToOwnRecords, setMustScopeToOwnRecords] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -96,65 +95,10 @@ export default function ActionsPage() {
   // Deduplicate actions first
   const uniqueActions = useMemo(() => deduplicateActionRowsById(actions), [actions])
 
-  const filteredActions = useMemo(() => {
-    return uniqueActions.filter((action) => {
-      const display = buildActionDisplay(action)
-
-      // Date filter
-      if (filters.dateFrom || filters.dateTo) {
-        const actionDate = new Date(action.inspection_submitted_at || action.inspection_created_at || action.created_at)
-        if (Number.isNaN(actionDate.getTime())) return false
-        
-        if (filters.dateFrom) {
-          const fromDate = new Date(filters.dateFrom)
-          if (actionDate < fromDate) return false
-        }
-        
-        if (filters.dateTo) {
-          const toDate = new Date(filters.dateTo)
-          toDate.setHours(23, 59, 59, 999) // End of day
-          if (actionDate > toDate) return false
-        }
-      }
-      
-      // Location filter
-      if (filters.location) {
-        const locationMatch = includesFilter([
-          display.contextLocation,
-          display.location,
-          display.blockLocation,
-          action.estate_block_name,
-          action.estate_name,
-          action.block_name,
-          action.location,
-          action.inspection_location_label,
-          action.inspection_address,
-          action.inspection_location,
-        ], filters.location)
-        if (!locationMatch) return false
-      }
-      
-      // Person filter (assigned or completed by)
-      if (filters.person) {
-        const personMatch = includesFilter([
-          display.assignedTo,
-          display.completedBy,
-          display.submittedBy,
-          action.assigned_to,
-          action.assigned_to_email,
-          action.created_by,
-          action.inspection_created_by_name,
-          action.inspection_completed_by_name,
-          action.inspection_inspector_name,
-          action.completed_by,
-          action.submitted_by,
-        ], filters.person)
-        if (!personMatch) return false
-      }
-      
-      return true
-    })
-  }, [uniqueActions, filters])
+  const filteredActions = useMemo(
+    () => filterActionsForView(uniqueActions, filters),
+    [uniqueActions, filters]
+  )
 
   const locationFilterOptions = useMemo(() => {
     return uniqueDisplayOptions(uniqueActions.flatMap((action) => {
@@ -207,7 +151,13 @@ export default function ActionsPage() {
       try {
         const res = await fetch('/api/auth/me', { credentials: 'include' })
         const data = await res.json().catch(() => null)
-        if (!cancelled) setMustScopeToOwnRecords(data?.roleUi?.mustScopeToOwnRecords === true)
+        if (!cancelled) {
+          setMustScopeToOwnRecords(data?.roleUi?.mustScopeToOwnRecords === true)
+          setCanExportActions(roleMayExportActionList(
+            data?.roleUi?.normalizedRole,
+            data?.roleUi?.clerkIsAdmin === true || data?.roleUi?.isFullAdmin === true
+          ))
+        }
       } catch {
         if (!cancelled) setMustScopeToOwnRecords(false)
       }
@@ -220,6 +170,11 @@ export default function ActionsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const actionId = params.get('action_id') || ''
+    if (actionId) {
+      setLinkedActionId(actionId)
+      setStatusFilter('all')
+    }
     setInspectionId(params.get('inspection_id') || '')
   }, [])
 
@@ -247,6 +202,7 @@ export default function ActionsPage() {
         const deduped = deduplicateActionRowsById(rows)
         setActions(deduped)
         setSelectedId((current) => {
+          if (linkedActionId && deduped.some((row) => row.id === linkedActionId)) return linkedActionId
           if (current && deduped.some((row) => row.id === current)) return current
           if (deduped.length > 0 && typeof window !== 'undefined' && window.innerWidth >= 900) {
             return deduped[0].id
@@ -261,7 +217,7 @@ export default function ActionsPage() {
     }
 
     loadActions()
-  }, [inspectionId, statusFilter, searchQuery])
+  }, [inspectionId, statusFilter, searchQuery, linkedActionId])
 
   useEffect(() => {
     let cancelled = false
@@ -353,6 +309,40 @@ export default function ActionsPage() {
     }
   }
 
+  const exportActionsCsv = async () => {
+    setExporting(true)
+    setError('')
+    try {
+      const params = new URLSearchParams()
+      params.set('format', 'csv')
+      params.set('status', statusFilter || 'active')
+      if (inspectionId) params.set('inspection_id', inspectionId)
+      if (searchQuery) params.set('q', searchQuery)
+      if (filters.dateFrom) params.set('date_from', filters.dateFrom)
+      if (filters.dateTo) params.set('date_to', filters.dateTo)
+      if (filters.location) params.set('location', filters.location)
+      if (filters.person) params.set('person', filters.person)
+      const res = await fetch(`/api/actions?${params.toString()}`, {
+        cache: 'no-store',
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Could not export issues')
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'issues-actions.csv'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err?.message || 'Could not export issues')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const closeDetail = () => setSelectedId('')
   const downloadActionPlanPdf = async () => {
     if (!inspectionId) return
@@ -439,9 +429,25 @@ export default function ActionsPage() {
       ) : null}
 
       <div style={filtersWrapStyle}>
-        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem', fontWeight: 'bold', color: '#111827' }}>
-          Filter Issues
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 'bold', color: '#111827' }}>
+            Filter Issues
+          </h3>
+          {canExportActions ? (
+            <button
+              type="button"
+              onClick={exportActionsCsv}
+              disabled={exporting || loading}
+              style={{
+                ...downloadPdfButtonStyle,
+                opacity: exporting || loading ? 0.72 : 1,
+                cursor: exporting || loading ? 'wait' : 'pointer',
+              }}
+            >
+              {exporting ? 'Preparing export...' : 'Export to Excel (CSV)'}
+            </button>
+          ) : null}
+        </div>
 
         <div style={statusTabRowStyle}>
           {LIST_STATUS_FILTERS.map((option) => {
@@ -622,7 +628,8 @@ export default function ActionsPage() {
                   </div>
                   <div style={inspectionContextGridStyle}>
                     <ContextItem label="Completed by" value={display.completedBy} />
-                    <ContextItem label="Inspection date" value={display.inspectionDate} />
+                    <ContextItem label="Date raised" value={display.dateRaised} />
+                    <ContextItem label="Inspection submitted" value={display.inspectionSubmitted} />
                   </div>
                   <div style={{ marginTop: '0.75rem', color: '#111827', fontSize: '0.95rem', fontWeight: 700 }}>
                     {headline}
@@ -636,6 +643,7 @@ export default function ActionsPage() {
                   <div style={{ marginTop: '0.35rem', color: '#334155', fontSize: '0.875rem' }}>
                     Assigned: {notRecorded(display.assignedTo)} | Priority: {notRecorded(display.priority)}
                     {display.jobNumber ? ` | Job: ${display.jobNumber}` : ''}
+                    {a.completed_at ? ` | Completed: ${display.completionDate}` : ''}
                     {display.hasPhoto ? ' | Photo attached' : ''}
                   </div>
                 </button>
@@ -685,7 +693,8 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
         <DetailRow label="Form/template" value={display.inspectionTemplateName} />
         <DetailRow label="Completed by" value={display.completedBy} />
         <DetailRow label="Estate/block/location" value={display.contextLocation} />
-        <DetailRow label="Inspection date" value={display.inspectionDate} />
+        <DetailRow label="Date raised" value={display.dateRaised} />
+        <DetailRow label="Inspection submitted" value={display.inspectionSubmitted} />
       </section>
 
       <section style={sectionStyle}>
@@ -717,6 +726,10 @@ function ActionDetail({ action, form, people, setField, saveAction, saving, erro
         <h3 style={sectionHeadingStyle}>Tracking</h3>
         <DetailRow label="Priority" value={display.priority} />
         <DetailRow label="Status" value={display.status} />
+        <DetailRow label="Completion date" value={action.completed_at ? display.completionDate : ''} />
+        {action.notification_sent_at || String(action.id || '').startsWith('action_estates_') ? (
+          <DetailRow label="Notification sent" value={display.notificationSent} />
+        ) : null}
         <DetailRow label="Submitted by" value={display.submittedBy} />
         <DetailRow label="Assigned to" value={display.assignedTo} />
         <DetailRow label="Target completion date" value={display.targetCompletionDate} />

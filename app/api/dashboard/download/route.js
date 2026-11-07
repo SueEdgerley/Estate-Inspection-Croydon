@@ -4,6 +4,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd, fragment } from '@/lib/inspection-filters'
+import { sqlOutstandingActionNotSuperseded } from '@/lib/superseded-records'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -66,6 +67,7 @@ export async function GET(request) {
       if (!admin && userEmail) {
         taskConditions.push(fragment`i.inspector_id = ${userEmail}`)
       }
+      taskConditions.push([sqlOutstandingActionNotSuperseded('a', 'i'), []])
       const [taskWhereText, taskWhereParams] = joinSqlAnd(asArray(taskConditions))
       const actionsResult = await getNeonQuery()(
         `SELECT a.id, a.inspection_id, a.section_name, a.question_id, a.category, a.priority,
@@ -112,7 +114,10 @@ export async function GET(request) {
 
     // Questions & Answers export: inspection_answers for completed inspections
     if (dataType === 'questions_answers') {
-      const qaConditions = [fragment`i.status = 'submitted'`]
+      const qaConditions = [
+        fragment`i.status = 'submitted'`,
+        ['i.superseded_by IS NULL', []],
+      ]
       if (!admin && userEmail) qaConditions.push(fragment`i.inspector_id = ${userEmail}`)
       const [qaWhereText, qaWhereParams] = joinSqlAnd(asArray(qaConditions))
       const answersResult = await getNeonQuery()(

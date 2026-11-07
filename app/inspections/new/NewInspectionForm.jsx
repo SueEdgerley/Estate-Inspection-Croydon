@@ -2134,6 +2134,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
   const [postgresBlockId, setPostgresBlockId] = useState('')
+  const [groundsSites, setGroundsSites] = useState([])
+  const [groundsSitesStatus, setGroundsSitesStatus] = useState('idle')
 
   /** Active blocks = live location list (estates not used in UI yet). */
   const locationBlocks = useMemo(
@@ -2143,6 +2145,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   useEffect(() => {
     if (!postgresBlockId) return
+    if (String(postgresBlockId).startsWith('gm:')) return
     const stillValid = locationBlocks.some((b) => b.id === postgresBlockId)
     if (!stillValid) setPostgresBlockId('')
   }, [postgresBlockId, locationBlocks])
@@ -2192,8 +2195,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const selectedBlockName = useMemo(() => {
     if (!postgresBlockId) return ''
     const block = locationBlocks.find((b) => String(b?.id) === String(postgresBlockId))
-    return String(block?.name || '').trim()
-  }, [locationBlocks, postgresBlockId])
+    if (block?.name) return String(block.name).trim()
+    const site = groundsSites.find((item) => String(item?.id) === String(postgresBlockId))
+    return String(site?.siteName || '').trim()
+  }, [groundsSites, locationBlocks, postgresBlockId])
 
   useEffect(() => {
     let cancelled = false
@@ -2456,6 +2461,47 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         isEsmInspectionFormTemplate(selectedTemplate) ||
         isGroundsMaintenanceTemplate(selectedTemplate))
   )
+  const groundsMaintenanceForm = Boolean(selectedTemplate && isGroundsMaintenanceTemplate(selectedTemplate))
+  const formLocations = groundsMaintenanceForm ? groundsSites : locationBlocks
+  useEffect(() => {
+    if (!groundsMaintenanceForm) return undefined
+    let cancelled = false
+    setGroundsSitesStatus('loading')
+    fetch('/api/grounds-maintenance-sites', { credentials: 'include' })
+      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (cancelled) return
+        if (!ok) {
+          setGroundsSites([])
+          setGroundsSitesStatus('error')
+          return
+        }
+        setGroundsSites(Array.isArray(data?.sites) ? data.sites : [])
+        setGroundsSitesStatus('ready')
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGroundsSites([])
+          setGroundsSitesStatus('error')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [groundsMaintenanceForm])
+  useEffect(() => {
+    if (!postgresBlockId) return
+    if (
+      groundsMaintenanceForm &&
+      String(postgresBlockId).startsWith('gm:') &&
+      groundsSitesStatus !== 'ready' &&
+      groundsSitesStatus !== 'error'
+    ) {
+      return
+    }
+    const stillValid = formLocations.some((item) => String(item?.id) === String(postgresBlockId))
+    if (!stillValid) setPostgresBlockId('')
+  }, [formLocations, groundsMaintenanceForm, groundsSitesStatus, postgresBlockId])
   const hasActivePhotoUploads = useMemo(
     () => Object.values(activePhotoUploads).some(Boolean),
     [activePhotoUploads]
@@ -2607,7 +2653,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     return {
       template_id: templateId,
       estate_id: undefined,
-      block_id: postgresBlockId.trim() || undefined,
+      block_id: groundsMaintenanceForm ? undefined : postgresBlockId.trim() || undefined,
+      gm_site_id: groundsMaintenanceForm ? postgresBlockId.trim() || undefined : undefined,
       location: location.trim() || undefined,
       description: isCaretakerForm
         ? encodeCaretakerScopeInDescription(description, {
@@ -2631,6 +2678,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   }, [
     templateId,
     postgresBlockId,
+    groundsMaintenanceForm,
     location,
     description,
     answers,
@@ -2942,7 +2990,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     const body = payload.submitBody || {}
     const parsedScope = parseCaretakerScopeFromDescription(body.description || payload.description || '')
     setTemplateId(body.template_id || payload.templateId || '')
-    setPostgresBlockId(body.block_id || payload.blockId || '')
+    setPostgresBlockId(body.gm_site_id || body.block_id || payload.blockId || '')
     setLocation(body.location || payload.location || '')
     setDescription(parsedScope.userDescription)
     setCaretakerInspectionMode(
@@ -3192,13 +3240,17 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const validate = () => {
     const errs = {}
     if (postgresBlockId) {
-      const b = locationBlocks.find((x) => x.id === postgresBlockId)
-      if (!b) errs.block_id = 'Choose a valid location or clear the selection'
+      const b = formLocations.find((x) => String(x.id) === String(postgresBlockId))
+      if (!b) {
+        errs.block_id = groundsMaintenanceForm
+          ? 'Choose a Grounds Maintenance site'
+          : 'Choose a valid location or clear the selection'
+      }
     }
     if (!templateId) errs.template_id = 'Select a template'
     if (!selectedTemplate) return { ...errs }
     if (locationRequiredForSelectedTemplate && !postgresBlockId.trim()) {
-      errs.block_id = 'Please select a location'
+      errs.block_id = groundsMaintenanceForm ? 'Please select a Grounds Maintenance site' : 'Please select a location'
     }
 
     let sectionsToValidate = inspectionRenderSections
@@ -3834,7 +3886,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             {locationRequiredForSelectedTemplate && <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>}
           </label>
           <p style={{ margin: '0 0 0.5rem', fontSize: '0.8125rem', color: '#6b7280' }}>
-            {locationRequiredForSelectedTemplate
+            {groundsMaintenanceForm
+              ? 'Choose the Grounds Maintenance site for this inspection. Lot 4 extra care schemes and hostels are included here and are not added to the normal block list. A site does not have to be linked to a block.'
+              : locationRequiredForSelectedTemplate
               ? 'If the exact location is not in the dropdown, users should select the closest option and provide full details in the notes/comments field.'
               : 'Optional: choose a location from the list, or leave blank and use the location note below.'}
           </p>
@@ -3846,10 +3900,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               setPostgresBlockId(nextValue)
               setValidationErrors((prev) => ({ ...prev, block_id: undefined }))
             }}
-            locations={locationBlocks}
+            locations={formLocations}
             required={locationRequiredForSelectedTemplate}
             error={!!validationErrors.block_id}
-            selectLabel="— Select location —"
+            selectLabel={groundsMaintenanceForm ? '— Select Grounds Maintenance site —' : '— Select location —'}
             noneLabel="— None selected —"
             style={{
               width: '100%',
@@ -3861,7 +3915,15 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
               minHeight: 44,
             }}
           />
-          {locationBlocks.length === 0 && (
+          {groundsMaintenanceForm && groundsSitesStatus === 'loading' && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>Loading Grounds Maintenance sites…</p>
+          )}
+          {groundsMaintenanceForm && groundsSitesStatus === 'error' && (
+            <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#ef4444' }}>
+              The Grounds Maintenance site list could not be loaded.
+            </p>
+          )}
+          {!groundsMaintenanceForm && locationBlocks.length === 0 && (
             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
               No locations in the list yet. Contact your administrator if you expected to see blocks here.
             </p>

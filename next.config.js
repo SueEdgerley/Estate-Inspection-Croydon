@@ -5,6 +5,8 @@ const nextConfig = {
   experimental: {
     // Keep sharp on the server filesystem for PDF image resizing.
     serverComponentsExternalPackages: ['sharp'],
+    // Load instrumentation.js before routes open a database connection.
+    instrumentationHook: true,
   },
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },

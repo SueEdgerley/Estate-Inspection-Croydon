@@ -57,6 +57,57 @@ export default function InspectionDetail() {
   const [roleUi, setRoleUi] = useState(null)
   const [viewerEmail, setViewerEmail] = useState('')
   const [submitWarning, setSubmitWarning] = useState('')
+  const [estatesRetry, setEstatesRetry] = useState([])
+  const [estatesRetrying, setEstatesRetrying] = useState(false)
+  const [estatesRetryMessage, setEstatesRetryMessage] = useState('')
+
+  const loadEstatesRetry = useCallback(async () => {
+    if (!id) return
+    try {
+      const response = await fetch(`/api/inspections/${encodeURIComponent(id)}/estates-notification-retry`, {
+        credentials: 'include',
+        cache: 'no-store',
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) return
+      setEstatesRetry(Array.isArray(data.pending) ? data.pending : [])
+    } catch {
+      // The saved retry remains available the next time this inspection is opened.
+    }
+  }, [id])
+
+  useEffect(() => {
+    loadEstatesRetry()
+  }, [loadEstatesRetry])
+
+  const retryEstatesNotification = async () => {
+    if (!id) return
+    setEstatesRetrying(true)
+    setEstatesRetryMessage('')
+    try {
+      const response = await fetch(`/api/inspections/${encodeURIComponent(id)}/estates-notification-retry`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not retry the Estate Services notification')
+      setEstatesRetry(Array.isArray(data.pending) ? data.pending : [])
+      const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : []
+      if (warnings.length) {
+        setEstatesRetryMessage(warnings.join(' '))
+      } else if ((data.sent || 0) > 0) {
+        setEstatesRetryMessage('The Estate Services notification was accepted. It will not be sent again.')
+      } else if ((data.skipped || 0) > 0) {
+        setEstatesRetryMessage('The notification had already been accepted, so it was not sent again.')
+      } else {
+        setEstatesRetryMessage('There is nothing left to retry.')
+      }
+    } catch (error) {
+      setEstatesRetryMessage(error?.message || 'Could not retry the Estate Services notification')
+    } finally {
+      setEstatesRetrying(false)
+    }
+  }
 
   useEffect(() => {
     if (!id || typeof window === 'undefined') return
@@ -328,6 +379,48 @@ export default function InspectionDetail() {
           }}
         >
           Inspection submitted, but follow-up work needs attention: {submitWarning}
+        </div>
+      )}
+
+      {estatesRetry.length > 0 && (
+        <div
+          style={{
+            padding: '0.75rem',
+            backgroundColor: '#fffbeb',
+            border: '1px solid #f59e0b',
+            borderRadius: '0.375rem',
+            color: '#92400e',
+            marginBottom: '1.5rem',
+            fontSize: '0.875rem',
+          }}
+        >
+          <p style={{ margin: '0 0 0.75rem' }}>
+            {estatesRetry.every((item) => item.stage === 'provider_accepted')
+              ? 'The email provider already accepted the Estate Services notification for '
+              : 'Estate Services still needs a notification for '}
+            {estatesRetry.map((item) => item.questionText || item.questionId).join(', ')}.
+            {' '}Choose Retry Estate Services notification.
+            {estatesRetry.every((item) => item.stage === 'provider_accepted')
+              ? ' That records Notification sent and does not send the email again.'
+              : ' It is saved with this inspection, so it remains after the browser is closed or the server restarts.'}
+          </p>
+          <button
+            type="button"
+            onClick={retryEstatesNotification}
+            disabled={estatesRetrying}
+            style={{
+              border: '1px solid #92400e',
+              borderRadius: '0.375rem',
+              background: '#fff',
+              color: '#92400e',
+              fontWeight: 700,
+              padding: '0.45rem 0.7rem',
+              cursor: estatesRetrying ? 'wait' : 'pointer',
+            }}
+          >
+            {estatesRetrying ? 'Retrying...' : 'Retry Estate Services notification'}
+          </button>
+          {estatesRetryMessage ? <p style={{ margin: '0.75rem 0 0' }}>{estatesRetryMessage}</p> : null}
         </div>
       )}
 
