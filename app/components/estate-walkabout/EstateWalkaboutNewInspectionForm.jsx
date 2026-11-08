@@ -38,6 +38,10 @@ import {
 } from '@/lib/inspection-draft-immediate-flush'
 import { isBrowserOnline, safeFetch } from '@/lib/offline-browser'
 import { clearInspectionResumeDraft } from '@/lib/inspection-resume-draft'
+import {
+  cancelledStaleDraftWrite,
+  deleteDeviceInspectionDraft,
+} from '@/lib/delete-device-inspection-draft'
 import { formatInspectionSaveFailureMessage } from '@/lib/inspection-permission-messages'
 import {
   buildWalkaboutSubmitBlockedMessage,
@@ -580,6 +584,7 @@ export default function EstateWalkaboutNewInspectionForm({
   )
   const restoredSessionDraftRef = useRef(Boolean(initialRestored?.id))
   const suppressAutosaveRef = useRef(Boolean(initialRestored?.id))
+  const draftWriteGenerationRef = useRef(0)
   const submitCompletedRef = useRef(false)
   const submitInFlightRef = useRef(false)
   const submitInFlightIdRef = useRef('')
@@ -907,6 +912,7 @@ export default function EstateWalkaboutNewInspectionForm({
   const flushDraftAfterLocalPhoto = useCallback(
     (update) => {
       if (submitCompletedRef.current || submitSuccessMessage || submittedInspection) return
+      if (suppressAutosaveRef.current) return
       markWalkaboutDraftDirty()
 
       const base = currentDraftPayloadRef.current
@@ -945,6 +951,24 @@ export default function EstateWalkaboutNewInspectionForm({
     },
     [markWalkaboutDraftDirty, noteDraftSaveResult, submitSuccessMessage, submittedInspection]
   )
+
+  const handleDeleteDeviceDraft = useCallback((draft) => {
+    if (!draft?.id) return
+    const wasOpen = draft.id === (offlineDraftIdRef.current || offlineDraftId)
+    if (wasOpen) {
+      draftWriteGenerationRef.current += 1
+      suppressAutosaveRef.current = true
+      ignoreParentResumeRef.current = true
+      offlineDraftIdRef.current = ''
+    }
+    const { drafts } = deleteDeviceInspectionDraft(draft.id, { forceClearResume: wasOpen })
+    setOfflineDrafts(drafts)
+    if (!wasOpen) return
+    resetWalkaboutFormForNextBlock({})
+    setRestoreNotice('')
+    setRecoverDraftsOpen(false)
+    setSubmittedInspection(null)
+  }, [offlineDraftId])
 
   const restoreOfflineDraft = useCallback((draft) => {
     try {
@@ -1084,7 +1108,10 @@ export default function EstateWalkaboutNewInspectionForm({
     ) {
       return undefined
     }
+    const generation = draftWriteGenerationRef.current
     const timer = window.setTimeout(() => {
+      if (cancelledStaleDraftWrite(generation, draftWriteGenerationRef.current)) return
+      if (suppressAutosaveRef.current) return
       try {
         const id = offlineDraftId || createOfflineDraftId()
         if (!offlineDraftId) setOfflineDraftId(id)
@@ -1907,6 +1934,7 @@ export default function EstateWalkaboutNewInspectionForm({
             blocks={locationBlocks}
             activeDraftId={offlineDraftId}
             onResumeDraft={handleRecoverResume}
+            onDeleteDraft={handleDeleteDeviceDraft}
             onBack={closeRecoverDrafts}
           />
         ) : null}
@@ -1944,8 +1972,9 @@ export default function EstateWalkaboutNewInspectionForm({
             submitSuccessMessage={submitSuccessMessage}
             storageWarning={draftStorageWarning}
             onReopenDraft={restoreOfflineDraft}
-            draftsTitle="Saved Walkabouts on this phone"
-            showSavedDrafts={false}
+            onDeleteDraft={handleDeleteDeviceDraft}
+            draftsTitle="Saved inspections on this device"
+            showSavedDrafts
             style={{ maxWidth: 'none' }}
           />
           {restoreNotice ? (

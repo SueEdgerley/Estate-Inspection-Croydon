@@ -76,9 +76,10 @@ export default function OfflineInspectionStatusPanel({
   submitSuccessMessage = '',
   storageWarning = '',
   onReopenDraft,
+  onDeleteDraft,
   onSubmitDraft,
   style,
-  draftsTitle = 'Saved inspections on this phone',
+  draftsTitle = 'Saved inspections on this device',
   showSavedDrafts = true,
 }) {
   const activeDraftRecord = activeDraftId
@@ -102,10 +103,11 @@ export default function OfflineInspectionStatusPanel({
       isSubmitting={isSubmitting}
       activeDraftId={activeDraftId}
       onResumeDraft={onReopenDraft}
+      onDeleteDraft={onDeleteDraft}
       onSubmitDraft={onSubmitDraft}
       showSubmit={false}
       title={draftsTitle}
-      intro="These inspections are saved on this phone only until you see Inspection submitted successfully. Resume opens that draft and does not delete the others."
+      intro="These inspections are saved on this device only until you see Inspection submitted successfully. Resume opens that draft. Delete draft removes only the one you confirm."
       style={{ maxWidth: 'none', margin: mode === 'hidden' && !storageWarning ? '0 0 1rem' : '0.75rem 0 0' }}
     />
   ) : null
@@ -138,7 +140,7 @@ export default function OfflineInspectionStatusPanel({
     return (
       <div style={{ ...style }}>
         <div style={{ ...onlineDraftStyle, maxWidth: 'none', margin: 0 }} role="status" aria-live="polite">
-          <strong>Saved on this phone – not submitted</strong>
+          <strong>Saved on this device – not submitted</strong>
           {lastSavedAt ? ` · last saved at ${lastSavedAt}` : ''}
           {photoStatus?.pendingCount > 0 ? ' · some photographs have not uploaded yet' : ''}
           <StorageWarning message={storageWarning} compact />
@@ -150,9 +152,9 @@ export default function OfflineInspectionStatusPanel({
 
   return (
     <div style={{ ...offlineBannerStyle, ...style }} role="status" aria-live="polite">
-      <strong>Saved on this phone – not submitted</strong>
+      <strong>Saved on this device – not submitted</strong>
       <p style={{ margin: '0.4rem 0 0', color: '#475569', fontSize: '0.875rem' }}>
-        No internet connection. You can keep working. This inspection stays on this phone until you have
+        No internet connection. You can keep working. This inspection stays on this device until you have
         signal, then tap Save inspection.
         {photoStatus?.pendingCount > 0 ? ' Photographs will upload when the connection returns.' : ''}
       </p>

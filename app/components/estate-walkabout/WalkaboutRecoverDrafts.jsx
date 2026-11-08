@@ -10,6 +10,7 @@ import {
 } from '@/lib/offline-inspection-drafts'
 import { isWalkaboutOfflineDraft } from '@/lib/walkabout-draft-restore'
 import { readPhoneDraftsBackup } from '@/lib/offline-draft-export'
+import { DeviceDraftDeleteActions } from '@/app/components/SavedInspectionDraftsPanel'
 import {
   lookupWalkaboutDraftStatuses,
   walkaboutDraftResumeAllowed,
@@ -106,6 +107,7 @@ export default function WalkaboutRecoverDraftsView({
   blocks = [],
   activeDraftId = '',
   onResumeDraft,
+  onDeleteDraft,
   onBack,
 }) {
   const { user } = useUser()
@@ -181,14 +183,14 @@ export default function WalkaboutRecoverDraftsView({
         </button>
       </div>
       <p style={{ margin: '0.65rem 0 0', fontSize: '0.875rem', lineHeight: 1.5, color: '#475569' }}>
-        These inspections are saved on this phone only. Opening this list does not resume or change
+        These inspections are saved on this device only. Opening this list does not resume or change
         anything. Resume a genuine unfinished inspection only when you need to. Do not resume an
         inspection that has already been submitted.
       </p>
 
       {visibleDrafts.length === 0 ? (
         <p style={{ margin: '1rem 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-          No saved Walkabout drafts were found on this phone.
+          No saved Walkabout drafts were found on this device.
         </p>
       ) : (
         <div style={{ display: 'grid', gap: '0.65rem', marginTop: '0.9rem' }}>
@@ -234,7 +236,7 @@ export default function WalkaboutRecoverDraftsView({
                     {identity.answersLabel}
                     {' · '}
                     {identity.photoLabel}
-                    {summary.pendingPhotoCount ? ` (${summary.pendingPhotoCount} still on this phone)` : ''}
+                    {summary.pendingPhotoCount ? ` (${summary.pendingPhotoCount} still on this device)` : ''}
                   </span>
                   {statusLabel ? (
                     <span
@@ -267,6 +269,7 @@ export default function WalkaboutRecoverDraftsView({
                 >
                   Resume
                 </button>
+                <DeviceDraftDeleteActions draft={draft} blocks={blocks} onDeleteDraft={onDeleteDraft} />
               </div>
             )
           })}

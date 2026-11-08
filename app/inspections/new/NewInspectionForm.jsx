@@ -80,6 +80,11 @@ import {
   mergeAnswerQuestionPhotoUrls,
 } from '@/lib/inspection-draft-immediate-flush'
 import {
+  cancelledStaleDraftWrite,
+  deleteDeviceInspectionDraft,
+  nextDraftAutosaveHold,
+} from '@/lib/delete-device-inspection-draft'
+import {
   isBrowserOnline,
   readCachedTemplatesPayload,
   safeFetch,
@@ -2179,6 +2184,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   // by the empty form. Re-enabled on Resume/Discard, or once the form actually
   // changes from the baseline captured when the prompt was dismissed.
   const resumeDraftAutosaveRef = useRef({ enabled: false, baseline: '' })
+  // After the open device draft is deleted: ignore the payload still on screen,
+  // then ignore the blank form until the officer enters new information.
+  const autosaveHoldRef = useRef(false)
+  const draftWriteGenerationRef = useRef(0)
   // Once the user has resumed, discarded, or dismissed the prompt, never
   // re-open it for this mounted session (the draft then mirrors the live form).
   const resumeDraftPromptResolvedRef = useRef(false)
@@ -2828,6 +2837,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const flushDraftAfterLocalPhoto = useCallback(
     (update) => {
       if (isWalkaboutFormActive) return
+      if (autosaveHoldRef.current) return
       if (submitCompletedRef.current || submitSuccessMessage) return
 
       const base = currentDraftPayloadRef.current
@@ -2865,9 +2875,19 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   useEffect(() => {
     if (isWalkaboutFormActive) return undefined
+    const previousHold = autosaveHoldRef.current
+    const nextHold = nextDraftAutosaveHold(previousHold, draftHasOfficerProgress(currentDraftPayload))
+    if (previousHold === 'until-edit' && nextHold === false) {
+      resumeDraftAutosaveRef.current.enabled = true
+    }
+    autosaveHoldRef.current = nextHold
+    if (nextHold) return undefined
     if (!draftHasOfficerProgress(currentDraftPayload)) return undefined
     if (submitCompletedRef.current || submitSuccessMessage) return undefined
+    const generation = draftWriteGenerationRef.current
     const timer = window.setTimeout(() => {
+      if (cancelledStaleDraftWrite(generation, draftWriteGenerationRef.current)) return
+      if (autosaveHoldRef.current) return
       try {
         const id = offlineDraftId || createOfflineDraftId()
         if (!offlineDraftId) setOfflineDraftId(id)
@@ -2894,6 +2914,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   // Debounced autosave of the resume draft ("inspection-draft" localStorage key).
   useEffect(() => {
     if (isWalkaboutFormActive) return undefined
+    if (autosaveHoldRef.current) return undefined
     if (resumeDraftPrompt) return undefined
     if (submitCompletedRef.current || submitSuccessMessage) return undefined
     if (!resumeDraftHasMeaningfulContent(currentDraftPayload)) return undefined
@@ -2903,7 +2924,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       }
       resumeDraftAutosaveRef.current.enabled = true
     }
+    const generation = draftWriteGenerationRef.current
     const timer = window.setTimeout(() => {
+      if (cancelledStaleDraftWrite(generation, draftWriteGenerationRef.current)) return
+      if (autosaveHoldRef.current) return
       writeInspectionResumeDraft({
         ...currentDraftPayload,
         locationLabel: selectedBlockName || currentDraftPayload.location || '',
@@ -2923,6 +2947,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
 
   const saveCurrentOfflineDraft = useCallback(() => {
     if (isWalkaboutFormActive) return offlineDraftId || ''
+    if (autosaveHoldRef.current) return ''
     if (!draftHasOfficerProgress(currentDraftPayload)) return offlineDraftId || ''
     try {
       const id = offlineDraftId || createOfflineDraftId()
@@ -2985,6 +3010,53 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [currentDraftPayload, isCaretakerForm, saveCurrentOfflineDraft, submitSuccessMessage])
+
+  const resetOpenInspectionForm = () => {
+    offlineDraftIdRef.current = ''
+    setOfflineDraftId('')
+    setPostgresBlockId('')
+    setLocation('')
+    setDescription('')
+    setAnswers({})
+    setAnswerExtras({})
+    setSubmitError(null)
+    setSubmitWarning(null)
+    setValidationErrors({})
+    setExpandedByQuestionId({})
+    setCaretakerInspectionMode(CARETAKER_INSPECTION_MODE_FULL)
+    setCaretakerSpecificSectionId('')
+    setCaretakerGuidedView(false)
+    setCaretakerMobileStep(0)
+    setInspectionStartTime(toDatetimeLocalValue())
+    setInspectionEndTime('')
+    setWalkaboutResumeDraft(null)
+    if (!isTemplateLocked) setTemplateId('')
+    setResumeDraftPrompt(null)
+    resumeDraftPromptResolvedRef.current = true
+    resumeDraftAutosaveRef.current = { enabled: false, baseline: '' }
+  }
+
+  const handleDeleteDeviceDraft = (draft) => {
+    if (!draft?.id) return
+    const wasOpen = draft.id === (offlineDraftIdRef.current || offlineDraftId)
+    if (wasOpen) {
+      draftWriteGenerationRef.current += 1
+      autosaveHoldRef.current = 'until-blank'
+      offlineDraftIdRef.current = ''
+    }
+    const { drafts } = deleteDeviceInspectionDraft(draft.id, { forceClearResume: wasOpen })
+    setOfflineDrafts(drafts)
+    setDismissedDraftIds((prev) => [...new Set([...prev, draft.id])])
+    if (walkaboutResumeDraft?.id === draft.id) setWalkaboutResumeDraft(null)
+    if (
+      resumeDraftPrompt?.payload?.offlineDraftId === draft.id ||
+      (wasOpen && resumeDraftPrompt)
+    ) {
+      setResumeDraftPrompt(null)
+      resumeDraftPromptResolvedRef.current = true
+    }
+    if (wasOpen) resetOpenInspectionForm()
+  }
 
   const applyInspectionDraftPayload = (payload) => {
     const body = payload.submitBody || {}
@@ -3687,6 +3759,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
         submitSuccessMessage={submitSuccessMessage}
         storageWarning={draftStorageWarning}
         onReopenDraft={restoreOfflineDraft}
+        onDeleteDraft={handleDeleteDeviceDraft}
         onSubmitDraft={submitOfflineDraft}
       />
 

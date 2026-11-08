@@ -11,6 +11,10 @@ import {
   selectResumableOfflineDrafts,
   summarizeOfflineDraft,
 } from '@/lib/offline-inspection-drafts'
+import {
+  deleteDeviceInspectionDraft,
+  describeDeviceDraftForDelete,
+} from '@/lib/delete-device-inspection-draft'
 
 const panelStyle = {
   maxWidth: 800,
@@ -33,6 +37,69 @@ const smallButtonStyle = {
   cursor: 'pointer',
 }
 
+const deleteButtonStyle = {
+  ...smallButtonStyle,
+  border: '1px solid #fecaca',
+  color: '#b91c1c',
+}
+
+export function DeviceDraftDeleteActions({ draft, blocks = [], onDeleteDraft }) {
+  const [confirming, setConfirming] = useState(false)
+  const details = describeDeviceDraftForDelete(draft, { blocks })
+
+  if (confirming) {
+    return (
+      <div
+        role="alertdialog"
+        aria-labelledby={`delete-draft-title-${draft.id}`}
+        data-testid="delete-draft-confirm"
+        style={{
+          flex: '1 1 100%',
+          display: 'grid',
+          gap: '0.2rem',
+          padding: '0.65rem 0.7rem',
+          border: '1px solid #fecaca',
+          borderRadius: '0.4rem',
+          background: '#fff7f7',
+          color: '#7f1d1d',
+        }}
+      >
+        <strong id={`delete-draft-title-${draft.id}`}>Delete this draft?</strong>
+        <span>Form: {details.formName}</span>
+        <span>Location: {details.location}</span>
+        <span>Last saved: {details.lastSaved}</span>
+        <span style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+          <button
+            type="button"
+            data-testid="confirm-delete-draft"
+            onClick={() => {
+              setConfirming(false)
+              onDeleteDraft?.(draft)
+            }}
+            style={deleteButtonStyle}
+          >
+            Delete draft
+          </button>
+          <button type="button" onClick={() => setConfirming(false)} style={smallButtonStyle}>
+            Keep draft
+          </button>
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      data-testid="delete-draft-button"
+      onClick={() => setConfirming(true)}
+      style={deleteButtonStyle}
+    >
+      Delete draft
+    </button>
+  )
+}
+
 function formatInspectionDate(value) {
   if (!value) return ''
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
@@ -53,6 +120,7 @@ export function SavedInspectionDraftsList({
   isSubmitting = false,
   activeDraftId = '',
   onResumeDraft,
+  onDeleteDraft,
   onSubmitDraft,
   showSubmit = false,
 }) {
@@ -95,7 +163,7 @@ export function SavedInspectionDraftsList({
                 {identity.answersLabel}
                 {' · '}
                 {identity.photoLabel}
-                {summary.pendingPhotoCount ? ` (${summary.pendingPhotoCount} still on this phone)` : ''}
+                {summary.pendingPhotoCount ? ` (${summary.pendingPhotoCount} still on this device)` : ''}
               </span>
               <span
                 style={{
@@ -122,6 +190,7 @@ export function SavedInspectionDraftsList({
             >
               Resume
             </button>
+            <DeviceDraftDeleteActions draft={draft} blocks={blocks} onDeleteDraft={onDeleteDraft} />
             {showSubmit ? (
               <button
                 type="button"
@@ -151,11 +220,12 @@ export default function SavedInspectionDraftsPanel({
   isSubmitting = false,
   activeDraftId = '',
   onResumeDraft,
+  onDeleteDraft,
   onSubmitDraft,
   showSubmit = false,
   style,
-  title = 'Saved inspections on this phone',
-  intro = 'These inspections are saved on this phone only until they are submitted. Resume restores that draft and does not delete the others.',
+  title = 'Saved inspections on this device',
+  intro = 'These inspections are saved on this device only until they are submitted. Resume opens that draft. Delete draft removes only the one you confirm.',
 }) {
   const router = useRouter()
   const [localDrafts, setLocalDrafts] = useState([])
@@ -179,6 +249,15 @@ export default function SavedInspectionDraftsPanel({
     router.push(getInspectionDraftResumeHref(draft))
   }
 
+  const handleDelete = (draft) => {
+    if (!draft?.id) return
+    if (onDeleteDraft) {
+      onDeleteDraft(draft)
+      return
+    }
+    setLocalDrafts(deleteDeviceInspectionDraft(draft.id).drafts)
+  }
+
   const hasVisible = drafts.some((draft) => draftHasOfficerProgress(draft?.payload || {}))
   if (!hasVisible) return null
 
@@ -195,6 +274,7 @@ export default function SavedInspectionDraftsPanel({
         isSubmitting={isSubmitting}
         activeDraftId={activeDraftId}
         onResumeDraft={handleResume}
+        onDeleteDraft={handleDelete}
         onSubmitDraft={onSubmitDraft}
         showSubmit={showSubmit}
       />
