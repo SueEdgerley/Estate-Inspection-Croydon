@@ -72,7 +72,11 @@ import {
   writeInspectionResumeDraft,
 } from '@/lib/inspection-resume-draft'
 import ResumeInspectionDraftModal from '@/app/components/ResumeInspectionDraftModal'
-import { submitBodyHasPendingPhotos, uploadPendingPhotosInSubmitBody } from '@/lib/offline-photo-upload'
+import {
+  omitEmbeddedPhotoDataFromSubmitBody,
+  submitBodyHasPendingPhotos,
+  uploadPendingPhotosInSubmitBody,
+} from '@/lib/offline-photo-upload'
 import { mergeInspectionAnswerExtras } from '@/lib/inspection-answer-extras'
 import {
   flushInspectionDraftPayloadToLocalStorage,
@@ -2946,9 +2950,9 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   ])
 
   const saveCurrentOfflineDraft = useCallback(() => {
-    if (isWalkaboutFormActive) return offlineDraftId || ''
-    if (autosaveHoldRef.current) return ''
-    if (!draftHasOfficerProgress(currentDraftPayload)) return offlineDraftId || ''
+    if (isWalkaboutFormActive) return { id: offlineDraftId || '', saved: false }
+    if (autosaveHoldRef.current) return { id: '', saved: false }
+    if (!draftHasOfficerProgress(currentDraftPayload)) return { id: offlineDraftId || '', saved: false }
     try {
       const id = offlineDraftId || createOfflineDraftId()
       if (!offlineDraftId) setOfflineDraftId(id)
@@ -2959,16 +2963,16 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       })
       setOfflineDrafts(next)
       noteDraftSaveResult(saved)
-      return id
+      return { id, saved: saved === true }
     } catch {
       noteDraftSaveResult(false)
-      return offlineDraftId || ''
+      return { id: offlineDraftId || '', saved: false }
     }
   }, [isWalkaboutFormActive, currentDraftPayload, offlineDraftId, noteDraftSaveResult])
 
   const handleFailedInspectionSave = useCallback(
     (res, data) => {
-      const savedLocally = Boolean(saveCurrentOfflineDraft())
+      const savedLocally = saveCurrentOfflineDraft()?.saved === true
       setSubmitError(
         formatInspectionSaveFailureMessage({
           status: res?.status,
@@ -3180,7 +3184,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
     setSubmitWarning(null)
     submitCompletedRef.current = false
     try {
-      body = await prepareSubmitBodyForUpload(body)
+      body = omitEmbeddedPhotoDataFromSubmitBody(await prepareSubmitBodyForUpload(body))
       const res = await safeFetch('/api/inspections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3576,6 +3580,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       if (isOnline && submitBodyHasPendingPhotos(submitBody)) {
         submitBody = await prepareSubmitBodyForUpload(submitBody)
       }
+      submitBody = omitEmbeddedPhotoDataFromSubmitBody(submitBody)
       // Stable submission id so a retry/duplicate submit converges on one record.
       const clientInspectionId = offlineDraftId || createOfflineDraftId()
       if (!offlineDraftId) setOfflineDraftId(clientInspectionId)
