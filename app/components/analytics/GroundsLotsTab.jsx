@@ -123,7 +123,7 @@ export default function GroundsLotsTab({ people = [], canManage = false, initial
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-        Lots group Grounds Maintenance sites by contractor. Each inspected site has one overall grade, using the same equal-weight A–D calculation as the block summary. A repeat visit adds an inspection and does not add another site. The site list is a local preview and has not been written to production.
+        Lots group Grounds Maintenance sites by contractor, including Lot 4. Each inspected site has one overall grade, using the same equal-weight A–D calculation as the block summary. A repeat visit adds an inspection and does not add another site.
       </p>
 
       <form

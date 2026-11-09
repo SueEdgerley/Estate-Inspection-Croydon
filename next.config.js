@@ -7,6 +7,12 @@ const nextConfig = {
     serverComponentsExternalPackages: ['sharp'],
     // Load instrumentation.js before routes open a database connection.
     instrumentationHook: true,
+    // The lot catalogue is read from disk. Include it in the server functions that load it.
+    outputFileTracingIncludes: {
+      '/api/grounds-maintenance-sites': ['./data/grounds-maintenance-sites.json'],
+      '/api/analytics/grounds-lots': ['./data/grounds-maintenance-sites.json'],
+      '/api/analytics/grounds-sites/links': ['./data/grounds-maintenance-sites.json'],
+    },
   },
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },

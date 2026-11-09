@@ -2,4 +2,4 @@ scripts/_andy-photo-review
 scripts/_*.json
 scripts/_*.txt
 scripts/_*.mjs
-data
+data/grounds-maintenance-import-preview.json
