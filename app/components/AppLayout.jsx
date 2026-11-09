@@ -13,6 +13,7 @@ import {
 } from '@clerk/nextjs'
 import { colours } from '@/lib/nv-theme'
 import { photobook } from '@/lib/photobook-theme'
+import { caretakerLegacyInspectionRedirect } from '@/lib/caretaker-inspection-route'
 
 const ALL_NAV_ITEMS = [
   { href: '/', label: 'Home', navKey: 'home' },
@@ -82,12 +83,10 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     if (!isSignedIn || roleUi?.normalizedRole !== 'caretaker' || !pathname) return
-    const legacyInspectionDetailMatch =
-      pathname.match(/^\/inspections\/([^/]+)$/) &&
-      !pathname.startsWith('/inspections/new')
-    if (legacyInspectionDetailMatch) {
-      const suffix = typeof window !== 'undefined' ? window.location.search + window.location.hash : ''
-      router.replace(`/caretaker/inspections/${legacyInspectionDetailMatch[1]}${suffix}`)
+    const suffix = typeof window !== 'undefined' ? window.location.search + window.location.hash : ''
+    const caretakerReportPath = caretakerLegacyInspectionRedirect(pathname, suffix)
+    if (caretakerReportPath) {
+      router.replace(caretakerReportPath)
       return
     }
     const allowed =
