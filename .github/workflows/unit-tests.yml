@@ -11,8 +11,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      - run: npm install
       - name: Run unit tests
         run: node --test --test-force-exit scripts/analytics-filters.test.mjs scripts/analytics-load-guard.test.mjs scripts/analytics-client-filters.test.mjs scripts/analytics-management.test.mjs scripts/analytics-teams.test.mjs scripts/grounds-maintenance-sites.test.mjs scripts/local-test-database.test.mjs scripts/photo-upload-input-attrs.test.mjs scripts/caretaker-inspection-route.test.mjs scripts/delete-device-inspection-draft.test.mjs
       - name: Run module-alias unit tests
