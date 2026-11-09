@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 // Route segment config
 export const runtime = 'nodejs'
@@ -9,6 +11,11 @@ export const dynamic = 'force-dynamic'
 // GET - Fetch all issues
 export async function GET() {
   try {
+    const { userId } = await auth()
+    if (userId) {
+      const repairsContactBlock = await forbidRepairsContactRequest(userId)
+      if (repairsContactBlock) return repairsContactBlock
+    }
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {

@@ -4,6 +4,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
 import { isIssueRecipientCategory } from '@/lib/validate-issue-recipient'
 import { isIssueRecipientPeopleRequest } from '@/lib/issue-recipient-people'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -51,6 +52,8 @@ export async function GET(request) {
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const repairsContactBlock = await forbidRepairsContactRequest(userId)
+  if (repairsContactBlock) return repairsContactBlock
 
   try {
     await ensureDatabase()

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,6 +17,8 @@ export async function GET() {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const repairsContactBlock = await forbidRepairsContactRequest(userId)
+    if (repairsContactBlock) return repairsContactBlock
 
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()

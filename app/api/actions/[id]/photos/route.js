@@ -6,6 +6,8 @@ import {
   loadActionAccessMeta,
   ownRecordActionForbidden,
 } from '@/lib/own-record-access'
+import { actionInRepairsQueue } from '@/lib/repairs-contact-rules'
+import { repairsMailboxError, resolveRepairsMailbox } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +15,7 @@ export const dynamic = 'force-dynamic'
 // POST - Link photos to an action
 export async function POST(request, { params }) {
   try {
-    const viewer = await getOwnRecordViewer()
+    const viewer = await getOwnRecordViewer({ allowRepairsContact: true })
     if (viewer.error) return viewer.error
 
     await ensureDatabase()
@@ -34,6 +36,15 @@ export async function POST(request, { params }) {
       recipientPersonId: existing.recipient_person_id,
     })
     if (forbidden) return forbidden
+
+    if (viewer.repairsContact) {
+      const resolved = await resolveRepairsMailbox()
+      const mailboxError = repairsMailboxError(resolved)
+      if (mailboxError) return mailboxError
+      if (!actionInRepairsQueue(existing, resolved.mailbox.id)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
 
     const { photo_ids } = await request.json()
 

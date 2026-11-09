@@ -620,6 +620,7 @@ export default function SettingsPage() {
         <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>Staff directory (assignments)</h2>
         <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#6b7280' }}>
           Staff job titles for estate/block assignments: {STAFF_JOB_TITLES.join(', ')}. Rows live in <code style={{ fontSize: '0.85em' }}>people.job_title</code> — not app access roles.
+          Assign Repairs Contact to additional Repairs staff who should sign in to the Repairs queue only. Repairs Officer does not grant that access.
           By default this view shows active staff rows whose email matches a current app user; legacy Photobook imports can be shown when needed.
         </p>
         <div

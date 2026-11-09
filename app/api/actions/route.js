@@ -27,6 +27,8 @@ import {
   loadOwnRecordIdentity,
   roleMustScopeToOwnOperationalRecords,
 } from '@/lib/own-record-scope'
+import { isRepairsContactAccess } from '@/lib/repairs-contact-rules'
+import { forbidRepairsContactRequest, resolveRepairsMailbox } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -251,6 +253,12 @@ export async function GET(request) {
       }
     }
 
+    let repairsMailboxId
+    if (isRepairsContactAccess(roleCtx)) {
+      const resolved = await resolveRepairsMailbox()
+      repairsMailboxId = resolved.mailbox?.id || ''
+    }
+
     const globalList = !inspectionId
     const mayViewActions = !globalList || roleMayViewGlobalActionsList(roleCtx.normalized, roleCtx.clerkIsAdmin)
     logAccessTrace('api.actions.get.permission', {
@@ -315,6 +323,7 @@ export async function GET(request) {
       search,
       includeFalseActions,
       ownRecord: scopeOwn ? identity : null,
+      ...(repairsMailboxId !== undefined ? { repairsMailboxId } : {}),
     }
     try {
       await ensureRepairActionFields(sql)
@@ -421,6 +430,8 @@ export async function POST(request) {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const repairsContactBlock = await forbidRepairsContactRequest(userId)
+    if (repairsContactBlock) return repairsContactBlock
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(
       userId,

@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd, fragment } from '@/lib/inspection-filters'
 import { sqlOutstandingActionNotSuperseded } from '@/lib/superseded-records'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -18,6 +19,8 @@ export async function GET(request) {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const repairsContactBlock = await forbidRepairsContactRequest(userId)
+    if (repairsContactBlock) return repairsContactBlock
 
     await ensureDatabase()
     const pgUrl = getPgUrl()

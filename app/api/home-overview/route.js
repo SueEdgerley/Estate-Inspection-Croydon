@@ -4,6 +4,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 import {
   homePeriodPresetLabel,
   resolveAnalyticsPresetDates,
@@ -120,6 +121,8 @@ export async function GET(request) {
         { status: 401 }
       )
     }
+    const repairsContactBlock = await forbidRepairsContactRequest(clerkUserId)
+    if (repairsContactBlock) return repairsContactBlock
 
     await ensureDatabase()
     try {

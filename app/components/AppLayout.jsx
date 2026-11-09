@@ -100,7 +100,24 @@ export default function AppLayout({ children }) {
     if (!allowed) router.replace('/templates')
   }, [isSignedIn, pathname, roleUi, router])
 
+  useEffect(() => {
+    if (!isSignedIn || roleUi?.normalizedRole !== 'repairs_contact' || !pathname) return
+    if (pathname === '/repairs' || pathname.startsWith('/repairs/')) return
+    if (
+      pathname.startsWith('/sign-in') ||
+      pathname.startsWith('/sign-up') ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/register')
+    ) {
+      return
+    }
+    router.replace('/repairs')
+  }, [isSignedIn, pathname, roleUi, router])
+
   const navItems = useMemo(() => {
+    if (isSignedIn && roleUi?.normalizedRole === 'repairs_contact') {
+      return [{ href: '/repairs', label: 'Repairs queue', navKey: 'repairsQueue' }]
+    }
     if (!isSignedIn) {
       return ALL_NAV_ITEMS.filter((item) => !ADMIN_ONLY_NAV_HREFS.has(item.href))
     }
