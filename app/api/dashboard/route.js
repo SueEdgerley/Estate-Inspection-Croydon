@@ -5,13 +5,12 @@ import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/l
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
+import { loadScopedOperationalIdentity } from '@/lib/own-record-scope'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 
 // Permissions come from users.system_role; operational grouping comes from people.job_title.
 const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'housing_team_manager', 'esm']
-// Set to true to show all inspections regardless of inspector/estate (for debugging access)
-const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -173,18 +172,7 @@ export async function GET(request) {
     console.log('[Dashboard] debug:', { systemRole, jobTitle, is_active: internalUser.is_active, assignedEstateCount })
 
     const admin = systemRole === 'owner' || systemRole === 'admin' || clerkAdminUser
-
-    // User exists and is allowed: if no estates assigned, still return 200 with empty dashboard (do NOT 403)
-    // Temporarily: do not early-return here so we can confirm access works without estate scoping
-    const hasEstates = assignedEstateCount > 0
-    if (!admin && !hasEstates) {
-      logDashboardAuth(clerkUserId, userEmail, internalUser, systemRole, assignedEstateCount, 200, 'ok_no_estates')
-      return NextResponse.json({
-        stats: { totalCompleted: 0, scheduledCompleted: 0, adHocCompleted: 0 },
-        inspections: [],
-        message: 'No estates assigned yet.',
-      })
-    }
+    const identity = admin ? null : await loadScopedOperationalIdentity(clerkUserId, userEmail)
 
     const { searchParams } = new URL(request.url)
     const whereConditions = buildInspectionWhereConditions({
@@ -202,7 +190,7 @@ export async function GET(request) {
       scheduled: searchParams.get('scheduled') || 'all',
       grading: searchParams.get('grading') || 'all',
       admin,
-      fallbackInspectorId: !TEMPORARILY_DISABLE_ESTATE_SCOPING ? internalUser.email : null,
+      fallbackInspectorIds: admin ? null : identity?.inspectorMatchValues || [],
     })
     const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const run = getNeonQuery()

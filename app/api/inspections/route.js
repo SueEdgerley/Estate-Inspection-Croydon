@@ -43,7 +43,7 @@ import {
   roleMayCreateInspectionWithTemplate,
 } from '@/lib/app-role-access'
 import {
-  loadOwnRecordIdentity,
+  loadScopedOperationalIdentity,
   roleMustScopeToOwnOperationalRecords,
 } from '@/lib/own-record-scope'
 import { summarizeTemplateSnapshotForDebug } from '@/lib/template-version-debug'
@@ -1104,7 +1104,7 @@ export async function GET(request) {
     }
     const userEmail = await getCurrentUserEmail()
     const clerkAdmin = await isAdmin()
-    // Align with /api/dashboard: owner|admin|esm (and Clerk admin) see all rows.
+    // Owners, admins, and Clerk admins see every inspection. Other users are scoped below.
     let postgresListAll = false
     try {
       const roleRow = await sql`
@@ -1118,7 +1118,7 @@ export async function GET(request) {
         LIMIT 1
       `
       const r = roleRow.rows[0]?.r || ''
-      postgresListAll = r === 'owner' || r === 'admin' || r === 'esm'
+      postgresListAll = r === 'owner' || r === 'admin'
     } catch {
       postgresListAll = false
     }
@@ -1130,7 +1130,7 @@ export async function GET(request) {
       { ...cu?.publicMetadata, ...cu?.privateMetadata, ...cu?.unsafeMetadata }
     )
     const scopeOwn = roleMustScopeToOwnOperationalRecords(roleCtx.normalized, roleCtx.clerkIsAdmin)
-    const identity = scopeOwn ? await loadOwnRecordIdentity(userId, userEmail) : null
+    const identity = scopeOwn ? await loadScopedOperationalIdentity(userId, userEmail) : null
     const { searchParams } = new URL(request.url)
 
     const whereConditions = buildInspectionWhereConditions({

@@ -1,14 +1,26 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
+import { getOwnRecordViewer } from '@/lib/own-record-access'
 
 // Route segment config
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // GET - Fetch a single issue by ID
+async function requirePrivilegedIssueAccess() {
+  const viewer = await getOwnRecordViewer()
+  if (viewer.error) return viewer.error
+  if (viewer.scopeOwn || viewer.repairsContact) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  return null
+}
+
 export async function GET(request, { params }) {
   try {
+    const forbidden = await requirePrivilegedIssueAccess()
+    if (forbidden) return forbidden
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {
@@ -51,6 +63,8 @@ export async function GET(request, { params }) {
 // PUT - Update an issue
 export async function PUT(request, { params }) {
   try {
+    const forbidden = await requirePrivilegedIssueAccess()
+    if (forbidden) return forbidden
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {

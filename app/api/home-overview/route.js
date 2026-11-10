@@ -5,6 +5,7 @@ import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/l
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
 import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
+import { loadScopedOperationalIdentity, operationalActionVisibilitySql } from '@/lib/own-record-scope'
 import {
   homePeriodPresetLabel,
   resolveAnalyticsPresetDates,
@@ -15,14 +16,10 @@ import {
   joinSqlAnd,
 } from '@/lib/inspection-filters'
 import { WORK_TYPE_VALUES, workTypeLabel } from '@/lib/inspection-work-types'
-import {
-  sqlOutstandingActionNotSuperseded,
-  sqlOutstandingActionNotSupersededUnjoined,
-} from '@/lib/superseded-records'
+import { sqlOutstandingActionNotSuperseded } from '@/lib/superseded-records'
 
 // Match /api/dashboard auth: system role or operational job titles.
 const ALLOWED_DASHBOARD_JOB_TITLES = ['caretaker', 'housing_officer', 'housing_team_manager', 'esm']
-const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 
 /** Open backlog statuses — aligned with Actions UI + inspections open_issues_count. */
 const OPEN_ACTION_STATUS_SQL = `lower(trim(COALESCE(status, ''))) IN ('open', 'in_progress', 'in progress')`
@@ -249,17 +246,12 @@ export async function GET(request) {
     }
 
     const admin = systemRole === 'owner' || systemRole === 'admin' || clerkAdminUser
+    const identity = admin ? null : await loadScopedOperationalIdentity(clerkUserId, userEmail)
     const { searchParams } = new URL(request.url)
     const appliedBase = resolveHomePreset(searchParams)
     const applied = {
       ...appliedBase,
       rangeLabel: formatRangeLabel(appliedBase),
-    }
-
-    // Match /api/dashboard: non-admin with no estate assignments still gets 200 + empty payload.
-    if (!admin && assignedEstateCount === 0) {
-      logHomeOverviewAuth(clerkUserId, userEmail, internalUser, systemRole, assignedEstateCount, 200, 'ok_no_estates')
-      return NextResponse.json(emptyOverview(applied, 'No estates assigned yet.'))
     }
 
     const whereConditions = buildInspectionWhereConditions({
@@ -277,7 +269,7 @@ export async function GET(request) {
       scheduled: 'all',
       grading: 'all',
       admin,
-      fallbackInspectorId: !TEMPORARILY_DISABLE_ESTATE_SCOPING ? internalUser.email : null,
+      fallbackInspectorIds: admin ? null : identity?.inspectorMatchValues || [],
     })
     const [whereText, whereParams] = joinSqlAnd(whereConditions)
     const whereInspectionAlias = aliasInspectionWhereClause(whereText, 'i')
@@ -362,16 +354,22 @@ export async function GET(request) {
     let latestOpenActions = []
     const hasActions = await pgPublicTableExists('actions')
     if (hasActions) {
+      const actionVisibility = admin
+        ? { sql: 'TRUE', params: [] }
+        : operationalActionVisibilitySql(identity)
       const actionCounts = await run(
         `SELECT
-          COUNT(*) FILTER (WHERE ${OPEN_ACTION_STATUS_SQL})::int AS open_count,
+          COUNT(*) FILTER (WHERE ${OPEN_ACTION_STATUS_ALIASED})::int AS open_count,
           COUNT(*) FILTER (
-            WHERE ${OPEN_ACTION_STATUS_SQL}
-              AND expected_completion_date IS NOT NULL
-              AND expected_completion_date < CURRENT_DATE
+            WHERE ${OPEN_ACTION_STATUS_ALIASED}
+              AND a.expected_completion_date IS NOT NULL
+              AND a.expected_completion_date < CURRENT_DATE
           )::int AS overdue_count
         FROM actions a
-        WHERE ${sqlOutstandingActionNotSupersededUnjoined('a')}`
+        LEFT JOIN inspections i ON i.id = a.inspection_id
+        WHERE ${sqlOutstandingActionNotSuperseded('a', 'i')}
+          AND ${actionVisibility.sql}`,
+        actionVisibility.params
       )
       openActions = parseInt(actionCounts.rows[0]?.open_count || 0, 10)
       overdueActions = parseInt(actionCounts.rows[0]?.overdue_count || 0, 10)
@@ -414,6 +412,7 @@ export async function GET(request) {
         LEFT JOIN people p ON p.id = a.recipient_person_id
         WHERE ${OPEN_ACTION_STATUS_ALIASED}
           AND ${sqlOutstandingActionNotSuperseded('a', 'i')}
+          AND ${actionVisibility.sql}
         ORDER BY
           CASE
             WHEN a.expected_completion_date IS NOT NULL AND a.expected_completion_date < CURRENT_DATE THEN 0
@@ -428,7 +427,8 @@ export async function GET(request) {
           END,
           a.expected_completion_date ASC NULLS LAST,
           a.created_at DESC
-        LIMIT 5`
+        LIMIT 5`,
+        actionVisibility.params
       )
       latestOpenActions = latestOpen.rows.map((row) => ({
         id: row.id,

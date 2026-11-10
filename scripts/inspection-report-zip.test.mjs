@@ -138,7 +138,7 @@ describe('authorisation', () => {
     assert.equal(failed.find((row) => row.id === 'missing-1')?.reason, 'not_found')
   })
 
-  it('lets a manager/admin keep every selected inspection that exists', () => {
+  it('lets an owner or admin keep every selected inspection that exists', () => {
     const { allowed, failed } = partitionBulkPdfAccess(
       { scopeOwn: false, identity: null },
       ['a', 'b'],

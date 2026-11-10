@@ -5,12 +5,18 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   buildOwnRecordIdentity,
+  canAccessOperationalAction,
+  canAccessOperationalInspection,
   emptyOwnRecordIdentity,
+  expandIdentityWithTeamAccess,
   identityCanAccessAction,
   identityOwnsInspection,
+  operationalActionVisibilitySql,
   roleMustScopeToOwnOperationalRecords,
+  teamInspectorMatchValuesForViewer,
 } from '../lib/own-record-scope.js'
 import { getRoleUiFlags } from '../lib/app-role-access.js'
 import { buildInspectionWhereConditions, joinSqlAnd } from '../lib/inspection-filters.js'
@@ -33,32 +39,37 @@ const HO_B = buildOwnRecordIdentity({
 })
 
 describe('roleMustScopeToOwnOperationalRecords', () => {
-  it('scopes Housing Officer only', () => {
+  it('scopes every operational user except Repairs Contact', () => {
     assert.equal(roleMustScopeToOwnOperationalRecords('housing_officer', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('caretaker', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('esm', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('housing_team_manager', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('resident', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('repairs_officer', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('', false), true)
+    assert.equal(roleMustScopeToOwnOperationalRecords('repairs_contact', false), false)
   })
 
-  it('does not scope other operational roles or privileged admins', () => {
-    assert.equal(roleMustScopeToOwnOperationalRecords('caretaker', false), false)
-    assert.equal(roleMustScopeToOwnOperationalRecords('esm', false), false)
-    assert.equal(roleMustScopeToOwnOperationalRecords('housing_team_manager', false), false)
-    assert.equal(roleMustScopeToOwnOperationalRecords('resident', false), false)
-    assert.equal(roleMustScopeToOwnOperationalRecords('repairs_inspector', false), false)
-    assert.equal(roleMustScopeToOwnOperationalRecords('neighbourhood_voice', false), false)
+  it('does not scope owners, admins, or Clerk admins', () => {
     assert.equal(roleMustScopeToOwnOperationalRecords('admin', false), false)
     assert.equal(roleMustScopeToOwnOperationalRecords('owner', false), false)
     assert.equal(roleMustScopeToOwnOperationalRecords('housing_officer', true), false)
+    assert.equal(roleMustScopeToOwnOperationalRecords('repairs_contact', true), false)
   })
 })
 
 describe('getRoleUiFlags own-record flag', () => {
-  it('hides officer filter for Housing Officer and not for manager/admin/others', () => {
+  it('scopes operational users and leaves owners, admins, and Repairs Contact unscoped', () => {
     assert.equal(getRoleUiFlags('user', false, 'Housing Officer').mustScopeToOwnRecords, true)
+    assert.equal(getRoleUiFlags('user', false, 'Housing Team Manager').mustScopeToOwnRecords, true)
+    assert.equal(getRoleUiFlags('user', false, 'Caretaker').mustScopeToOwnRecords, true)
+    assert.equal(getRoleUiFlags('user', false, 'ESM').mustScopeToOwnRecords, true)
+    assert.equal(getRoleUiFlags('user', false, 'Resident').mustScopeToOwnRecords, true)
+    assert.equal(getRoleUiFlags('user', false, 'Repairs Officer').mustScopeToOwnRecords, true)
     assert.equal(getRoleUiFlags('admin', false, 'Housing Officer').mustScopeToOwnRecords, false)
+    assert.equal(getRoleUiFlags('owner', false, 'Repairs Contact').mustScopeToOwnRecords, false)
     assert.equal(getRoleUiFlags('user', true, 'Housing Officer').mustScopeToOwnRecords, false)
-    assert.equal(getRoleUiFlags('user', false, 'Housing Team Manager').mustScopeToOwnRecords, false)
-    assert.equal(getRoleUiFlags('user', false, 'Caretaker').mustScopeToOwnRecords, false)
-    assert.equal(getRoleUiFlags('user', false, 'ESM').mustScopeToOwnRecords, false)
-    assert.equal(getRoleUiFlags('user', false, 'Resident').mustScopeToOwnRecords, false)
+    assert.equal(getRoleUiFlags('user', false, 'Repairs Contact').mustScopeToOwnRecords, false)
   })
 })
 
@@ -216,23 +227,25 @@ describe('follow-up and by-id access', () => {
     )
   })
 
-  it('still lets ESM, HTM, and admin view another officer inspection follow-up', () => {
+  it('blocks ESM and Housing Team Manager from another officer unless the record is theirs or their team', () => {
     const inspection = { inspector_id: 'officer.b@croydon.gov.uk' }
     assert.equal(
       canViewInspectionFollowUpUpdates({
         roleCtx: { normalized: 'esm', clerkIsAdmin: false },
         userEmail: 'esm@croydon.gov.uk',
         inspection,
+        identity: HO_A,
       }),
-      true
+      false
     )
     assert.equal(
       canViewInspectionFollowUpUpdates({
         roleCtx: { normalized: 'housing_team_manager', clerkIsAdmin: false },
         userEmail: 'manager@croydon.gov.uk',
         inspection,
+        identity: emptyOwnRecordIdentity(),
       }),
-      true
+      false
     )
     assert.equal(
       canViewInspectionFollowUpUpdates({
@@ -242,5 +255,137 @@ describe('follow-up and by-id access', () => {
       }),
       true
     )
+  })
+
+  it('lets a team member view a teammate inspection follow-up', () => {
+    const teamIdentity = expandIdentityWithTeamAccess(HO_A, ['officer.b@croydon.gov.uk'])
+    assert.equal(
+      canViewInspectionFollowUpUpdates({
+        roleCtx: { normalized: 'housing_team_manager', clerkIsAdmin: false },
+        userEmail: 'officer.a@croydon.gov.uk',
+        inspection: { inspector_id: 'officer.b@croydon.gov.uk' },
+        identity: teamIdentity,
+      }),
+      true
+    )
+  })
+})
+
+describe('team permissions', () => {
+  const teams = [
+    {
+      id: 'team-north',
+      managerPersonId: 'person-manager',
+      members: [
+        { personId: 'person-a', email: 'officer.a@croydon.gov.uk', matchValues: ['person-a', 'officer.a@croydon.gov.uk'] },
+        { personId: 'person-b', email: 'officer.b@croydon.gov.uk', matchValues: ['person-b', 'officer.b@croydon.gov.uk'] },
+      ],
+    },
+  ]
+
+  it('includes teammates for a member and a manager, and nobody else', () => {
+    assert.ok(teamInspectorMatchValuesForViewer(teams, HO_A).includes('officer.b@croydon.gov.uk'))
+    const manager = buildOwnRecordIdentity({ peopleIds: ['person-manager'], emails: ['manager@croydon.gov.uk'] })
+    assert.ok(teamInspectorMatchValuesForViewer(teams, manager).includes('officer.b@croydon.gov.uk'))
+    const outsider = buildOwnRecordIdentity({ peopleIds: ['person-c'], emails: ['other@croydon.gov.uk'] })
+    assert.deepEqual(teamInspectorMatchValuesForViewer(teams, outsider), [])
+  })
+})
+
+describe('operational record decisions', () => {
+  const ownAction = { inspector_id: 'officer.a@croydon.gov.uk', recipient_person_id: 'person-b', category: 'cleaning' }
+  const assignedAction = { inspector_id: 'officer.b@croydon.gov.uk', recipient_person_id: 'person-a', category: 'cleaning' }
+  const otherAction = { inspector_id: 'officer.b@croydon.gov.uk', recipient_person_id: 'person-b', category: 'repairs' }
+  const mailboxRepairs = { recipient_person_id: 'recipient_repairs', category: 'health_safety' }
+  const unassignedRepairs = { recipient_person_id: '', category: 'repairs' }
+  const otherTeamRepairs = { recipient_person_id: 'recipient_fire', category: 'repairs' }
+
+  it('lets owners and admins view and update any action', () => {
+    assert.equal(canAccessOperationalAction({ privileged: true, action: otherAction }), true)
+    assert.equal(canAccessOperationalInspection({ privileged: true, inspectorId: 'officer.b@croydon.gov.uk' }), true)
+  })
+
+  it('lets another user view and update their own inspection, its actions, and actions assigned to them', () => {
+    assert.equal(canAccessOperationalInspection({ identity: HO_A, inspectorId: 'officer.a@croydon.gov.uk' }), true)
+    assert.equal(canAccessOperationalAction({ identity: HO_A, action: ownAction }), true)
+    assert.equal(canAccessOperationalAction({ identity: HO_A, action: assignedAction }), true)
+  })
+
+  it('blocks another user from someone else’s inspection and action', () => {
+    assert.equal(canAccessOperationalInspection({ identity: HO_A, inspectorId: 'officer.b@croydon.gov.uk' }), false)
+    assert.equal(canAccessOperationalAction({ identity: HO_A, action: otherAction }), false)
+    assert.equal(canAccessOperationalAction({ identity: emptyOwnRecordIdentity(), action: otherAction }), false)
+  })
+
+  it('lets a team member view a teammate inspection and its action, not an outside assignment', () => {
+    const teamIdentity = expandIdentityWithTeamAccess(HO_A, teamInspectorMatchValuesForViewer(
+      [{
+        id: 'team-north',
+        members: [
+          { personId: 'person-a', email: 'officer.a@croydon.gov.uk' },
+          { personId: 'person-b', email: 'officer.b@croydon.gov.uk' },
+        ],
+      }],
+      HO_A
+    ))
+    assert.equal(canAccessOperationalInspection({ identity: teamIdentity, inspectorId: 'officer.b@croydon.gov.uk' }), true)
+    assert.equal(canAccessOperationalAction({ identity: teamIdentity, action: otherAction }), true)
+    assert.equal(
+      canAccessOperationalAction({
+        identity: teamIdentity,
+        action: { inspector_id: 'officer.c@croydon.gov.uk', recipient_person_id: 'person-c', category: 'repairs' },
+      }),
+      false
+    )
+  })
+
+  it('keeps Repairs Contact inside the existing queue and blocks every inspection', () => {
+    assert.equal(
+      canAccessOperationalAction({ repairsContact: true, mailboxId: 'recipient_repairs', action: mailboxRepairs }),
+      true
+    )
+    assert.equal(
+      canAccessOperationalAction({ repairsContact: true, mailboxId: 'recipient_repairs', action: unassignedRepairs }),
+      true
+    )
+    assert.equal(
+      canAccessOperationalAction({ repairsContact: true, mailboxId: 'recipient_repairs', action: otherTeamRepairs }),
+      false
+    )
+    assert.equal(
+      canAccessOperationalAction({ repairsContact: true, mailboxId: 'recipient_repairs', action: { recipient_person_id: '', category: 'cleaning' } }),
+      false
+    )
+    assert.equal(canAccessOperationalInspection({ repairsContact: true, inspectorId: 'officer.a@croydon.gov.uk' }), false)
+    assert.equal(
+      canAccessOperationalAction({ privileged: true, repairsContact: true, mailboxId: 'recipient_repairs', action: otherTeamRepairs }),
+      true
+    )
+  })
+
+  it('scopes list and download SQL to the viewer and matches nothing when identity is empty', () => {
+    const visible = operationalActionVisibilitySql(HO_A)
+    assert.match(visible.sql, /i\.inspector_id/)
+    assert.match(visible.sql, /a\.recipient_person_id/)
+    assert.deepEqual(visible.params[0], HO_A.inspectorMatchValues)
+    assert.equal(operationalActionVisibilitySql(emptyOwnRecordIdentity()).sql, 'FALSE')
+  })
+})
+
+describe('server routes keep the record check', () => {
+  it('checks action IDs, the repairs list, photos, and report downloads on the server', () => {
+    const actionRoute = readFileSync(new URL('../app/api/actions/[id]/route.js', import.meta.url), 'utf8')
+    const listRoute = readFileSync(new URL('../app/api/actions/route.js', import.meta.url), 'utf8')
+    const repairsList = readFileSync(new URL('../app/api/repairs-inspector/actions/route.js', import.meta.url), 'utf8')
+    const photos = readFileSync(new URL('../app/api/actions/[id]/photos/route.js', import.meta.url), 'utf8')
+    const zip = readFileSync(new URL('../app/api/inspections/report-pdfs-zip/route.js', import.meta.url), 'utf8')
+    assert.match(actionRoute, /ownRecordActionForbidden/)
+    assert.match(actionRoute, /actionInRepairsQueue/)
+    assert.match(actionRoute, /repairsProgressRejection/)
+    assert.match(listRoute, /loadScopedOperationalIdentity/)
+    assert.match(repairsList, /operationalActionVisibilitySql/)
+    assert.match(repairsList, /isRepairsContactAccess/)
+    assert.match(photos, /actionInRepairsQueue/)
+    assert.match(zip, /partitionBulkPdfAccess/)
   })
 })
