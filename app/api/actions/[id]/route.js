@@ -15,6 +15,13 @@ import {
   loadActionAccessMeta,
   ownRecordActionForbidden,
 } from '@/lib/own-record-access'
+import { actionInRepairsQueue, repairsProgressRejection } from '@/lib/repairs-contact-rules'
+import {
+  listRepairsProgress,
+  recordRepairsProgress,
+  repairsMailboxError,
+  resolveRepairsMailbox,
+} from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -71,7 +78,7 @@ function normalizeDateOnly(value) {
 // GET - Get action by ID
 export async function GET(request, { params }) {
   try {
-    const viewer = await getOwnRecordViewer()
+    const viewer = await getOwnRecordViewer({ allowRepairsContact: true })
     if (viewer.error) return viewer.error
 
     await ensureDatabase()
@@ -166,6 +173,17 @@ export async function GET(request, { params }) {
     })
     if (forbidden) return forbidden
 
+    if (viewer.repairsContact) {
+      const resolved = await resolveRepairsMailbox()
+      const mailboxError = repairsMailboxError(resolved)
+      if (mailboxError) return mailboxError
+      if (!actionInRepairsQueue(result.rows[0], resolved.mailbox.id)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const progress = await listRepairsProgress([result.rows[0].id])
+      return NextResponse.json({ ...result.rows[0], progress })
+    }
+
     return NextResponse.json(result.rows[0])
   } catch (error) {
     console.error('Error fetching action:', error)
@@ -181,7 +199,7 @@ export async function PUT(request, { params }) {
   let id = null
   let debugPayload = null
   try {
-    const viewer = await getOwnRecordViewer()
+    const viewer = await getOwnRecordViewer({ allowRepairsContact: true })
     if (viewer.error) return viewer.error
 
     await ensureDatabase()
@@ -205,6 +223,16 @@ export async function PUT(request, { params }) {
     if (forbidden) return forbidden
 
     const data = await request.json()
+    if (viewer.repairsContact) {
+      const rejection = repairsProgressRejection(data)
+      if (rejection) return NextResponse.json({ error: rejection }, { status: 403 })
+      const resolved = await resolveRepairsMailbox()
+      const mailboxError = repairsMailboxError(resolved)
+      if (mailboxError) return mailboxError
+      if (!actionInRepairsQueue(existing, resolved.mailbox.id)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
     const repairFieldsAvailable = await ensureRepairActionFields(sql)
     if (!repairFieldsAvailable) {
       throw new Error('Repair action columns could not be verified or created on actions table')
@@ -299,6 +327,19 @@ export async function PUT(request, { params }) {
         { error: 'Action not found' },
         { status: 404 }
       )
+    }
+
+    if (viewer.repairsContact) {
+      await recordRepairsProgress({
+        actionId: id,
+        authorEmail: viewer.email,
+        note: normalizedData.repair_notes,
+        statusBefore: previousStatus || existing.status || null,
+        statusAfter: normalizedData.status || previousStatus || existing.status || null,
+        photoUrl: normalizedData.repair_photo_url,
+      })
+      const progress = await listRepairsProgress([id])
+      return NextResponse.json({ ...result.rows[0], progress })
     }
 
     return NextResponse.json(result.rows[0])

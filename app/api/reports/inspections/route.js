@@ -11,6 +11,7 @@ import {
   aliasInspectionWhereClause,
 } from '@/lib/inspection-filters'
 import { calendarQuarterToRange } from '@/lib/inspection-report-quarter'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,8 @@ const TEMPORARILY_DISABLE_ESTATE_SCOPING = true
 async function resolveAuth(request) {
   const { userId } = await auth()
   if (!userId) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const repairsContactBlock = await forbidRepairsContactRequest(userId)
+  if (repairsContactBlock) return { error: repairsContactBlock }
   const cu = await currentUser()
   const clerkIsAdmin = cu?.publicMetadata?.isAdmin === true
   const email =

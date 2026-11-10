@@ -3,6 +3,13 @@ import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
 import { ensureRepairActionFields } from '@/lib/repair-action-fields'
+import { getAppRoleContextForClerkUser } from '@/lib/app-role-access'
+import { isRepairsContactAccess } from '@/lib/repairs-contact-rules'
+import {
+  listRepairsMailboxActions,
+  repairsMailboxError,
+  resolveRepairsMailbox,
+} from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,6 +18,15 @@ export async function GET() {
   try {
     const { userId } = await auth()
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const roleCtx = await getAppRoleContextForClerkUser(userId)
+    if (isRepairsContactAccess(roleCtx)) {
+      const resolved = await resolveRepairsMailbox()
+      const mailboxError = repairsMailboxError(resolved)
+      if (mailboxError) return mailboxError
+      const actions = await listRepairsMailboxActions(resolved.mailbox.id)
+      return NextResponse.json(actions)
+    }
 
     if (!getPgUrl()) return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
     await ensureDatabase()

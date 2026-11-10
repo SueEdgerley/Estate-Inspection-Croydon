@@ -9,6 +9,7 @@ import {
   roleBypassesOperationalRouteRestrictions,
 } from '@/lib/app-role-access'
 import { parseCaretakerScopeFromDescription } from '@/lib/caretaker-specific-task-inspection'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,8 @@ export async function GET() {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const repairsContactBlock = await forbidRepairsContactRequest(userId)
+    if (repairsContactBlock) return repairsContactBlock
     await ensureDatabase()
     if (!getPgUrl()) {
       return NextResponse.json({ error: 'Database not configured.' }, { status: 503 })

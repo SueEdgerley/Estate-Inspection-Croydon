@@ -10,6 +10,7 @@ import {
   isPrivilegedAdmin,
   mayViewManagerAnalytics,
 } from '@/lib/app-role-access'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -35,6 +36,8 @@ export async function GET(request) {
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
     }
+    const repairsContactBlock = await forbidRepairsContactRequest(clerkUserId)
+    if (repairsContactBlock) return repairsContactBlock
 
     const cu = await currentUser()
     const roleCtx = await getAppRoleContextForClerkUser(

@@ -11,6 +11,7 @@ import { filterArchivedTemplates } from '@/lib/archived-templates'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '../../../lib/db'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 
 /** System role + job title for template list filtering (no Airtable changes). */
 async function getViewerContext() {
@@ -252,6 +253,10 @@ export async function GET() {
   }
 
   const viewer = await getViewerContext()
+  if (viewer.userId) {
+    const repairsContactBlock = await forbidRepairsContactRequest(viewer.userId)
+    if (repairsContactBlock) return repairsContactBlock
+  }
   console.log('[api/templates] GET start', {
     authenticated: Boolean(viewer.userId),
     systemRole: viewer.systemRole,

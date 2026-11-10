@@ -4,6 +4,7 @@ import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl, getNeonQuery, pgPublicTableExists } from '@/lib/db'
 import { ensureClerkUserProvisioned } from '@/lib/ensure-clerk-user-provisioned'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 import { buildInspectionWhereConditions, joinSqlAnd } from '@/lib/inspection-filters'
 import { queryInspectionRowsWithPdfColumnFallback } from '@/lib/inspection-list-query-pdf-fallback'
 
@@ -59,6 +60,8 @@ export async function GET(request) {
       logDashboardAuth(clerkUserId, userEmail, null, null, null, 401, 'Missing clerk userId')
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED', reason: 'Not signed in' }, { status: 401 })
     }
+    const repairsContactBlock = await forbidRepairsContactRequest(clerkUserId)
+    if (repairsContactBlock) return repairsContactBlock
 
     await ensureDatabase()
     try {

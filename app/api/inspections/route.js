@@ -5,6 +5,7 @@ import { createHash } from 'crypto'
 import { ensureDatabase, ensureInspectionTimingFields, getPgUrl, getNeonQuery } from '@/lib/db'
 import { getTemplatesNested } from '@/lib/airtable-client'
 import { getCurrentUserEmail, getCurrentUserName, isAdmin } from '@/lib/auth'
+import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
 import { applyTemplateDisplayPatches, patchCaretakerTemplatesList } from '@/lib/caretaker-fire-template-patch'
 import { generatePosterPdfBuffer } from '../../../lib/poster-pdf'
 import { uploadInspectionPdfToBlob } from '@/lib/blob/uploadPdf'
@@ -1090,6 +1091,8 @@ export async function GET(request) {
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const repairsContactBlock = await forbidRepairsContactRequest(userId)
+  if (repairsContactBlock) return repairsContactBlock
   try {
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -1320,6 +1323,8 @@ export async function POST(request) {
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const repairsContactBlock = await forbidRepairsContactRequest(userId)
+  if (repairsContactBlock) return repairsContactBlock
 
   let body
   try {
