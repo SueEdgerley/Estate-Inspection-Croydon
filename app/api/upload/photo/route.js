@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
 import { put } from '@vercel/blob'
 
 export const runtime = 'nodejs'
@@ -10,6 +11,9 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'im
 // POST - Upload photo to Vercel Blob Storage (public)
 export async function POST(request) {
   try {
+    const { userId } = await auth()
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const formData = await request.formData()
     const file = formData.get('file')
 

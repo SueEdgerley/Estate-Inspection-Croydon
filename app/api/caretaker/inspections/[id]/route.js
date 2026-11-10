@@ -9,10 +9,8 @@ import {
   roleBypassesOperationalRouteRestrictions,
 } from '@/lib/app-role-access'
 import { inspectionIsCaretaker } from '@/lib/caretaker-template'
-import {
-  inspectionIsSubmitted,
-  userOwnsInspection,
-} from '@/lib/inspection-follow-up-updates'
+import { inspectionIsSubmitted } from '@/lib/inspection-follow-up-updates'
+import { identityOwnsInspection, loadScopedOperationalIdentity } from '@/lib/own-record-scope'
 import { parseCaretakerScopeFromDescription } from '@/lib/caretaker-specific-task-inspection'
 import { withInspectionPdfDefaults } from '@/lib/inspection-pdf-fields'
 
@@ -61,8 +59,11 @@ export async function GET(_request, { params }) {
     }
 
     const userEmail = await getCurrentUserEmail()
-    if (!elevatedAccess && !userOwnsInspection(userEmail, row)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!elevatedAccess) {
+      const identity = await loadScopedOperationalIdentity(userId, userEmail)
+      if (!identityOwnsInspection(identity, row.inspector_id)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     if (!inspectionIsSubmitted(row)) {

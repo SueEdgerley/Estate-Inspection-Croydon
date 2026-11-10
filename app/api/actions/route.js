@@ -24,7 +24,7 @@ import { ensureIssueNumberFields } from '@/lib/issue-number-fields'
 import { buildActionListWhere, normalizeActionListStatus } from '@/lib/action-list-filters'
 import {
   identityOwnsInspection,
-  loadOwnRecordIdentity,
+  loadScopedOperationalIdentity,
   roleMustScopeToOwnOperationalRecords,
 } from '@/lib/own-record-scope'
 import { isRepairsContactAccess } from '@/lib/repairs-contact-rules'
@@ -291,7 +291,7 @@ export async function GET(request) {
 
     const scopeOwn = roleMustScopeToOwnOperationalRecords(roleCtx.normalized, roleCtx.clerkIsAdmin)
     const identity = scopeOwn
-      ? await loadOwnRecordIdentity(userId, currentUserEmail(cu))
+      ? await loadScopedOperationalIdentity(userId, currentUserEmail(cu))
       : null
     if (scopeOwn && inspectionId) {
       const inspectionOwner = await sql`

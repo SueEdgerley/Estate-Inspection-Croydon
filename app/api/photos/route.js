@@ -25,6 +25,9 @@ export async function POST(request) {
       )
     }
     const data = await request.json()
+    if (viewer.scopeOwn && !data.inspection_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     if (data.inspection_id) {
       const inspection = await loadInspectionInspectorId(data.inspection_id)
       if (!inspection) {
@@ -76,6 +79,9 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const inspectionId = searchParams.get('inspection_id')
     const questionId = searchParams.get('question_id')
+    if (viewer.scopeOwn && !inspectionId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     if (inspectionId) {
       const inspection = await loadInspectionInspectorId(inspectionId)
       if (viewer.scopeOwn) {

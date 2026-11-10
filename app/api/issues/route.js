@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { sql } from '@vercel/postgres'
 import { ensureDatabase, getPgUrl } from '@/lib/db'
-import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
+import { getOwnRecordViewer } from '@/lib/own-record-access'
 
 // Route segment config
 export const runtime = 'nodejs'
@@ -11,10 +10,10 @@ export const dynamic = 'force-dynamic'
 // GET - Fetch all issues
 export async function GET() {
   try {
-    const { userId } = await auth()
-    if (userId) {
-      const repairsContactBlock = await forbidRepairsContactRequest(userId)
-      if (repairsContactBlock) return repairsContactBlock
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    if (viewer.scopeOwn || viewer.repairsContact) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     await ensureDatabase()
     const pgUrl = getPgUrl()
@@ -50,6 +49,11 @@ export async function GET() {
 // POST - Create a new issue
 export async function POST(request) {
   try {
+    const viewer = await getOwnRecordViewer()
+    if (viewer.error) return viewer.error
+    if (viewer.repairsContact) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     await ensureDatabase()
     const pgUrl = getPgUrl()
     if (!pgUrl) {

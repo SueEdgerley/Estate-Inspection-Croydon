@@ -6,6 +6,7 @@ import { getCurrentUserEmail, isAdmin } from '@/lib/auth'
 import { buildInspectionWhereConditions, joinSqlAnd, fragment } from '@/lib/inspection-filters'
 import { sqlOutstandingActionNotSuperseded } from '@/lib/superseded-records'
 import { forbidRepairsContactRequest } from '@/lib/repairs-contact-access'
+import { loadScopedOperationalIdentity, operationalActionVisibilitySql } from '@/lib/own-record-scope'
 
 // Node Postgres client requires Node runtime
 export const runtime = "nodejs";
@@ -35,7 +36,14 @@ export async function GET(request) {
     let postgresListAll = false
     try {
       const roleRow = await sql`
-        SELECT lower(trim(role)) AS r FROM users WHERE clerk_user_id = ${userId} LIMIT 1
+        SELECT lower(trim(CASE
+          WHEN lower(trim(COALESCE(role, ''))) = 'owner' THEN 'owner'
+          WHEN lower(trim(COALESCE(system_role, role, ''))) = 'admin' THEN 'admin'
+          ELSE 'user'
+        END)) AS r
+        FROM users
+        WHERE clerk_user_id = ${userId}
+        LIMIT 1
       `
       const r = roleRow.rows[0]?.r || ''
       postgresListAll = r === 'owner' || r === 'admin'
@@ -44,6 +52,8 @@ export async function GET(request) {
     }
     const admin = clerkAdmin || postgresListAll
     const userEmail = await getCurrentUserEmail()
+    const identity = admin ? null : await loadScopedOperationalIdentity(userId, userEmail)
+    const actionVisibility = admin ? null : operationalActionVisibilitySql(identity)
 
     const { searchParams } = new URL(request.url)
     const dateFrom = searchParams.get('dateFrom')
@@ -67,8 +77,8 @@ export async function GET(request) {
       } else if (taskFilter === 'outstanding') {
         taskConditions.push(fragment`(a.status IS DISTINCT FROM 'completed' OR a.status IS NULL)`)
       }
-      if (!admin && userEmail) {
-        taskConditions.push(fragment`i.inspector_id = ${userEmail}`)
+      if (!admin) {
+        taskConditions.push([actionVisibility.sql, actionVisibility.params])
       }
       taskConditions.push([sqlOutstandingActionNotSuperseded('a', 'i'), []])
       const [taskWhereText, taskWhereParams] = joinSqlAnd(asArray(taskConditions))
@@ -121,7 +131,7 @@ export async function GET(request) {
         fragment`i.status = 'submitted'`,
         ['i.superseded_by IS NULL', []],
       ]
-      if (!admin && userEmail) qaConditions.push(fragment`i.inspector_id = ${userEmail}`)
+      if (!admin) qaConditions.push([`lower(trim(COALESCE(i.inspector_id, ''))) = ANY($1::text[])`, [identity?.inspectorMatchValues || []]])
       const [qaWhereText, qaWhereParams] = joinSqlAnd(asArray(qaConditions))
       const answersResult = await getNeonQuery()(
         `SELECT i.id AS inspection_id, i.title, i.submitted_at,
@@ -168,7 +178,7 @@ export async function GET(request) {
       scheduled: missed === '1' ? 'scheduled' : (scheduled || 'all'),
       grading: grading || 'all',
       admin,
-      fallbackInspectorId: userEmail || null,
+      fallbackInspectorIds: admin ? null : identity?.inspectorMatchValues || [],
     })
 
     const [whereText, whereParams] = joinSqlAnd(asArray(whereConditions))
