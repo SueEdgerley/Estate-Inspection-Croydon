@@ -34,6 +34,7 @@ import {
   applyGroundsMaintenanceTemplateToSnapshot,
   isGroundsMaintenanceTemplate,
 } from '@/lib/grounds-maintenance-template'
+import { groundsMaintenanceLocationError } from '@/lib/grounds-maintenance-sites'
 import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabout-actions'
 import { createEsmActionsFromInspection } from '@/lib/esm-action-plan-actions'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
@@ -678,11 +679,18 @@ export async function POST(request, { params }) {
     const isGroundsMaintenanceSubmission = Boolean(
       templateForRoleCheck && isGroundsMaintenanceTemplate(templateForRoleCheck)
     )
-    if (
+    if (isGroundsMaintenanceSubmission) {
+      const groundsLocationError = groundsMaintenanceLocationError({
+        blockId: inspection.block_id,
+        gmSiteId: inspection.gm_site_id,
+      })
+      if (groundsLocationError) {
+        return NextResponse.json({ error: groundsLocationError }, { status: 400 })
+      }
+    } else if (
       templateForRoleCheck &&
       (isCaretakerTemplate(templateForRoleCheck) ||
-        isEsmInspectionFormTemplate(templateForRoleCheck) ||
-        isGroundsMaintenanceSubmission) &&
+        isEsmInspectionFormTemplate(templateForRoleCheck)) &&
       !String(inspection.block_id || '').trim()
     ) {
       return NextResponse.json({ error: 'Location is required' }, { status: 400 })

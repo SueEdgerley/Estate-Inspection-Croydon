@@ -159,7 +159,7 @@ function getDraftTemplateId(draft) {
 
 function getDraftBlockId(draft) {
   const payload = draft?.payload || {}
-  return String(payload.submitBody?.block_id || payload.blockId || '').trim()
+  return String(payload.submitBody?.gm_site_id || payload.submitBody?.block_id || payload.blockId || '').trim()
 }
 
 function getDraftLocationLabel(draft) {
