@@ -5,12 +5,18 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   buildGroundsLotReport,
   buildGroundsMaintenanceCatalogue,
+  groundsMaintenanceLocationError,
   groundsSiteId,
   loadGroundsMaintenanceCatalogue,
 } from '../lib/grounds-maintenance-sites.js'
+import { draftHasOfficerProgress } from '../lib/offline-inspection-drafts.js'
+import { resumeDraftHasMeaningfulContent } from '../lib/inspection-resume-draft.js'
+
+const PALMA_SITE_ID = 'gm:2:SI/000001411'
 
 function featureRow(lotNumber, siteReference, siteName, featureDescription) {
   return {
@@ -119,6 +125,34 @@ describe('grounds maintenance lot grades', () => {
     assert.match(site.coverage.label, /Atlanta Estate/)
   })
 
+  it('places a submitted grounds site with no block under its lot and contractor', () => {
+    const catalogue = loadGroundsMaintenanceCatalogue()
+    const report = buildGroundsLotReport({
+      catalogue,
+      inspections: [
+        {
+          id: 'resumed-draft',
+          gmSiteId: PALMA_SITE_ID,
+          blockId: null,
+          locationLabel: '122 to 140 King Henrys Drive',
+          a: 8,
+          b: 0,
+          c: 0,
+          d: 0,
+        },
+      ],
+    })
+    const lot2 = report.lots.find((lot) => lot.id === 'lot-2')
+    const site = lot2.sites.find((row) => row.siteId === PALMA_SITE_ID)
+    const unassigned = report.lots.find((lot) => lot.id === 'unassigned')
+    assert.equal(lot2.label, 'Lot 2 – East Croydon')
+    assert.equal(lot2.contractor, 'Krinkels')
+    assert.equal(site.siteName, '122 to 140 King Henrys Drive')
+    assert.equal(site.inspectionCount, 1)
+    assert.equal(site.overallGrade, 'A')
+    assert.equal(unassigned.sites.length, 0)
+  })
+
   it('keeps an unclear historic inspection visible under Unassigned lot', () => {
     const report = buildGroundsLotReport({
       catalogue,
@@ -135,5 +169,54 @@ describe('grounds maintenance lot grades', () => {
     assert.equal(unassigned.sites[0].recordedLocation, 'Rear gardens')
     assert.equal(unassigned.sites[0].inspectionCount, 2)
     assert.equal(unassigned.sites[0].overallGrade, 'D')
+  })
+})
+
+describe('grounds maintenance location requirement', () => {
+  it('accepts a new inspection that has a grounds site and no block', () => {
+    assert.equal(groundsMaintenanceLocationError({ blockId: null, gmSiteId: PALMA_SITE_ID }), null)
+  })
+
+  it('accepts a resumed draft that saved the same site and no block', () => {
+    assert.equal(
+      groundsMaintenanceLocationError({
+        blockId: '',
+        gmSiteId: PALMA_SITE_ID,
+      }),
+      null
+    )
+    const payload = {
+      submitBody: {
+        template_id: 'recMOQSaY7Z16SYDM',
+        gm_site_id: PALMA_SITE_ID,
+        answers: { q1: 'A', q2: 'A', q3: 'B', q4: 'B', q5: 'A', q6: 'B', q7: 'A', q8: 'B' },
+      },
+    }
+    assert.equal(resumeDraftHasMeaningfulContent(payload), true)
+    assert.equal(draftHasOfficerProgress(payload), true)
+  })
+
+  it('still requires a location when a grounds inspection has neither a site nor a block', () => {
+    assert.equal(groundsMaintenanceLocationError({ blockId: null, gmSiteId: null }), 'Location is required')
+    assert.equal(
+      groundsMaintenanceLocationError({ blockId: null, gmSiteId: 'gm:2:SI/missing' }),
+      'Choose a Grounds Maintenance site from the site list'
+    )
+  })
+
+  it('still accepts an older grounds inspection saved against a block only', () => {
+    assert.equal(groundsMaintenanceLocationError({ blockId: 'blk_000545', gmSiteId: null }), null)
+  })
+
+  it('keeps caretaker and ESM submissions on the block check', () => {
+    const source = readFileSync(new URL('../app/api/inspections/[id]/submit/route.js', import.meta.url), 'utf8')
+    assert.match(source, /groundsMaintenanceLocationError\(\{/)
+    assert.match(source, /isCaretakerTemplate\(templateForRoleCheck\)/)
+    assert.match(source, /isEsmInspectionFormTemplate\(templateForRoleCheck\)/)
+    assert.match(source, /!String\(inspection\.block_id \|\| ''\)\.trim\(\)/)
+    const groundsAt = source.indexOf('if (isGroundsMaintenanceSubmission)')
+    const groundsBranch = source.slice(groundsAt, source.indexOf('} else if (', groundsAt))
+    assert.match(groundsBranch, /groundsMaintenanceLocationError/)
+    assert.doesNotMatch(groundsBranch, /isCaretakerTemplate|isEsmInspectionFormTemplate/)
   })
 })
