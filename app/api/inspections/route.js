@@ -20,6 +20,10 @@ import {
 } from '@/lib/caretaker-specific-task-inspection'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
+  buildEsmAbandonedVehicleAvsEmail,
+  isEsmAbandonedVehicleAvsReferral,
+} from '@/lib/esm-abandoned-vehicle-referral'
+import {
   isEstateWalkaboutTemplate,
   ESTATE_WALKABOUT_CHECKLIST_QID,
   getCanonicalEstateWalkaboutTemplateForInsert,
@@ -293,7 +297,7 @@ function collectCaretakerEmailNotifications({ template, answers, answerExtras, i
   return notifications
 }
 
-function collectEsmEmailNotifications({ template, answers, answerExtras, resolveRecipientEmail }) {
+function collectEsmEmailNotifications({ template, answers, answerExtras, resolveRecipientEmail, officerName = '' }) {
   if (!isEsmInspectionFormTemplate(template)) return []
   const notifications = []
   for (const section of template.sections || []) {
@@ -335,7 +339,12 @@ function collectEsmEmailNotifications({ template, answers, answerExtras, resolve
         })
       }
       if (q.esm_email_on_yes && isYes) {
-        notifications.push({ ...base, to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` })
+        const yesNotification = { ...base, to: String(q.esm_email_on_yes), routing: `esm_${q.esm_behavior || 'yes'}_yes` }
+        if (q.esm_q4_abandoned_vehicle === true) {
+          yesNotification.referralExtras = extras
+          yesNotification.officerName = officerName
+        }
+        notifications.push(yesNotification)
       }
       if (q.esm_email_on_comment_or_issue && (comment || isYes)) {
         notifications.push({ ...base, to: String(q.esm_email_on_comment_or_issue), routing: `esm_${q.esm_behavior || 'comment'}_comment` })
@@ -408,7 +417,56 @@ function buildEsmNotificationText({ inspectionTitle, locationLine, items }) {
 async function sendEsmEmailNotifications(sqlFn, { inspectionId, inspectionTitle, locationLine, notifications }) {
   const result = { sent: 0, failed: [] }
   const grouped = new Map()
+  const standardNotifications = []
   for (const notification of notifications || []) {
+    if (!isEsmAbandonedVehicleAvsReferral(notification)) {
+      standardNotifications.push(notification)
+      continue
+    }
+    const preview = buildEsmAbandonedVehicleAvsEmail({
+      inspectionTitle,
+      locationLine,
+      sectionTitle: notification.sectionTitle,
+      questionText: notification.questionText,
+      answer: notification.answer,
+      comment: notification.comment,
+      extras: notification.referralExtras || {},
+      officerName: notification.officerName || '',
+      photoUrls: notification.photoUrls || [],
+    })
+    if (!preview.ok) {
+      result.failed.push({
+        question: notification.questionText || '',
+        routing: notification.routing || 'esm_abandoned_vehicle_yes',
+        error: preview.missing.map((item) => item.message).join(' '),
+      })
+      continue
+    }
+    try {
+      const sendResult = await sendAppEmail({
+        to: notification.to,
+        subject: `ESM inspection: ${notification.sectionTitle || locationLine || inspectionTitle || 'notification'}`,
+        html: preview.html,
+        text: preview.text,
+      })
+      if (sendResult.ok) {
+        result.sent += 1
+        await insertOutboundEmailLog(sqlFn, {
+          inspectionId,
+          questionId: null,
+          emailTo: notification.to,
+          emailRouting: notification.routing || 'esm_abandoned_vehicle_yes',
+          status: 'sent',
+          sentAt: new Date(),
+        })
+      } else {
+        result.failed.push({ email: notification.to, error: sendResult.error || 'send_failed' })
+      }
+    } catch (error) {
+      result.failed.push({ email: notification.to, error: error?.message || String(error) })
+    }
+  }
+  for (const notification of standardNotifications) {
     const to = String(notification.to || '').trim()
     if (!to) {
       result.failed.push({
@@ -2261,6 +2319,7 @@ export async function POST(request) {
           answers,
           answerExtras: answer_extras,
           resolveRecipientEmail,
+          officerName: inspectorName || '',
         })
         const sent = await sendEsmEmailNotifications(sql, {
           inspectionId,

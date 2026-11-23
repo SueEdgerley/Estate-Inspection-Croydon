@@ -39,6 +39,10 @@ import { createEstateWalkaboutActionsFromInspection } from '@/lib/estate-walkabo
 import { createEsmActionsFromInspection } from '@/lib/esm-action-plan-actions'
 import { isEsmInspectionFormTemplate } from '@/lib/esm-inspection-form'
 import {
+  buildEsmAbandonedVehicleAvsEmail,
+  isEsmAbandonedVehicleAvsReferral,
+} from '@/lib/esm-abandoned-vehicle-referral'
+import {
   tryGenerateAndStoreIssueJobCardPdf,
   formatAssignedTeamLabel,
   formatDateGb,
@@ -195,7 +199,7 @@ async function resolveRecipientEmail(value) {
   return { email: '', source: 'unresolved', personId: '' }
 }
 
-async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectionTitle, locationLine }) {
+async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, answers, answerRows, inspectionTitle, locationLine, officerName = '' }) {
   if (!isEsmInspectionFormTemplate(templateVersion)) return { sent: [], failed: [] }
   const sent = []
   const failed = []
@@ -261,13 +265,38 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
         const answerText = answer == null ? '—' : String(answer)
         const priorityText = extras.priority || q.action_priority || ''
         const statusText = isYes || photoUrls.length > 0 || extras.comment ? 'Action required' : ''
+        let html
+        let text
+        if (isEsmAbandonedVehicleAvsReferral({ to, routing: target.routing })) {
+          const preview = buildEsmAbandonedVehicleAvsEmail({
+            inspectionTitle,
+            locationLine,
+            sectionTitle,
+            questionText,
+            answer: answerText,
+            comment: extras.comment || '',
+            extras: { ...(extras.structured || {}), cost_code: extras.structured?.cost_code || extras.costCode || '' },
+            officerName,
+            photoUrls: allPhotoUrls,
+          })
+          if (!preview.ok) {
+            failed.push({
+              questionId: q.id,
+              routing: target.routing,
+              error: preview.missing.map((item) => item.message).join(' '),
+            })
+            continue
+          }
+          html = preview.html
+          text = preview.text
+        } else {
         const photoList = allPhotoUrls.length
           ? `<ul>${allPhotoUrls.map((url) => `<li><a href="${escapeHtml(url)}">Photo attached</a></li>`).join('')}</ul>`
           : '<p>No photo link recorded.</p>'
         const photoText = allPhotoUrls.length
           ? allPhotoUrls.map((url) => `Photo attached: ${url}`).join('\n')
           : 'No photo link recorded.'
-        const html = `
+        html = `
           <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111827;max-width:680px;">
             ${croydonLogoEmailHeaderHtml()}
             <h1 style="font-size:20px;line-height:1.25;margin:0 0 16px 0;">ESM inspection notification</h1>
@@ -296,7 +325,7 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
             <p style="margin:0 0 6px 0;">No PDF link is available in this notification.</p>
           </div>
         `
-        const text = [
+        text = [
           'ESM inspection notification',
           '',
           'Inspection context',
@@ -322,6 +351,7 @@ async function sendEsmPhotoAndYesNotifications({ inspectionId, templateVersion, 
           'PDFs/links',
           'No PDF link is available in this notification.',
         ].filter(Boolean).join('\n')
+        }
         try {
           console.log('[sendEsmPhotoAndYesNotifications] final recipient email', {
             inspectionId,
@@ -1377,6 +1407,7 @@ export async function POST(request, { params }) {
             answerRows: answersResult.rows,
             inspectionTitle: inspectionLive.template_name || inspectionLive.title || 'ESM inspection',
             locationLine: estateBlockLine,
+            officerName: inspectionLive.inspector_name || inspectorName || '',
           })
           if (Array.isArray(esmEmails.sent)) {
             emailResults.sent.push(...esmEmails.sent)
