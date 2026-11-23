@@ -99,6 +99,10 @@ import {
   FORM_NOT_PERMITTED_MESSAGE,
 } from '@/lib/inspection-permission-messages'
 import { packNvWizardExtras } from '@/lib/nv-notes-pack'
+import {
+  esmAbandonedVehicleReferralFieldErrors,
+  reportingOfficerDisplayName,
+} from '@/lib/esm-abandoned-vehicle-referral'
 import { loadIssueRecipientPeople } from '@/lib/issue-recipient-people'
 import CaretakerInspectionModeSelector from '@/app/components/caretaker/CaretakerInspectionModeSelector'
 import {
@@ -591,7 +595,11 @@ function InspectionQuestion({
   errorRecipient,
   errorAuthorisation,
   errorAuthorisationName,
+  errorVehicleMake,
+  errorVehicleModel,
+  errorVehicleRegistration,
   errorCostCode,
+  reportingOfficerName = '',
   answerExtras,
   onAnswerExtras,
   createActionOnNo,
@@ -896,6 +904,14 @@ function InspectionQuestion({
     }
   }, [isNvTemplate, showCommentPhotoBlock])
 
+  useEffect(() => {
+    if (!esmQ4AbandonedVehicle || !isYes) return
+    const officer = String(reportingOfficerName || '').trim()
+    if (!officer) return
+    if (String(extras.authorisation_name || '').trim() === officer) return
+    onAnswerExtras?.(question.id, { authorisation_name: officer })
+  }, [esmQ4AbandonedVehicle, extras.authorisation_name, isYes, onAnswerExtras, question.id, reportingOfficerName])
+
   if (isEstateInspectionInstructionalQuestion(question) && !skipInstructionalBlockForEstateChecklistRow) {
     const rawParts = [
       caretakerPartLabel || question.question_text,
@@ -981,6 +997,8 @@ function InspectionQuestion({
           photo_urls: [],
           id_card_photo_urls: [],
           vehicle_colour: '',
+          vehicle_make: '',
+          vehicle_model: '',
           vehicle_make_model: '',
           vehicle_registration: '',
           authorisation_name: '',
@@ -1325,6 +1343,50 @@ function InspectionQuestion({
               {ESM_ABANDONED_VEHICLE_AUTHORISATION_STATEMENT}
             </div>
             {errorAuthorisation && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisation}</p>}
+            {(errorPhotos || errorAuthorisationName || errorVehicleMake || errorVehicleModel || errorVehicleRegistration || errorCostCode) ? (
+              <div style={{ marginBottom: '0.75rem', padding: '0.65rem 0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '0.375rem' }}>
+                <p style={{ margin: '0 0 0.35rem', fontSize: '0.875rem', fontWeight: 600, color: '#991b1b' }}>
+                  Complete these details before the AVS referral is sent
+                </p>
+                <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#991b1b', fontSize: '0.875rem' }}>
+                  {[errorPhotos, errorAuthorisationName, errorVehicleMake, errorVehicleModel, errorVehicleRegistration, errorCostCode]
+                    .filter(Boolean)
+                    .map((message) => (
+                      <li key={message}>{message}</li>
+                    ))}
+                </ul>
+              </div>
+            ) : null}
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.875rem', color: '#374151' }}>
+              <span style={{ fontWeight: 600 }}>Reporting officer: </span>
+              {reportingOfficerName || extras.authorisation_name || 'Name not available'}
+            </p>
+            {!reportingOfficerName ? (
+              <>
+                <label htmlFor={`authorisation-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                  Reporting officer name <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
+                </label>
+                <input
+                  id={`authorisation-name-${question.id}`}
+                  type="text"
+                  value={extras.authorisation_name || ''}
+                  onChange={(e) => setExtras({ authorisation_name: e.target.value })}
+                  placeholder="Enter your name"
+                  style={{
+                    width: '100%',
+                    padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+                    border: errorAuthorisationName ? '1px solid #ef4444' : '1px solid #d1d5db',
+                    borderRadius: '0.375rem',
+                    fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+                    fontFamily: 'inherit',
+                    marginBottom: '0.75rem',
+                    minHeight: mobileStackedForm ? 48 : undefined,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </>
+            ) : null}
+            {errorAuthorisationName && <p style={{ marginTop: -8, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisationName}</p>}
             <label htmlFor={`vehicle-colour-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
               Colour
             </label>
@@ -1346,19 +1408,19 @@ function InspectionQuestion({
                 boxSizing: 'border-box',
               }}
             />
-            <label htmlFor={`vehicle-make-model-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Make/model
+            <label htmlFor={`vehicle-make-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Vehicle make <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
             </label>
             <input
-              id={`vehicle-make-model-${question.id}`}
+              id={`vehicle-make-${question.id}`}
               type="text"
-              value={extras.vehicle_make_model || ''}
-              onChange={(e) => setExtras({ vehicle_make_model: e.target.value })}
-              placeholder="Enter vehicle make/model"
+              value={extras.vehicle_make || extras.vehicle_make_model || ''}
+              onChange={(e) => setExtras({ vehicle_make: e.target.value, vehicle_make_model: '' })}
+              placeholder="Enter vehicle make"
               style={{
                 width: '100%',
                 padding: mobileStackedForm ? '0.75rem' : '0.5rem',
-                border: '1px solid #d1d5db',
+                border: errorVehicleMake ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '0.375rem',
                 fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                 fontFamily: 'inherit',
@@ -1367,19 +1429,42 @@ function InspectionQuestion({
                 boxSizing: 'border-box',
               }}
             />
+            {errorVehicleMake && <p style={{ marginTop: -8, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#ef4444' }}>{errorVehicleMake}</p>}
+            <label htmlFor={`vehicle-model-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+              Vehicle model <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
+            </label>
+            <input
+              id={`vehicle-model-${question.id}`}
+              type="text"
+              value={extras.vehicle_model || ''}
+              onChange={(e) => setExtras({ vehicle_model: e.target.value })}
+              placeholder="Enter vehicle model"
+              style={{
+                width: '100%',
+                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
+                border: errorVehicleModel ? '1px solid #ef4444' : '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
+                fontFamily: 'inherit',
+                marginBottom: '0.75rem',
+                minHeight: mobileStackedForm ? 48 : undefined,
+                boxSizing: 'border-box',
+              }}
+            />
+            {errorVehicleModel && <p style={{ marginTop: -8, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#ef4444' }}>{errorVehicleModel}</p>}
             <label htmlFor={`vehicle-registration-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Registration
+              Registration number <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
             </label>
             <input
               id={`vehicle-registration-${question.id}`}
               type="text"
               value={extras.vehicle_registration || ''}
               onChange={(e) => setExtras({ vehicle_registration: e.target.value })}
-              placeholder="Enter registration"
+              placeholder="Enter registration number"
               style={{
                 width: '100%',
                 padding: mobileStackedForm ? '0.75rem' : '0.5rem',
-                border: '1px solid #d1d5db',
+                border: errorVehicleRegistration ? '1px solid #ef4444' : '1px solid #d1d5db',
                 borderRadius: '0.375rem',
                 fontSize: mobileStackedForm ? '1rem' : '0.875rem',
                 fontFamily: 'inherit',
@@ -1388,28 +1473,7 @@ function InspectionQuestion({
                 boxSizing: 'border-box',
               }}
             />
-            <label htmlFor={`authorisation-name-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Name of person authorising/reporting <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
-            </label>
-            <input
-              id={`authorisation-name-${question.id}`}
-              type="text"
-              value={extras.authorisation_name || ''}
-              onChange={(e) => setExtras({ authorisation_name: e.target.value })}
-              placeholder="Enter your name"
-              style={{
-                width: '100%',
-                padding: mobileStackedForm ? '0.75rem' : '0.5rem',
-                border: errorAuthorisationName ? '1px solid #ef4444' : '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: mobileStackedForm ? '1rem' : '0.875rem',
-                fontFamily: 'inherit',
-                marginBottom: '0.75rem',
-                minHeight: mobileStackedForm ? 48 : undefined,
-                boxSizing: 'border-box',
-              }}
-            />
-            {errorAuthorisationName && <p style={{ marginTop: -8, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#ef4444' }}>{errorAuthorisationName}</p>}
+            {errorVehicleRegistration && <p style={{ marginTop: -8, marginBottom: '0.75rem', fontSize: '0.875rem', color: '#ef4444' }}>{errorVehicleRegistration}</p>}
             <label htmlFor={`comment-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
               Comment/location
             </label>
@@ -1435,7 +1499,7 @@ function InspectionQuestion({
             />
             {errorComment && <p style={{ marginTop: 4, fontSize: '0.875rem', color: '#ef4444' }}>{errorComment}</p>}
             <label htmlFor={`cost-code-${question.id}`} style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-              Cost code
+              Cost code <span style={{ color: '#ef4444', marginLeft: 4 }}>*</span>
             </label>
             <select
               id={`cost-code-${question.id}`}
@@ -3307,6 +3371,8 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
       [`${questionId}_authorisation`]: undefined,
       [`${questionId}_authorisation_name`]: undefined,
       [`${questionId}_vehicle_colour`]: undefined,
+      [`${questionId}_vehicle_make`]: undefined,
+      [`${questionId}_vehicle_model`]: undefined,
       [`${questionId}_vehicle_make_model`]: undefined,
       [`${questionId}_vehicle_registration`]: undefined,
       [`${questionId}_cost_code`]: undefined,
@@ -3419,14 +3485,17 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             if (idCardPhotos.length === 0) {
               errs[`${q.id}_photos`] = 'Vehicle/issue photo and ID card photo are required'
             }
-            if (!(extras.authorisation_name || '').trim()) {
-              errs[`${q.id}_authorisation_name`] = 'Authorising/reporting name is required'
-            }
             if (!(extras.comment || '').trim()) {
               errs[`${q.id}_comment`] = 'Comment/location is required'
             }
-            if (!(extras.cost_code || '').trim()) {
-              errs[`${q.id}_cost_code`] = 'Please select a cost code'
+            for (const gap of esmAbandonedVehicleReferralFieldErrors({
+              question: q,
+              answer: normalized,
+              extras,
+              officerName: reportingOfficerDisplayName(user),
+              photoUrls,
+            })) {
+              errs[`${q.id}_${gap.field}`] = gap.message
             }
           }
           if (q.caretaker_recipient_on_yes && isYes && !(extras.recipient_person_id || '').trim()) {
@@ -4486,7 +4555,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
                         errorRecipient: validationErrors[`${q.id}_recipient`],
                         errorAuthorisation: validationErrors[`${q.id}_authorisation`],
                         errorAuthorisationName: validationErrors[`${q.id}_authorisation_name`],
+                        errorVehicleMake: validationErrors[`${q.id}_vehicle_make`],
+                        errorVehicleModel: validationErrors[`${q.id}_vehicle_model`],
+                        errorVehicleRegistration: validationErrors[`${q.id}_vehicle_registration`],
                         errorCostCode: validationErrors[`${q.id}_cost_code`],
+                        reportingOfficerName: reportingOfficerDisplayName(user),
                         answerExtras: answerExtras[q.id],
                         onAnswerExtras: (questionId, updates) =>
                           setAnswerExtras((prev) => ({
