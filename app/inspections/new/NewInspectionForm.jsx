@@ -43,6 +43,7 @@ import {
   ESTATE_WALKABOUT_TEMPLATE_ID,
 } from '@/lib/estate-walkabout-template'
 import LocationBlockSelector from '@/app/components/LocationBlockSelector'
+import { retiredBlockResumeNotice } from '@/lib/inspection-form-locations'
 import EstateWalkaboutNewInspectionForm from '@/app/components/estate-walkabout/EstateWalkaboutNewInspectionForm'
 import InspectionTemplateVersionDebugPanel from '@/app/components/debug/InspectionTemplateVersionDebugPanel'
 import { summarizeTemplateSnapshotForDebug, logInspectionTemplateDebug } from '@/lib/template-version-debug'
@@ -2207,6 +2208,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   const [loadError, setLoadError] = useState(null)
   const [templateId, setTemplateId] = useState('')
   const [postgresBlockId, setPostgresBlockId] = useState('')
+  const [retiredBlockNotice, setRetiredBlockNotice] = useState('')
   const [groundsSites, setGroundsSites] = useState([])
   const [groundsSitesStatus, setGroundsSitesStatus] = useState('idle')
 
@@ -2219,8 +2221,10 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
   useEffect(() => {
     if (!postgresBlockId) return
     if (String(postgresBlockId).startsWith('gm:')) return
-    const stillValid = locationBlocks.some((b) => b.id === postgresBlockId)
-    if (!stillValid) setPostgresBlockId('')
+    const notice = retiredBlockResumeNotice(postgresBlockId, locationBlocks)
+    if (!notice) return
+    if (locationBlocks.length > 0) setRetiredBlockNotice(notice)
+    setPostgresBlockId('')
   }, [postgresBlockId, locationBlocks])
   const [location, setLocation] = useState('')
   const [description, setDescription] = useState('')
@@ -4045,6 +4049,7 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
             value={postgresBlockId}
             onChange={(nextValue) => {
               setPostgresBlockId(nextValue)
+              if (nextValue) setRetiredBlockNotice('')
               setValidationErrors((prev) => ({ ...prev, block_id: undefined }))
             }}
             locations={formLocations}
@@ -4073,6 +4078,11 @@ export default function NewInspectionForm({ initialBlocks = [] }) {
           {!groundsMaintenanceForm && locationBlocks.length === 0 && (
             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#6b7280' }}>
               No locations in the list yet. Contact your administrator if you expected to see blocks here.
+            </p>
+          )}
+          {retiredBlockNotice && (
+            <p role="status" style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#92400e' }}>
+              {retiredBlockNotice}
             </p>
           )}
           {validationErrors.block_id && (
