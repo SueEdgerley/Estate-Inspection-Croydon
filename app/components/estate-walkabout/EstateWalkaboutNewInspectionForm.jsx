@@ -7,6 +7,7 @@ import { useUser } from '@clerk/nextjs'
 import PhotoUploadControl from '@/app/components/questions/PhotoUploadControl'
 import BestPracticeGuideButton from '@/app/components/BestPracticeGuideButton'
 import LocationBlockSelector from '@/app/components/LocationBlockSelector'
+import { retiredBlockResumeNotice } from '@/lib/inspection-form-locations'
 import {
   ESTATE_WALKABOUT_CHECKLIST_QID,
   ESTATE_WALKABOUT_TEMPLATE_ID,
@@ -538,6 +539,7 @@ export default function EstateWalkaboutNewInspectionForm({
     ? buildWalkaboutFormStateFromDraft(initialDraftToRestore, { blocks })
     : null
   const [postgresBlockId, setPostgresBlockId] = useState(() => initialRestored?.postgresBlockId || '')
+  const [retiredBlockNotice, setRetiredBlockNotice] = useState('')
   const [location, setLocation] = useState(() => initialRestored?.location || '')
   const [description, setDescription] = useState(() => initialRestored?.description || '')
 
@@ -613,6 +615,13 @@ export default function EstateWalkaboutNewInspectionForm({
     () => blocks.filter((b) => b != null && b.active !== false),
     [blocks]
   )
+  useEffect(() => {
+    if (!postgresBlockId) return
+    const notice = retiredBlockResumeNotice(postgresBlockId, locationBlocks)
+    if (!notice) return
+    if (locationBlocks.length > 0) setRetiredBlockNotice(notice)
+    setPostgresBlockId('')
+  }, [postgresBlockId, locationBlocks])
   const selectedBlockName = useMemo(() => {
     if (!postgresBlockId) return ''
     const block = locationBlocks.find((item) => String(item?.id || '') === String(postgresBlockId))
@@ -2114,6 +2123,7 @@ export default function EstateWalkaboutNewInspectionForm({
                 onChange={(blockId) => {
                   markWalkaboutDraftDirty()
                   setPostgresBlockId(blockId)
+                  if (blockId) setRetiredBlockNotice('')
                 }}
                 locations={locationBlocks}
                 error={!!validationErrors.block_id}
@@ -2123,6 +2133,11 @@ export default function EstateWalkaboutNewInspectionForm({
               {locationBlocks.length === 0 && (
                 <p style={{ marginTop: 8, fontSize: 13, color: EW.muted }}>
                   No locations in the list yet. Contact your administrator if you expected to see blocks here.
+                </p>
+              )}
+              {retiredBlockNotice && (
+                <p role="status" style={{ marginTop: 8, fontSize: 13, color: '#92400e' }}>
+                  {retiredBlockNotice}
                 </p>
               )}
               {validationErrors.block_id && <p style={errStyle}>{validationErrors.block_id}</p>}

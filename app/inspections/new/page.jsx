@@ -2,6 +2,7 @@ import { loadEstatesAndBlocksForInspectionForm } from '@/lib/load-reference-esta
 import NewInspectionForm from './NewInspectionForm'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 /**
  * New inspection — active blocks from Neon/Postgres as the location list. Templates from Airtable via client fetch.
